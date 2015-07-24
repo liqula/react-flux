@@ -125,11 +125,11 @@ parseKeyboardEvent (RawEvent ref val) =
                 { keyGetModifierState = pFromJSRef . js_GetModifierState . pToJSRef
                 }
 
-onKeyDown ::(Event -> KeyboardEvent -> handler) -> EventHandler handler
+onKeyDown :: (Event -> KeyboardEvent -> handler) -> EventHandler handler
 onKeyDown = mkHandler "onKeyDown" parseKeyboardEvent
 
-onKeyPress ::(Event -> KeyboardEvent -> handler) -> EventHandler handler
+onKeyPress :: (Event -> KeyboardEvent -> handler) -> EventHandler handler
 onKeyPress = mkHandler "onKeyPress" parseKeyboardEvent
 
-onKeyUp ::(Event -> KeyboardEvent -> handler) -> EventHandler handler
+onKeyUp :: (Event -> KeyboardEvent -> handler) -> EventHandler handler
 onKeyUp = mkHandler "onKeyUp" parseKeyboardEvent

@@ -341,6 +341,11 @@ mkClassHelper runHandler name initial render = unsafePerformIO $ do
     renderCb <- syncCallback1 ThrowWouldBlock $ \arg -> do
 
         stateRef <- js_RenderCbRetrieveState arg
+        mstate <- fromJSRef stateRef
+        stateVal <- maybe (error "Unable to decode class state") return mstate
+        state <- case fromJSON stateVal of
+                    Error err -> error $ "Unable to decode class state: " ++ err
+                    Success s -> return s
 
         propsE <- js_RenderCbRetrieveProps arg
         mprops <- derefExport propsE
@@ -359,12 +364,3 @@ mkClassHelper runHandler name initial render = unsafePerformIO $ do
     releaseProps <- syncCallback1 ThrowWouldBlock releaseExport
 
     ReactClass <$> js_createClass (toJSString name) initialRef renderCb releaseCb releaseProps
-
--- | Parse the state from a JSRef.
-parseState :: FromJSON state => JSRef state -> IO state
-parseState stateRef = do
-    mstate <- fromJSRef stateRef
-    stateVal <- maybe (error "Unable to decode class state") return mstate
-    state <- case fromJSON stateVal of
-                Error err -> error $ "Unable to decode class state: " ++ err
-                Success s -> return s
