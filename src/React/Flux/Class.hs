@@ -3,9 +3,12 @@ module React.Flux.Class (
     ReactClass_
   , ReactClassRef(..)
   , ReactClass(..)
+  , ViewEventHandler
   , mkControllerView
   , mkView
+  , StatefulViewEventHandler
   , mkStatefulView
+  , ClassEventHandler
   , mkClass
 ) where
 
@@ -56,9 +59,8 @@ newtype ReactClass props = ReactClass (ReactClassRef_ props)
 -- * elem  This is set by Haskell and contains the value that should be returned by the render
 --         function back to React.
 --
---  In addition, for classes (not controller-views), there is one additional property @alterState@
---  with two functions, @getState@ and @setState@.  These functions are used inside the event
---  handlers.
+--  In addition, for classes (not controller-views), there is one additional property @setState@
+--  which is used inside the event handlers.
 data RenderCbArgs
 
 foriegn import javascript unsafe
@@ -73,19 +75,15 @@ foreign import javascript unsafe
     "$1.newCallbacks = $2; $1.elem = $3;"
     js_RenderCbSetResults :: JSRef RenderCbArgs -> JSRef a -> JSRef b -> IO ()
 
-type AlterStateFns = JSRef (IO (JSRef state), JSRef state -> IO ())
+type SetStateFn = JSRef (JSRef state -> IO ())
 
 foreign import javascript unsafe
     "$1.alterState"
-    js_RenderCbRetrieveAlterStateFns :: JSRef RenderCbArgs -> IO GetStateFn
+    js_RenderCbRetrieveSetStateFn :: JSRef RenderCbArgs -> IO SetStateFn
 
 foreign import javascript unsafe
-    "$1.getState()"
-    js_GetState :: AlterStateFns -> IO (JSRef state)
-
-foreign import javascript unsafe
-    "$1.setState($2)"
-    js_SetState :: AlterStateFns -> JSRef state -> IO ()
+    "$1($2)"
+    js_SetState :: SetStateFn -> JSRef state -> IO ()
 
 ---------------------------------------------------------------------------------------------------
 
@@ -139,53 +137,20 @@ foreign import javascript unsafe
                            -> (JSFun (Export a -> IO ())
                            -> IO (ReactClassRef props)
 
+-- | Event handlers in a controller-view and a view transform events into actions.
+type ViewEventHandler = [SomeStoreAction]
+
 -- | Transform a controller view handler to a raw handler.
-expandViewHandler :: ControllerViewEventHandler -> RawEventHandler
-expandViewHandler handler evt = mapM_ dispatchSome $ handler evt
-    where
-        dispatchSome (SomeStoreAction store action) = dispatch store action
+runViewHandler :: ViewEventHandler -> IO ()
+runViewHandler = mapM_ dispatchSome
 
 -- | A controller view provides the glue between a 'ReactStore' and the DOM.
 --
---
--- In the TODO application, there is a single controller-view todoApp, with several views.  Each
--- view is just a pure haskell function.
---
--- >todoApp :: ReactClass ()
--- >todoApp = mkControllerView "todoApp" todoStore $ \todos [] ->
--- >    el "div"
--- >        [ header
--- >        , mainSection todos
--- >        , footer todos
--- >        ]
--- >
--- >header :: ReactElement eventHandler
--- >header =
--- >    el "header"
--- >        [ el "h1" []
--- >            [ text "Todos"]
--- >        , class todoTextInput TextInputProps
--- >            { placeholder = "What needs to be done?"
--- >            , onSave = todoCreateAction
--- >            }
--- >        ]
--- >
--- >mainSection :: TodoState -> ReactElement ControllerViewEventHandler
--- >mainSection (TodoState todos) =
--- >    el "section" []
--- >        [ input "checkbox"
--- >            [ id .= "toggle-all"
--- >            , checked .= if all (map todoComplete todos) then "checked" else ""
--- >            ]
--- >            [ evt "onChange" $ const todoToggleAllCompleted ]
--- >        , el "label" ["htmlFor" .= "toggle-all"]
--- >            [ text "Mark all as complete" ]
--- >        , el "ul" [] $ map todoItem 
--- >     TODOTODO
+--  TODO: write more!!!
 mkControllerView :: Typeable props
                  => String -- ^ A name for this class
                  -> ReactStore storeData -- ^ The store this controller view should attach to.
-                 -> (storeData -> props -> ReactElement ControllerViewEventHandler) -- ^ The rendering function
+                 -> (storeData -> props -> ReactElement ViewEventHandler) -- ^ The rendering function
                  -> ReactClass props
 mkControllerView name (ReactStore store) buildNode = unsafePerformIO $ do
     renderCb <- syncCallback1 ThrowWouldBlock $ \arg -> do
@@ -198,7 +163,7 @@ mkControllerView name (ReactStore store) buildNode = unsafePerformIO $ do
         mprops <- derefExport propsE
         props <- maybe (error "Unable to load props") return mprops
 
-        let node = fmap expandViewHandler $ buildNode storeData props
+        let node = fmap runViewHandler $ buildNode storeData props
         (element, evtCallbacks) <- runWriterT $ renderNode node
 
         evtCallbacksRef <- toJSArg evtCallbacks
@@ -293,10 +258,7 @@ foreign import javascript unsafe
                     props: this.props.hs, \
                     newCallbacks: [], \
                     elem:null, \
-                    alterState: { \
-                        getState: function() { return this.state; }, \
-                        setState: this.setState, \
-                    }, \
+                    setState: this.setState, \
                 }; \
                 renderCb(arg); \
                 this._currentCallbacks.map(releaseCb); \
@@ -313,42 +275,44 @@ foreign import javascript unsafe
                    -> JSFun (Export a -> IO ())
                    -> IO (ReactClassRef props)
 
+-- | A stateful class event handler transforms events into store actions and a new state.
+-- If the new state is nothing, no change is made to the state (which allows an optimization in that
+-- we do not need to re-render the view).
+type StatefulViewEventHandler = ([SomeStoreAction], Maybe state)
+
 -- | Transform a stateful class event handler to a raw event handler
-expandStatefulViewHandler :: (FromJSON state, ToJSON state)
-                           => AlterStateFns -> StatefulViewEventHandler state -> RawEventHandler
-expandStatefulViewHandler alterState handler evt = do
-    state <- parseState <$> js_GetState alterState
-    let (actions, mNewState) = handler state evt
+runStateViewHandler :: ToJSON state => SetStateFn -> StatefulViewEventHandler state -> IO ()
+runStateViewHandler setStateFn (actions, mNewState) = do
     case mNewState of
         Nothing -> return ()
         Just newState -> do
             newStateRef <- toJSRef_aeson newState
-            js_SetState alterState newStateRef
+            js_SetState setStateFn newStateRef
     mapM_ dispatchSomeAction actions
 
 -- | A stateful class keeps track of internal state, but the definition of the rendering and
 -- event handlers are pure functions.
 --
 -- TODO
--- >todoInput :: ReactClass String
--- >todoInput = mkStatefulView "todoInput" "" $ \state props ->
--- >    let ct = if null state then props else state
--- >     in el "input" [evt "onChange" (\oldState evt -> ([], oldState ++ evt)]
 mkStatefulView :: (ToJSON state, FromJSON state, Typeable props)
                => String -- ^ A name for this class
                -> state -- ^ The initial state
                -> (state -> props -> ReactElement (StatefulViewEventHandler state)) -- ^ The rendering function
                -> ReactClass props
-mkStatefulView name initial render = mkClassHelper expandStatefulViewHandler name initial render'
+mkStatefulView name initial render = mkClassHelper runStateViewHandler name initial render'
     where
         render' state props = return $ render state props
 
+-- | A class event handler can perform arbitrary IO, producing the new state.  If the new state is
+-- nothing, no change is made to the state (which allows an optimization in that we do not need to
+-- re-render the view).
+type ClassEventHandler state = IO (Maybe state)
+
 -- | Transform a class event handler to a raw event handler.
-expandClassHandler :: (FromJSON state, ToJSON state)
-                   => GetStateFn -> SetStateFn -> ClassEventHandler state -> RawEventHandler
-expandClassHandler getState setState handler evt = do
-    state <- parseState <$> js_GetState getState
-    mNewState <- handler state evt
+runClassHandler :: (FromJSON state, ToJSON state)
+                => SetStateFn -> ClassEventHandler state -> IO ()
+runClassHandler setStateFn handler = do
+    mNewState <- handler
     case mNewState of
         Nothing -> return ()
         Just newState -> do
@@ -365,12 +329,12 @@ mkClass = mkClassHelper expandClassHandler
 
 -- | Helper function used for 'mkStatefulView' and 'mkClass'
 mkClassHelper :: (ToJSON state, FromJSON state, Typeable props)
-              => (GetStateFn -> SetStateFn -> eventHandler -> RawEventHandler))
+              => (AlterStateFns -> eventHandler -> IO ()))
               -> String
               -> state
               -> (state -> props -> IO (ReactElement eventHandler))
               -> ReactClass props
-mkClassHelper expandHandler name initial render = unsafePerformIO $ do
+mkClassHelper runHandler name initial render = unsafePerformIO $ do
 
     initialRef <- toJSRef_aeson initial
 
@@ -383,7 +347,7 @@ mkClassHelper expandHandler name initial render = unsafePerformIO $ do
         props <- maybe (error "Unable to load props") return mprops
 
         alterStateFns <- js_RenderCbRetrieveAlterStateFns
-        node <- fmap (expandHandler alterStateFns) <$> render state props
+        node <- fmap (runHandler alterStateFns) <$> render state props
 
         (element, evtCallbacks) <- runWriterT $ renderNode node
 

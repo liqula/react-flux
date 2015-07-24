@@ -1,29 +1,10 @@
 module React.Flux.Element where
 
-data Event_
-newtype Event = JSRef Event_
-
--- | Event handlers in a controller-view and a view transform events into actions.
-type ViewEventHandler = Event -> [SomeStoreAction]
-
--- | A stateful class event handler transforms events into store actions and a new state.
--- If the new state is nothing, no change is made to the state (which allows an optimization in that
--- we do not need to re-render the view).
-type StatefulViewEventHandler state = state -> Event -> ([SomeStoreAction], Maybe state)
-
--- | A class event handler can perform arbitrary IO, producing the new state.  If the new state is
--- nothing, no change is made to the state (which allows an optimization in that we do not need to
--- re-render the view).
-type ClassEventHandler state = state -> Event -> IO (Maybe state)
-
--- | An internal event handler, used by the rendering function
-type RawEventHandler = Event -> IO ()
-
 data ReactElement eventHandler
     = forall attrs. ToJSON attrs => ForeignElement
         { fName :: String
         , fAttrs :: attrs
-        , fEvents :: [(String, eventHandler)]
+        , fEvents :: [EventHandler eventHandler]
         , fChildren :: [ReactElement eventHandler]
         }
     | forall props key. (Typeable props, ToJSRef key) => ClassElement
@@ -35,7 +16,9 @@ data ReactElement eventHandler
         }
 
 instance Functor ReactElement where
-    fmap f (ForeignElement n a e c) = ForeignElement n (f a) e (map (fmap f) c)
+    fmap f (ForeignElement n a e c) = ForeignElement n a (map changeHandler e) (map (fmap f) c)
+        where
+            changeHandler (EventHandler name oldHandler) = EventHandler nane (f . oldHandler)
     fmap f (ClassElement n k p c) = ClassElement n k p (map (fmap f) c)
 
 data ReactElement_
@@ -73,14 +56,20 @@ foreign import javascript unsafe
                   -> (Callback (Event -> IO ()))
                   -> IO ()
 
-mkEventHandler :: ReactElementArg -> (String, RawEventHandler) -> WriterT [Callback] IO ReactElementArg
-mkEventHandler arg (str, handler) = do
-    cb <- lift $ asyncCallback1 handler -- this will be released by the render function of the class.
+mkEventHandler :: ReactElementArg -> EventHandler (IO ()) -> WriterT [Callback] IO ReactElementArg
+mkEventHandler arg (EventHandler str handler) = do
+    -- this will be released by the render function of the class.
+    cb <- lift $ asyncCallback1 $ \evtRef -> do
+        mevtVal <- fromJSRef evtRef
+        evtVal <- maybe (error "Unable to parse event as a javascript object") return mevtVal
+        handler $ RawEvent evtRef evtVal
+
     tell [cb]
+
     js_AddHandler arg str cb
     return arg
 
-renderNode :: ReactElement RawEventHandler -> WriterT [Callback] IO ReactElementRef
+renderNode :: ReactElement (IO ()) -> WriterT [Callback] IO ReactElementRef
 renderNode (f@(ForeignElement{})) = do
     props <- toJSRef_aeson $ fAttrs f
     foldM mkEventHandler props $ fEvents f

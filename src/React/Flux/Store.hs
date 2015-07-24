@@ -31,35 +31,7 @@ type ReactStoreRef storeData = JSRef ReactStore_
 -- You can have multiple stores; it should be the case that all of the state required to render the
 -- page is contained in the stores.
 --
--- For the TODO example application, we create a single store.
---
--- >data Todo = Todo {
--- >    todoText :: String
--- >  , todoComplete :: Bool
--- >} deriving (Show, Typeable)
--- >
--- >newtype TodoState = TodoState [(Int, Todo)]
--- >  deriving (Show, Typeable)
--- >
--- >data TodoActions = TodoCreate String
--- >                 | TodoToggleAllComplete
--- >                 | TodoComplete Int
--- >                 | TodoUndoComplete Int
--- >                 | TodoUpdateText Int String
--- >                 | TodoDelete Int
--- >  deriving (Show, Typeable)
--- >
--- >instance StoreData TodoState where
--- >    type StoreAction TodoState = TodoActions
--- >    transform (TodoState todos) action = ...
--- >
--- >todoStore :: ReactStore TodoState
--- >todoStore = mkStore $ TodoState []
--- >
--- >todoCreateAction :: String -> SomeStoreAction
--- >todoCreateAction txt = SomeStoreAction todoStore (TodoCreate txt)
--- >
--- > -- similar helpers for other actions
+-- TODO: copy from example
 newtype ReactStore storeData = ReactStore {
     -- | A reference to the foreign javascript part of the store.
     storeRef :: ReactStoreRef storeData
