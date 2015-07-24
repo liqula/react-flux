@@ -2,6 +2,21 @@ module React.Flux.Element where
 
 data Event_
 newtype Event = JSRef Event_
+
+-- | Event handlers in a controller-view and a view transform events into actions.
+type ViewEventHandler = Event -> [SomeStoreAction]
+
+-- | A stateful class event handler transforms events into store actions and a new state.
+-- If the new state is nothing, no change is made to the state (which allows an optimization in that
+-- we do not need to re-render the view).
+type StatefulViewEventHandler state = state -> Event -> ([SomeStoreAction], Maybe state)
+
+-- | A class event handler can perform arbitrary IO, producing the new state.  If the new state is
+-- nothing, no change is made to the state (which allows an optimization in that we do not need to
+-- re-render the view).
+type ClassEventHandler state = state -> Event -> IO (Maybe state)
+
+-- | An internal event handler, used by the rendering function
 type RawEventHandler = Event -> IO ()
 
 data ReactElement eventHandler
@@ -11,15 +26,17 @@ data ReactElement eventHandler
         , fEvents :: [(String, eventHandler)]
         , fChildren :: [ReactElement eventHandler]
         }
-    | forall props. Typeable props => ClassElement
+    | forall props key. (Typeable props, ToJSRef key) => ClassElement
         { ceClass :: ReactClass props
+        , ceKey :: Maybe key
+        -- TODO: ref?  ref support would need to tie into the Class too.
         , ceProps :: props
         , ceChildren :: [ReactElement eventHandler]
         }
 
 instance Functor ReactElement where
     fmap f (ForeignElement n a e c) = ForeignElement n (f a) e (map (fmap f) c)
-    fmap f (ClassElement n p c) = ClassElement n p (map (fmap f) c)
+    fmap f (ClassElement n k p c) = ClassElement n k p (map (fmap f) c)
 
 data ReactElement_
 type ReactElementRef = JSRef ReactElement_
@@ -30,6 +47,21 @@ foreign import javascript unsafe
                           -> JSRef b -- ^ the raw properties
                           -> JSRef [ReactElementRef] -- ^ children
                           -> IO ReactElementRef
+
+foreign import javascript unsafe
+    "React.createElement($1, {hs:$2}, $3)"
+    js_ReactCreateClass :: JSRef a -- ^ will either be a string or a ReactClassRef
+                        -> JSRef props -- ^ the properties
+                        -> JSRef [ReactElementRef] -- ^ children
+                        -> IO ReactElementRef
+
+foreign import javascript unsafe
+    "React.createElement($1, {key: $2, hs:$3}, $4)"
+    js_ReactCreateKeyedClass :: JSRef a -- ^ will either be a string or a ReactClassRef
+                             -> JSRef key
+                             -> JSRef props -- ^ the properties
+                             -> JSRef [ReactElementRef] -- ^ children
+                             -> IO ReactElementRef
 
 data ReactElementArg_
 type ReactElementArg = JSRef ReactElementArg_
@@ -55,7 +87,11 @@ renderNode (f@(ForeignElement{})) = do
     childNodes <- mapM renderNode $ fChildren f
     js_ReactCreateElement (toJSString $ fName f) props (pToJSRef childNodes)
 
-renderNode (ClassInstance { ceClass = ReactClass rc, ceProps = props, ceChildren = children }) = do
+renderNode (ClassInstance { ceClass = ReactClass rc, ceProps = props, ceKey = mkey, ceChildren = children }) = do
     childNodes <- mapM renderNode children
     propsE <- export props -- this will be released inside the lifetime events for the class
-    lift $ js_ReactCreateElement rc propsE (pToJSRef childNodes)
+    lift $ case mkey of
+        Just key -> do
+            keyRef <- toJSRef key
+            js_ReactCreateKeyedElement rc keyRef propsE (pToJSRef childNodes)
+        Nothing -> js_ReactCreateClass rc propsE (pToJSRef childNodes)

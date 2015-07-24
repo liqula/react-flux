@@ -1,3 +1,4 @@
+-- | Internal module containing the store definitions.
 module Store (
     ReactStore_
   , ReactStoreRef
@@ -29,6 +30,36 @@ type ReactStoreRef storeData = JSRef ReactStore_
 -- 
 -- You can have multiple stores; it should be the case that all of the state required to render the
 -- page is contained in the stores.
+--
+-- For the TODO example application, we create a single store.
+--
+-- >data Todo = Todo {
+-- >    todoText :: String
+-- >  , todoComplete :: Bool
+-- >} deriving (Show, Typeable)
+-- >
+-- >newtype TodoState = TodoState [(Int, Todo)]
+-- >  deriving (Show, Typeable)
+-- >
+-- >data TodoActions = TodoCreate String
+-- >                 | TodoToggleAllComplete
+-- >                 | TodoComplete Int
+-- >                 | TodoUndoComplete Int
+-- >                 | TodoUpdateText Int String
+-- >                 | TodoDelete Int
+-- >  deriving (Show, Typeable)
+-- >
+-- >instance StoreData TodoState where
+-- >    type StoreAction TodoState = TodoActions
+-- >    transform (TodoState todos) action = ...
+-- >
+-- >todoStore :: ReactStore TodoState
+-- >todoStore = mkStore $ TodoState []
+-- >
+-- >todoCreateAction :: String -> SomeStoreAction
+-- >todoCreateAction txt = SomeStoreAction todoStore (TodoCreate txt)
+-- >
+-- > -- similar helpers for other actions
 newtype ReactStore storeData = ReactStore {
     -- | A reference to the foreign javascript part of the store.
     storeRef :: ReactStoreRef storeData
@@ -41,7 +72,7 @@ newtype ReactStore storeData = ReactStore {
   , storeData :: MVar storeData
 }
 
--- | All data in a store must be an instance of this typeclass.
+-- | The data in a store must be an instance of this typeclass.
 class Typeable storeData => StoreData storeData where
     -- | The actions that this store accepts
     type StoreAction storeData
@@ -51,7 +82,9 @@ class Typeable storeData => StoreData storeData where
     -- unchanged.
     transform :: StoreAction storeData -> storeData -> IO storeData
 
--- | An existential type for some store action.
+-- | An existential type for some store action.  It is used for event handlers in controller-views
+-- and classes, so it is helpful to create utility functions creating 'SomeStoreAction' similar to
+-- @todoCreateAction@ above.
 data SomeStoreAction = forall storeData. StoreData storeData
     => SomeStoreAction (ReactStore storeData) (StoreAction storeData)
 
@@ -89,14 +122,7 @@ foreign import javascript unsafe
     "$1.export"
     js_UpdateStore_RetrieveOldExport :: UpdateStoreArgument -> IO (Export storeData)
 
--- | Create a new store from some initial data.
---
--- For the TODO example application, we can create a single store.
---
--- >newtype TodoState = TodoState [Todo]
--- >
--- >todoStore :: ReactStore TodoState
--- >todoStore = mkStore $ TodoState []
+-- | Create a new store from the initial data.
 mkStore :: StoreData storeData => storeData -> ReactStore storeData
 mkStore initial = unsafePerformIO $ do
     i <- export initial
