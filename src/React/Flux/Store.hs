@@ -61,8 +61,7 @@ class Typeable storeData => StoreData storeData where
     transform :: StoreAction storeData -> storeData -> IO storeData
 
 -- | An existential type for some store action.  It is used for event handlers in controller-views
--- and classes, so it is helpful to create utility functions creating 'SomeStoreAction' similar to
--- @todoCreateAction@ above.
+-- and classes, so it is helpful to create utility functions creating 'SomeStoreAction'.
 data SomeStoreAction = forall storeData. StoreData storeData
     => SomeStoreAction (ReactStore storeData) (StoreAction storeData)
 

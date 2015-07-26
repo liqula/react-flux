@@ -1,3 +1,5 @@
+-- | This module contains the definitions for the
+-- <https://facebook.github.io/react/docs/events.html React Event System>
 module React.Flux.Events (
     EventHandler
   , Event(..)
@@ -7,12 +9,19 @@ module React.Flux.Events (
   , onKeyDown
   , onKeyPress
   , onKeyUp
+
+  -- * Creating your own handlers
+  , mkHandler
+  , RawEvent_
+  , RawEvent(..)
+  , parseEvent
 ) where
 
 import Data.Aeson
 import React.Flux.JsTypes
 
--- | TODO
+-- | An event handler.  Values of this type are created by the various functions below such as
+-- 'onKeyDown'.  The handler is then passed to the element creation functions in "React.Flux.Dom".
 data EventHandler handler = EventHandler
   { evtHandlerName :: String
   , evtHandler :: RawEvent -> handler
@@ -25,6 +34,7 @@ instance Functor EventHandler where
 --- Generic Event
 ----------------------------------------------------------------------------------------------------
 
+-- | Every event in React is a synthetic event, a cross-browser wrapper around the native event.
 data Event = Event
     { evtType :: String
     , evtBubbles :: Bool
@@ -70,9 +80,10 @@ parseEvent (RawEvent _ val) =
         Error err -> error $ "Unable to parse event: " ++ err
         Success e -> e
 
-mkHandler :: String
-          -> (RawEvent -> detail)
-          -> (Event -> detail -> handler)
+-- | Construct an 'EventHandler' 
+mkHandler :: String -- ^ The event name
+          -> (RawEvent -> detail) -- ^ A function parsing the details for the specific event.
+          -> (Event -> detail -> handler) -- ^ The function implementing the handler.
           -> EventHandler handler
 mkHandler name parseDetail f = EventHandler
     { evtHandlerName = name
@@ -83,6 +94,7 @@ mkHandler name parseDetail f = EventHandler
 --- Keyboard
 ---------------------------------------------------------------------------------------------------
 
+-- | The data for the keyboard events
 data KeyboardEvent = KeyboardEvent
   { keyEvtAltKey :: Bool
   , keyEvtCharCode :: Int

@@ -1,6 +1,7 @@
 module React.Flux.Element (
     ReactElement(..)
   , ReactElementM(..)
+  , elementToM
   , el
   , foreignClass
   , ReactElementRef
@@ -26,7 +27,12 @@ data ReactElement eventHandler
         , fChild :: ReactElement eventHandler
         }
     | forall props key. (Typeable props, ToJSON key) => ClassElement
-        { ceClass :: ReactClassRef props
+        {
+#ifdef __GHCJS__
+          ceClass :: ReactClassRef props
+#else
+          ceClass :: String
+#endif
         , ceKey :: Maybe key
         -- TODO: ref?  ref support would need to tie into the Class too.
         , ceProps :: props
@@ -50,36 +56,26 @@ instance Functor ReactElement where
 newtype ReactElementM eventHandler a = ReactElementM { runReactElementM :: Writer (ReactElement eventHandler) a }
     deriving (Functor, Applicative, Monad, Foldable)
 
+elementToM :: a -> ReactElement eventHandler -> ReactElementM eventHandler a
+elementToM a e = ReactElementM (WriterT (Identity (a, e)))
+
 instance (a ~ ()) => Monoid (ReactElementM eventHandler a) where
-    mempty = ReactElementM (WriterT (Identity ((), EmptyElement)))
+    mempty = elementToM () EmptyElement
     mappend e1 e2 =
         let ((),e1') = runWriter $ runReactElementM e1
             ((),e2') = runWriter $ runReactElementM e2
-         in ReactElementM (WriterT (Identity ((), Append e1' e2')))
+         in elementToM () $ Append e1' e2'
 
 instance (a ~ ()) => IsString (ReactElementM eventHandler a) where
-    fromString s = ReactElementM (WriterT (Identity ((), Content s)))
-
+    fromString s = elementToM () $ Content s
 
 el :: String -> [Pair] -> [EventHandler eventHandler] -> ReactElementM eventHandler a -> ReactElementM eventHandler a
 el name attrs handlers (ReactElementM child) =
     let (a, childEl) = runWriter child
-     in ReactElementM (WriterT (Identity (a, ForeignElement name (object attrs) handlers childEl)))
+     in elementToM a $ ForeignElement name (object attrs) handlers childEl
 
 foreignClass :: String -> [Pair] -> ReactElementM eventHandler a -> ReactElementM eventHandler a
 foreignClass name attrs = el name attrs []
-
-{-
-rclass :: Typeable props => ReactClass props -> props -> ReactElementM eventHandler a -> ReactElementM eventHandler a
-rclass c p (ReactElementM child) =
-    let (a, childEl) = runWriter child
-     in ReactElementM (WriterT (Identity (ClassElement c (Nothing :: Maybe ()) props childEl, a)))
-
-rclassWithKey :: (Typeable props, ToJSRef key) => ReactClass props -> key -> props -> ReactElementM eventHandler a -> ReactElementM eventHandler a
-rclassWithKey c key p (ReactElementM child) =
-    let (a, childEl) = runWriter child
-     in ReactElementM (WriterT (Identity (ClassElement c (Just key) props childEl, a)))
--}
 
 ----------------------------------------------------------------------------------------------------
 -- mkReactElementM has two versions

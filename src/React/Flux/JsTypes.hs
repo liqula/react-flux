@@ -8,8 +8,10 @@ type Callback a = JSRef a
 type Export a = JSRef a
 #endif
 
+-- | Represents the raw javascript event from React.
 data RawEvent_
--- | A raw event from React
+
+-- | The raw event received from React, and a decoded version of the event.
 data RawEvent = RawEvent
     { _rawEventRef :: JSRef RawEvent_
     , _rawEventValue :: Value

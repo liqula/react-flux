@@ -20,6 +20,8 @@ module React.Flux (
   -- * Elements
   , ReactElement
   , ReactElementM(..)
+  , rclass
+  , rclassWithKey
   , foreignClass
   , module React.Flux.DOM
   , module React.Flux.Events

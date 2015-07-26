@@ -8,21 +8,24 @@ module React.Flux.Class (
   , mkStatefulView
   , ClassEventHandler
   , mkClass
+  , rclass
+  , rclassWithKey
 ) where
 
 import Data.Aeson
 import Data.Typeable (Typeable)
+import Control.Monad.Writer (runWriter)
 
 import React.Flux.Store
 import React.Flux.Element
+import React.Flux.JsTypes
 --import React.Flux.Events
---import React.Flux.JsTypes
 
 -- | A React class is conceptually a (stateful) function from properties to a tree of elements.
 --
 -- This module supports 3 kinds of pure classes and 1 unpure class.
 --
--- * Controller View, created by 'mkControllerView'.  The controller view provides the glue code
+-- * Controller View, created by 'mkControllerView'.  A controller view provides the glue code
 -- between a store and the view, and as such is a pure function taking as input the store data and
 -- the properties and producing a tree of elements.  In addition, any event handlers attached to
 -- elements can only produce actions.
@@ -30,7 +33,7 @@ import React.Flux.Element
 -- * View.  A view is pure function from props to a tree of elements.  It can eiter be modeled by
 -- just a Haskell function without a 'ReactClass', or as a 'ReactClass' created by 'mkView'.  Using
 -- the machinery of a 'ReactClass' is helpful because it allows React to more easily reconcile the
--- virtual DOM with the DOM and leads to faster rendering (as long as you use the @key@ property
+-- virtual DOM with the DOM and leads to faster rendering (as long as you use 'rclassWithKey'
 -- when creating an instance of the view).
 --
 -- * Stateful View, created by 'mkStatefulView'.  A stateful view is a class which keeps track of
@@ -46,26 +49,33 @@ import React.Flux.Element
 -- escape-hatch in 'mkClass'.
 
 #ifdef __GHCJS__
-newtype ReactClass props = ReactClass (ReactClassRef props)
+newtype ReactClass props = ReactClass { reactClassRef :: (ReactClassRef props) }
 #else
 data ReactClass props =
     forall storeData. Typeable storeData =>
-        TestReactControllerView (storeData -> props -> ReactElement ViewEventHandler)
+        TestReactControllerView String (storeData -> props -> ReactElement ViewEventHandler)
 
-  | TestReactView (props -> ReactElement ViewEventHandler)
-
-  | forall state. (ToJSON state, FromJSON state) =>
-        TestReactStatefulView (state -> props -> ReactElement (StatefulViewEventHandler state))
+  | TestReactView String (props -> ReactElement ViewEventHandler)
 
   | forall state. (ToJSON state, FromJSON state) =>
-        TestReactClass (state -> props -> IO (ReactElement (ClassEventHandler state)))
+        TestReactStatefulView String (state -> props -> ReactElement (StatefulViewEventHandler state))
+
+  | forall state. (ToJSON state, FromJSON state) =>
+        TestReactClass String (state -> props -> IO (ReactElement (ClassEventHandler state)))
+
+reactClassRef :: ReactClass props -> String
+reactClassRef (TestReactControllerView n _) = n
+reactClassRef (TestReactView n _) = n
+reactClassRef (TestReactStatefulView n _) = n
+reactClassRef (TestReactClass n _) = n
 #endif
 
 ---------------------------------------------------------------------------------------------------
 --- Two versions of mkControllerView
 ---------------------------------------------------------------------------------------------------
 
--- | Event handlers in a controller-view and a view transform events into actions.
+-- | Event handlers in a controller-view and a view transform events into actions, but are not
+-- allowed to perform any 'IO'.
 type ViewEventHandler = [SomeStoreAction]
 
 -- | A controller view provides the glue between a 'ReactStore' and the DOM.
@@ -113,7 +123,7 @@ mkControllerView :: (StoreData storeData, Typeable props)
                  -> ReactStore storeData -- ^ The store this controller view should attach to.
                  -> (storeData -> props -> ReactElement ViewEventHandler) -- ^ The rendering function
                  -> ReactClass props
-mkControllerView _ _ f = TestReactControllerView f
+mkControllerView n _ f = TestReactControllerView n f
 
 #endif
 
@@ -122,8 +132,9 @@ mkControllerView _ _ f = TestReactControllerView f
 ---------------------------------------------------------------------------------------------------
 
 -- | A view is a class which does not track its own state.  It provides more than just a Haskell
--- function when used with a key property, which allows React to more easily reconcile the virtual
--- DOM with the browser DOM.
+-- function when used with a key property with 'rclassWithKey', which allows React to more easily
+-- reconcile the virtual DOM with the browser DOM.  For more details, see the
+-- <https://facebook.github.io/react/docs/reconciliation.html React documentation on reconciliation>.
 
 #ifdef __GHCJS__
 
@@ -155,7 +166,7 @@ mkView :: Typeable props
        => String -- ^ A name for this class
        -> (props -> ReactElement ViewEventHandler) -- ^ The rendering function
        -> ReactClass props
-mkView _ f = TestReactView f
+mkView = TestReactView
 
 #endif
 
@@ -201,7 +212,7 @@ mkStatefulView :: (ToJSON state, FromJSON state, Typeable props)
                -> state -- ^ The initial state
                -> (state -> props -> ReactElement (StatefulViewEventHandler state)) -- ^ The rendering function
                -> ReactClass props
-mkStatefulView _ _ f = TestReactStatefulView f
+mkStatefulView n _ f = TestReactStatefulView n f
 
 #endif
 
@@ -243,7 +254,7 @@ mkClass :: (ToJSON state, FromJSON state, Typeable props)
         -> state -- ^ The initial state
         -> (state -> props -> IO (ReactElement (ClassEventHandler state))) -- ^ The rendering function
         -> ReactClass props
-mkClass _ _ f = TestReactClass f
+mkClass n _ f = TestReactClass n f
 
 #endif
 
@@ -451,3 +462,34 @@ mkClassHelper runHandler name initial render = unsafePerformIO $ do
 
     ReactClass <$> js_createClass (toJSString name) initialRef renderCb releaseCb releaseProps
 #endif
+
+----------------------------------------------------------------------------------------------------
+--- Element creation for classes
+----------------------------------------------------------------------------------------------------
+
+-- | Create an element from a class.  I suggest you make a combinator for each of your classes.  For
+-- example,
+--
+-- TODO
+rclass :: Typeable props => ReactClass props -- ^ the class
+                         -> props -- ^ the properties to pass into the instance of this class
+                         -> ReactElementM eventHandler a -- ^ The children of the element
+                         -> ReactElementM eventHandler a
+rclass rc props (ReactElementM child) =
+    let (a, childEl) = runWriter child
+     in elementToM a $ ClassElement (reactClassRef rc) (Nothing :: Maybe ()) props childEl
+
+-- | Create an element from a class, and also pass in a key property for the instance.  Key
+-- properties speed up the <https://facebook.github.io/react/docs/reconciliation.html reconciliation>
+-- of the virtual DOM with the DOM.  The key does not need to be globally unqiue, it only needs to
+-- be unique within its siblings, not globally unique.
+--
+-- TODO
+rclassWithKey :: (Typeable props, ToJSON key) => ReactClass props -- ^ the class
+                                              -> key -- ^ A value unique within the siblings of this element
+                                              -> props -- ^ The properties to pass to the class instance
+                                              -> ReactElementM eventHandler a -- ^ The children of the class
+                                              -> ReactElementM eventHandler a
+rclassWithKey rc key props (ReactElementM child) =
+    let (a, childEl) = runWriter child
+     in elementToM a $ ClassElement (reactClassRef rc) (Just key) props childEl
