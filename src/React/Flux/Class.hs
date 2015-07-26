@@ -1,13 +1,13 @@
 -- | Internal module containing the class definitions
 module React.Flux.Class (
     ReactClass(..)
-  , ViewEventHandler
   , mkControllerView
   , mkView
-  , StatefulViewEventHandler
+  , ViewEventHandler
   , mkStatefulView
-  , ClassEventHandler
+  , StatefulViewEventHandler
   , mkClass
+  , ClassEventHandler
   , rclass
   , rclassWithKey
 ) where
@@ -18,7 +18,7 @@ import Control.Monad.Writer (runWriter)
 
 import React.Flux.Store
 import React.Flux.Element
-import React.Flux.JsTypes
+--import React.Flux.JsTypes
 --import React.Flux.Events
 
 -- | A React class is conceptually a (stateful) function from properties to a tree of elements.
@@ -80,7 +80,29 @@ type ViewEventHandler = [SomeStoreAction]
 
 -- | A controller view provides the glue between a 'ReactStore' and the DOM.
 --
---  TODO: write more!!!
+-- The controller-view registers with the given store.  Whenever the store is transformed, the
+-- controller-view re-renders itself.  It is recommended to have one controller-view for each
+-- significant section of the page.  Controller-views deeper in the page tree can cause complexity
+-- because data is now flowing into the page in multiple possibly conflicting places.  You must
+-- balance the gain of encapsulated components versus the complexity of multiple entry points for
+-- data into the page.  Deeper components in the page can still be made re-usuable by using views or
+-- stateful views.
+--
+-- Each instance of a controller-view also accepts properties of type @props@ from its parent.
+-- Whenever the parent re-renders itself, the new properties will be passed down to the
+-- controller-view causing it to re-render itself.
+--
+-- Events registered on controller-views just produce actions, which get dispatched to the
+-- appropriate store which causes the store to transform itself, which eventually leads to the
+-- controller-view re-rendering.  This one-way flow of data from actions to store to
+-- controller-views is central to the flux design.
+--
+-- While the above re-rendering on any store data or property change is conceptually what occurs,
+-- React uses a process of <https://facebook.github.io/react/docs/reconciliation.html
+-- reconciliation> to speed up re-rendering.  The best way of taking advantage of re-rendering is to
+-- use key properties with 'rclassWithKey'.
+--
+-- TODO
 
 #ifdef __GHCJS__
 
@@ -131,10 +153,17 @@ mkControllerView n _ f = TestReactControllerView n f
 --- Two versions of mkView
 ---------------------------------------------------------------------------------------------------
 
--- | A view is a class which does not track its own state.  It provides more than just a Haskell
--- function when used with a key property with 'rclassWithKey', which allows React to more easily
--- reconcile the virtual DOM with the browser DOM.  For more details, see the
--- <https://facebook.github.io/react/docs/reconciliation.html React documentation on reconciliation>.
+-- | A view is a re-usable component of the page which does not track any state itself.
+--
+-- Each instance of a view accepts properties of type @props@ from its parent and re-renders itself
+-- whenever the properties change.
+--
+-- One option to implement views is to just use a Haskell function taking the @props@ as input and
+-- produce a 'ReactElementM'.  For small views, such a Haskell function is ideal.
+--
+-- Using a view class provides more than just a Haskell function when used with a key property with
+-- 'rclassWithKey'.  The key property allows React to more easily reconcile the virtual DOM with the
+-- browser DOM.
 
 #ifdef __GHCJS__
 
@@ -179,8 +208,12 @@ mkView = TestReactView
 -- we do not need to re-render the view).
 type StatefulViewEventHandler state = ([SomeStoreAction], Maybe state)
 
--- | A stateful class keeps track of internal state, but the definition of the rendering and
--- event handlers are pure functions.
+-- | A stateful view is a re-usable component of the page which keeps track of internal state.
+--
+-- The rendering function is a pure function of the state and the properties from the parent.  The
+-- view will be re-rendered whenever the state or properties change.  The only way to
+-- transform the internal state of the view is via an event handler, which can optionally produce
+-- new state.
 --
 -- TODO
 

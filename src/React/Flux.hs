@@ -22,7 +22,7 @@ module React.Flux (
   , ReactElementM(..)
   , rclass
   , rclassWithKey
-  , foreignClass
+  --, foreignClass
   , module React.Flux.DOM
   , module React.Flux.Events
 
@@ -40,7 +40,7 @@ import React.Flux.Store
 -- reactRender has two versions
 ----------------------------------------------------------------------------------------------------
 
--- | Render
+-- | Render your React application into the DOM.
 
 #ifdef __GHCJS__
 

@@ -1,9 +1,15 @@
+-- | Utility module for React Elements.
+--
+-- Normally you should not need to use anything in this module.  Instead, you can create DOM
+-- elements from the functions in "React.Flux.DOM".  This module is only needed if you have
+-- complicated interaction with custom javascript rendering code that isn't covered by the
+-- combinators in "React.Flux.DOM".  Actually, I cannot think of any case not covered by the
+-- existing combinators, but I exported this module anyway just in case.
 module React.Flux.Element (
     ReactElement(..)
   , ReactElementM(..)
   , elementToM
   , el
-  , foreignClass
   , ReactElementRef
   , ReactElement_
   , mkReactElementM
@@ -19,6 +25,14 @@ import Control.Monad.Identity (Identity(..))
 import React.Flux.Events
 import React.Flux.JsTypes
 
+-- | A React element is the result of the rendering functions on the classes.  It is a node or list
+-- of nodes in a virtual DOM built by the rendering functions of classes, and React then reconciles
+-- this virtual DOM with the browser DOM.  The 'ReactElement' is a monoid, so dispite its name, can
+-- represent more than one element.
+--
+-- A 'ReactElement' is parametrized by the type @eventHandler@, which is the type of the event
+-- handlers that can be attached to DOM elements.  Event handlers are created by combinators in
+-- "React.Flux.Events" and can be attached to elements by the combinators in "React.Flux.DOM".
 data ReactElement eventHandler
     = ForeignElement
         { fName :: String
@@ -53,9 +67,22 @@ instance Functor ReactElement where
     fmap _ (Content s) = Content s
     fmap _ EmptyElement = EmptyElement
 
+-- | A writer monad for 'ReactElement's which is used in the rendering function of all views.
+--
+-- * @do@ notation is used to sequence sibling elements.  Alternativly, the 'Monoid' instance
+-- can also be used to sequence sibling elements.
+--
+-- * Child elements are specified via function application; the combinator creating an element takes
+-- the child element as a parameter.
+--
+-- * The "React.Flux.DOM" module contains a large number of combinators for creating HTML elements.
+--
+-- * 'React.Flux.rclass', 'React.Flux.rclassWithKey', and 'React.Flux.foreignClass' allow creating
+-- React elements from classes.
 newtype ReactElementM eventHandler a = ReactElementM { runReactElementM :: Writer (ReactElement eventHandler) a }
     deriving (Functor, Applicative, Monad, Foldable)
 
+-- | Create a 'ReactElementM' containing a given 'ReactElement'.
 elementToM :: a -> ReactElement eventHandler -> ReactElementM eventHandler a
 elementToM a e = ReactElementM (WriterT (Identity (a, e)))
 
@@ -69,20 +96,34 @@ instance (a ~ ()) => Monoid (ReactElementM eventHandler a) where
 instance (a ~ ()) => IsString (ReactElementM eventHandler a) where
     fromString s = elementToM () $ Content s
 
-el :: String -> [Pair] -> [EventHandler eventHandler] -> ReactElementM eventHandler a -> ReactElementM eventHandler a
+-- | Create a React element.
+el :: String -- ^ The element name.  In fact, this string is passed as the first argument of @React.createElement@ so can
+             -- also be a class name.
+   -> [Pair] -- ^ The properties to pass to the element (the second argument to @React.createElement@
+   -> [EventHandler eventHandler] -- ^ Event handlers.  Each event handler will be added to the properties, so also are given in the
+                                  --   second argument to @React.createElement@.
+   -> ReactElementM eventHandler a -- ^ The child elements, the third argument to @React.createElement@.
+   -> ReactElementM eventHandler a
 el name attrs handlers (ReactElementM child) =
     let (a, childEl) = runWriter child
      in elementToM a $ ForeignElement name (object attrs) handlers childEl
 
-foreignClass :: String -> [Pair] -> ReactElementM eventHandler a -> ReactElementM eventHandler a
-foreignClass name attrs = el name attrs []
+{-
+-- | Create a 'ReactElement' for a class defined in javascript.
+foreignClass :: String -- ^ A javascript expression for 
+             -> [Pair]
+             -> ReactElementM eventHandler a
+             -> ReactElementM eventHandler a
+foreignClass name attrs =
+-}
 
 ----------------------------------------------------------------------------------------------------
 -- mkReactElementM has two versions
 ----------------------------------------------------------------------------------------------------
 
 -- | Execute a ReactElementM to create a javascript React element and a list of callbacks attached
--- to nodes within the element.
+-- to nodes within the element.  These callbacks will need to be released with 'releaseCallback'
+-- once the class is re-rendered.  The built-in views do this automatically.
 
 #ifdef __GHCJS__
 
