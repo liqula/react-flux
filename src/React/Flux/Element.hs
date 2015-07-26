@@ -3,6 +3,8 @@ module React.Flux.Element (
   , ReactElementM(..)
   , el
   , foreignClass
+  , ReactElementRef
+  , ReactElement_
   , mkReactElementM
 ) where
 
