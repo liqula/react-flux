@@ -206,7 +206,12 @@ mkView = TestReactView
 -- | A stateful-view event handler transforms events into store actions and a new state.
 -- If the new state is nothing, no change is made to the state (which allows an optimization in that
 -- we do not need to re-render the view).
-type StatefulViewEventHandler state = ([SomeStoreAction], Maybe state)
+--
+-- The handler takes a state as input.  Changing the state causes a re-render which
+-- will cause a new event handler to be created with the new state.  But there is a race if multiple
+-- events occur before React causes a re-render.  Therefore, the handler takes the current state and
+-- it should ignore the state passed into the render function.
+type StatefulViewEventHandler state = state -> ([SomeStoreAction], Maybe state)
 
 -- | A stateful view is a re-usable component of the page which keeps track of internal state.
 --
@@ -229,13 +234,15 @@ mkStatefulView name initial render = mkClassHelper runStateViewHandler name init
         render' state props = return $ render state props
 
 -- | Transform a stateful class event handler to a raw event handler
-runStateViewHandler :: ToJSON state => SetStateFn -> StatefulViewEventHandler state -> IO ()
-runStateViewHandler setStateFn (actions, mNewState) = do
+runStateViewHandler :: (ToJSON state, FromJSON state)
+                    => AlterStateFns -> StatefulViewEventHandler state -> IO ()
+runStateViewHandler alterState (actions, mNewState) = do
+    st <- parseState =<< js_GetState alterState
     case mNewState of
         Nothing -> return ()
         Just newState -> do
             newStateRef <- toJSRef_aeson newState
-            js_SetState setStateFn newStateRef
+            js_SetState alterState newStateRef
     mapM_ dispatchSomeAction actions
 
 #else
@@ -256,7 +263,10 @@ mkStatefulView n _ f = TestReactStatefulView n f
 -- | A class event handler can perform arbitrary IO, producing the new state.  If the new state is
 -- nothing, no change is made to the state (which allows an optimization in that we do not need to
 -- re-render the view).
-type ClassEventHandler state = IO (Maybe state)
+--
+-- Similar to 'StatefulViewEventHandler', the handler takes the current state as input to avoid a
+-- race between changing the state and a re-render.
+type ClassEventHandler state = state -> IO (Maybe state)
 
 -- | Create a class allowed to perform arbitrary IO during rendering and event handlers.
 
@@ -271,14 +281,15 @@ mkClass = mkClassHelper expandClassHandler
 
 -- | Transform a class event handler to a raw event handler.
 runClassHandler :: (FromJSON state, ToJSON state)
-                => SetStateFn -> ClassEventHandler state -> IO ()
-runClassHandler setStateFn handler = do
-    mNewState <- handler
+                => AlterStateFns -> ClassEventHandler state -> IO ()
+runClassHandler alterState handler = do
+    st <- parseState =<< js_GetState alterState
+    mNewState <- handler st
     case mNewState of
         Nothing -> return ()
         Just newState -> do
             newStateRef <- toJSRef_aeson newState
-            js_SetState setState newStateRef
+            js_SetState alterState newStateRef
 
 #else
 
@@ -310,8 +321,9 @@ mkClass n _ f = TestReactClass n f
 -- * elem  This is set by Haskell and contains the value that should be returned by the render
 --         function back to React.
 --
---  In addition, for classes (not controller-views), there is one additional property @setState@
---  which is used inside the event handlers.
+--  In addition, for classes (not controller-views), there is one additional property @alterState@
+--  which is used inside the event handlers.  @alterState@ has two properties, @setState@ and
+--  @getState@.
 data RenderCbArgs
 
 foriegn import javascript unsafe
@@ -326,15 +338,19 @@ foreign import javascript unsafe
     "$1.newCallbacks = $2; $1.elem = $3;"
     js_RenderCbSetResults :: JSRef RenderCbArgs -> JSRef a -> JSRef b -> IO ()
 
-type SetStateFn = JSRef (JSRef state -> IO ())
+type AlterStateFns = JSRef (JSRef state -> IO (), IO (JSRef state))
 
 foreign import javascript unsafe
     "$1.alterState"
-    js_RenderCbRetrieveSetStateFn :: JSRef RenderCbArgs -> IO SetStateFn
+    js_RenderCbRetrieveAlterStateFns :: JSRef RenderCbArgs -> IO AlterStateFns
 
 foreign import javascript unsafe
-    "$1($2)"
-    js_SetState :: SetStateFn -> JSRef state -> IO ()
+    "$1.setState($2)"
+    js_SetState :: AlterStateFns -> JSRef state -> IO ()
+
+foreign import javascript unsafe
+    "$1.getState()"
+    js_GetState :: AlterStateFns -> IO (JSRef state)
 
 -- | Create a controller view.  On mounting and unmounting, register with the store to be notified
 -- of state changes.  Any time the properties change they must be released, so @releaseProps@
@@ -435,12 +451,16 @@ foreign import javascript unsafe
                 releaseProps(this.props.hs); \
             }, \
             render: function() { \
+                var that = this; \
                 var arg = { \
                     state: this.state, \
                     props: this.props.hs, \
                     newCallbacks: [], \
                     elem:null, \
-                    setState: this.setState, \
+                    alterState: { \
+                        getState: function() { return that.state; }, \
+                        setState: function(st) { that.setState(st); }, \
+                    }, \
                 }; \
                 renderCb(arg); \
                 this._currentCallbacks.map(releaseCb); \
@@ -470,12 +490,7 @@ mkClassHelper runHandler name initial render = unsafePerformIO $ do
 
     renderCb <- syncCallback1 ThrowWouldBlock $ \arg -> do
 
-        stateRef <- js_RenderCbRetrieveState arg
-        mstate <- fromJSRef stateRef
-        stateVal <- maybe (error "Unable to decode class state") return mstate
-        state <- case fromJSON stateVal of
-                    Error err -> error $ "Unable to decode class state: " ++ err
-                    Success s -> return s
+        state <- parseState =<< js_RenderCbRetrieveState arg
 
         propsE <- js_RenderCbRetrieveProps arg
         mprops <- derefExport propsE
@@ -494,6 +509,14 @@ mkClassHelper runHandler name initial render = unsafePerformIO $ do
     releaseProps <- syncCallback1 ThrowWouldBlock releaseExport
 
     ReactClass <$> js_createClass (toJSString name) initialRef renderCb releaseCb releaseProps
+
+parseState :: FromJSON state => JSRef state -> IO state
+parseState stateRef = do
+    mstate <- fromJSRef stateRef
+    stateVal <- maybe (error "Unable to decode class state") return mstate
+    state <- case fromJSON stateVal of
+                Error err -> error $ "Unable to decode class state: " ++ err
+                Success s -> return s
 #endif
 
 ----------------------------------------------------------------------------------------------------
