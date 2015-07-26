@@ -19,9 +19,14 @@ library
   hs-source-dirs:      src
   ghc-options: -Wall
   default-language: Haskell2010
-  exposed-modules: React.Flux.Element
-  other-modules: React.Flux.JSMock
-                 React.Flux.Events
+
+  exposed-modules: React.Flux
+                   React.Flux.DOM
+                   React.Flux.Events
+
+  other-modules: React.Flux.JsTypes
+                 React.Flux.Element
+                 React.Flux.Store
 
   default-extensions: CPP
                       EmptyDataDecls

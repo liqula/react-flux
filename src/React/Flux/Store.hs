@@ -1,5 +1,5 @@
 -- | Internal module containing the store definitions.
-module Store (
+module React.Flux.Store (
     ReactStore_
   , ReactStoreRef
   , ReactStore(..)
@@ -9,6 +9,12 @@ module Store (
   , dispatch
   , dispatchSomeAction
 ) where
+
+import Control.Concurrent.MVar (MVar, newMVar, modifyMVar_)
+import Data.Typeable (Typeable)
+import System.IO.Unsafe (unsafePerformIO)
+
+import React.Flux.JsTypes
 
 -- | As part of each store, we have a javascript object with two properties:
 --
@@ -32,7 +38,7 @@ type ReactStoreRef storeData = JSRef ReactStore_
 -- page is contained in the stores.
 --
 -- TODO: copy from example
-newtype ReactStore storeData = ReactStore {
+data ReactStore storeData = ReactStore {
     -- | A reference to the foreign javascript part of the store.
     storeRef :: ReactStoreRef storeData
 
@@ -59,6 +65,21 @@ class Typeable storeData => StoreData storeData where
 -- @todoCreateAction@ above.
 data SomeStoreAction = forall storeData. StoreData storeData
     => SomeStoreAction (ReactStore storeData) (StoreAction storeData)
+
+----------------------------------------------------------------------------------------------------
+-- mkStore has two versions
+----------------------------------------------------------------------------------------------------
+
+-- | Create a new store from the initial data.
+
+#ifdef __GHCJS__
+
+mkStore :: StoreData storeData => storeData -> ReactStore storeData
+mkStore initial = unsafePerformIO $ do
+    i <- export initial
+    storeRef <- jsCreateStore i
+    storeMVar <- newMVar initial
+    return $ ReactStore storeRef storeMVar
 
 -- | Create the javascript half of the store.
 foreign import javascript unsafe
@@ -94,19 +115,27 @@ foreign import javascript unsafe
     "$1.export"
     js_UpdateStore_RetrieveOldExport :: UpdateStoreArgument -> IO (Export storeData)
 
--- | Create a new store from the initial data.
+#else
+
 mkStore :: StoreData storeData => storeData -> ReactStore storeData
 mkStore initial = unsafePerformIO $ do
-    i <- export initial
-    storeRef <- jsCreateStore i
     storeMVar <- newMVar initial
-    return $ ReactStore storeRef storeMVar
+    return $ ReactStore () storeMVar
+
+#endif
+
+----------------------------------------------------------------------------------------------------
+-- dispatch has two versions
+----------------------------------------------------------------------------------------------------
 
 -- | Dispatch an action to a store.  This first causes the store data to transform according to the
 -- action and then notifies all component views that the store data has changed.
 --
 -- This function uses an MVar to make sure only a single thread is updating the store and
 -- re-rendering the view at a single time.  Thus this function can block.
+
+#ifdef __GHCJS__
+
 dispatch :: StoreData storeData => ReactStore storeData -> StoreAction storeData -> IO ()
 dispatch store action = modifyMVar_ (storeData store) $ \oldData -> do
 
@@ -119,6 +148,13 @@ dispatch store action = modifyMVar_ (storeData store) $ \oldData -> do
         `finally` js_UpdateStore_RetrieveOldState arg >>= releaseExport
 
     return newData
+
+#else
+
+dispatch :: StoreData storeData => ReactStore storeData -> StoreAction storeData -> IO ()
+dispatch store action = modifyMVar_ (storeData store) (transform action)
+
+#endif
 
 -- | Dispatch some store action.
 dispatchSomeAction :: SomeStoreAction -> IO ()

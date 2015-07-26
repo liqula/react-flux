@@ -39,9 +39,7 @@ instance Monoid (ReactElement eventHandler) where
     mappend x y = Append x y
 
 instance Functor ReactElement where
-    fmap f (ForeignElement n a h c) = ForeignElement n a (map changeHandler h) (fmap f c)
-        where
-            changeHandler (EventHandler name oldHandler) = EventHandler name (f . oldHandler)
+    fmap f (ForeignElement n a h c) = ForeignElement n a (map (fmap f) h) (fmap f c)
     fmap f (ClassElement n k p c) = ClassElement n k p (fmap f c)
     fmap f (Append a b) = Append (fmap f a) (fmap f b)
     fmap _ (Content s) = Content s
@@ -81,10 +79,24 @@ rclassWithKey c key p (ReactElementM child) =
      in ReactElementM (WriterT (Identity (ClassElement c (Just key) props childEl, a)))
 -}
 
----------------------------
+----------------------------------------------------------------------------------------------------
+-- mkReactElementM has two versions
+----------------------------------------------------------------------------------------------------
 
+-- | Execute a ReactElementM to create a javascript React element and a list of callbacks attached
+-- to nodes within the element.
 
 #ifdef __GHCJS__
+
+mkReactElementM :: ReactElementM (IO ()) a -> IO (ReactElementRef, [Callback (IO a)])
+mkReactElementM e = runWriterT $ do
+    let elem = execWriter $ runReactElementM e
+    refs <- mkReactElem elem
+    case refs of
+        [] -> lift $ js_ReactCreateElement "div" jsNull jsNull
+        [x] -> return x
+        xs -> lift $ js_ReactCreateElement "div" jsNull (pToJSRef xs)
+
 
 foreign import javascript unsafe
     "React.createElement($1, $2, $3)"
@@ -154,16 +166,9 @@ mkReactElem (ClassInstance { ceClass = ReactClass rc, ceProps = props, ceKey = m
         Nothing -> js_ReactCreateClass rc propsE (pToJSRef childNodes)
     return [e]
 
-mkReactElementM :: ReactElementM (IO ()) a -> IO (ReactElementRef, [Callback (IO a)])
-mkReactElementM e = runWriterT $ do
-    let elem = execWriter $ runReactElementM e
-    refs <- mkReactElem elem
-    case refs of
-        [] -> lift $ js_ReactCreateElement "div" jsNull jsNull
-        [x] -> return x
-        xs -> lift $ js_ReactCreateElement "div" jsNull (pToJSRef xs)
-
 #else
+
 mkReactElementM :: ReactElementM (IO ()) a -> IO (ReactElementRef, [Callback (IO a)])
 mkReactElementM _ = return ((), [])
+
 #endif

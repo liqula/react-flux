@@ -5,6 +5,7 @@ import Data.Aeson
 #ifndef __GHCJS__
 type JSRef a = ()
 type Callback a = JSRef a
+type Export a = JSRef a
 #endif
 
 data RawEvent_

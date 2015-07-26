@@ -1,5 +1,5 @@
 module React.Flux.Events (
-    EventHandler(..)
+    EventHandler
   , Event(..)
 
   -- * Keyboard
@@ -17,6 +17,9 @@ data EventHandler handler = EventHandler
   { evtHandlerName :: String
   , evtHandler :: RawEvent -> handler
   }
+
+instance Functor EventHandler where
+    fmap f (EventHandler name h) = EventHandler name (f . h)
 
 ----------------------------------------------------------------------------------------------------
 --- Generic Event
