@@ -24,7 +24,7 @@ module React.Flux (
   , rclassWithKey
   --, foreignClass
   , module React.Flux.DOM
-  , module React.Flux.Events
+  , module React.Flux.PropertiesAndEvents
 
   -- * Main
   , reactRender

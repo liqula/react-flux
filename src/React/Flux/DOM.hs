@@ -41,11 +41,11 @@ instance (child ~ ReactElementM eventHandler a) => Term eventHandler [PropertyOr
 instance Term eventHandler (ReactElementM eventHandler a) (ReactElementM eventHandler a) where
     term name child = el name [] child
 
-
-
 #define elem(name) name ## _ :: Term eventHandler arg result => arg -> result; name ## _ = term #name
 
--- Copy from react documentation and use :s/ /)^v^Melem(/g
+-- Copy the elements from react documentation and use :s/ /)^v^Melem(/g
+
+-- HTML
 
 elem(a)
 elem(abbr)
@@ -161,4 +161,23 @@ elem(video)
 elem(wbr)
 
 
+-- SVG
 
+elem(circle)
+elem(clipPath)
+elem(defs)
+elem(ellipse)
+elem(g)
+elem(line)
+elem(linearGradient)
+elem(mask)
+elem(path)
+elem(pattern)
+elem(polygon)
+elem(polyline)
+elem(radialGradient)
+elem(rect)
+elem(stop)
+elem(svg)
+elem(text)
+elem(tspan)
