@@ -23,9 +23,11 @@ library
   exposed-modules: React.Flux
                    React.Flux.DOM
                    React.Flux.Events
+                   React.Flux.Test
 
-  other-modules: React.Flux.JsTypes
+  other-modules: React.Flux.Class
                  React.Flux.Element
+                 React.Flux.JsTypes
                  React.Flux.Store
 
   default-extensions: CPP

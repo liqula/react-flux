@@ -8,7 +8,6 @@ module React.Flux (
   , dispatchSomeAction
 
   -- * Classes
-  {-
   , ReactClass
   , ViewEventHandler
   , mkControllerView
@@ -17,10 +16,6 @@ module React.Flux (
   , mkStatefulView
   , ClassEventHandler
   , mkClass
-  -}
-
-  -- * Events
-  , module React.Flux.Events
 
   -- * Elements
   , ReactElement
@@ -28,8 +23,10 @@ module React.Flux (
   , el
   , foreignClass
   , module React.Flux.DOM
+  , module React.Flux.Events
 ) where
 
+import React.Flux.Class
 import React.Flux.DOM
 import React.Flux.Element
 import React.Flux.Events
