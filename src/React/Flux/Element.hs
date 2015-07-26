@@ -17,27 +17,25 @@ module React.Flux.Element (
 
 import Data.String (IsString(..))
 import Data.Aeson
-import Data.Aeson.Types (Pair)
 import Data.Typeable (Typeable)
 import Control.Monad.Writer (Writer, runWriter, WriterT(..))
 import Control.Monad.Identity (Identity(..))
 
-import React.Flux.Events
+import React.Flux.PropertiesAndEvents
 import React.Flux.JsTypes
 
 -- | A React element is the result of the rendering functions on the classes.  It is a node or list
 -- of nodes in a virtual DOM built by the rendering functions of classes, and React then reconciles
--- this virtual DOM with the browser DOM.  The 'ReactElement' is a monoid, so dispite its name, can
+-- this virtual DOM with the browser DOM.  The 'ReactElement' is a monoid, so dispite its name can
 -- represent more than one element.
 --
 -- A 'ReactElement' is parametrized by the type @eventHandler@, which is the type of the event
 -- handlers that can be attached to DOM elements.  Event handlers are created by combinators in
--- "React.Flux.Events" and can be attached to elements by the combinators in "React.Flux.DOM".
+-- "React.Flux.Events".
 data ReactElement eventHandler
     = ForeignElement
         { fName :: String
-        , fAttrs :: Value
-        , fHandlers :: [EventHandler eventHandler]
+        , fProps :: [PropertyOrHandler eventHandler]
         , fChild :: ReactElement eventHandler
         }
     | forall props key. (Typeable props, ToJSON key) => ClassElement
@@ -61,7 +59,7 @@ instance Monoid (ReactElement eventHandler) where
     mappend x y = Append x y
 
 instance Functor ReactElement where
-    fmap f (ForeignElement n a h c) = ForeignElement n a (map (fmap f) h) (fmap f c)
+    fmap f (ForeignElement n p c) = ForeignElement n (map (fmap f) p) (fmap f c)
     fmap f (ClassElement n k p c) = ClassElement n k p (fmap f c)
     fmap f (Append a b) = Append (fmap f a) (fmap f b)
     fmap _ (Content s) = Content s
@@ -69,15 +67,28 @@ instance Functor ReactElement where
 
 -- | A writer monad for 'ReactElement's which is used in the rendering function of all views.
 --
--- * @do@ notation is used to sequence sibling elements.  Alternativly, the 'Monoid' instance
--- can also be used to sequence sibling elements.
+-- @do@ notation or the 'Monoid' instance is used to sequence sibling elements.
+-- Child elements are specified via function application; the combinator creating an element takes
+-- the child element as a parameter. The @OverloadedStrings@ extension is used to create plain text.
 --
--- * Child elements are specified via function application; the combinator creating an element takes
--- the child element as a parameter.
+-- >ul_ $ do li_ (b_ "Hello")
+-- >         li_ "World"
+-- >         li_ $
+-- >             ul_ (li_ "Nested" <> li_ "List")
 --
--- * The "React.Flux.DOM" module contains a large number of combinators for creating HTML elements.
+-- would build something like
 --
--- * 'React.Flux.rclass', 'React.Flux.rclassWithKey', and 'React.Flux.foreignClass' allow creating
+-- ><ul>
+-- >  <li><b>Hello</b><li>
+-- >  <li>World</li>
+-- >  <li><ul>
+-- >    <li>Nested</li>
+-- >    <li>List</li>
+-- >  </ul></li>
+-- ></ul>
+--
+-- The "React.Flux.DOM" module contains a large number of combinators for creating HTML elements.
+-- 'React.Flux.rclass', 'React.Flux.rclassWithKey', and 'React.Flux.foreignClass' allow creating
 -- React elements from classes.
 newtype ReactElementM eventHandler a = ReactElementM { runReactElementM :: Writer (ReactElement eventHandler) a }
     deriving (Functor, Applicative, Monad, Foldable)
@@ -97,16 +108,13 @@ instance (a ~ ()) => IsString (ReactElementM eventHandler a) where
     fromString s = elementToM () $ Content s
 
 -- | Create a React element.
-el :: String -- ^ The element name.  In fact, this string is passed as the first argument of @React.createElement@ so can
-             -- also be a class name.
-   -> [Pair] -- ^ The properties to pass to the element (the second argument to @React.createElement@
-   -> [EventHandler eventHandler] -- ^ Event handlers.  Each event handler will be added to the properties, so also are given in the
-                                  --   second argument to @React.createElement@.
-   -> ReactElementM eventHandler a -- ^ The child elements, the third argument to @React.createElement@.
+el :: String -- ^ The element name (the first argument to @React.createElement@).
+   -> [PropertyOrHandler eventHandler] -- ^ The properties to pass to the element (the second argument to @React.createElement@).
+   -> ReactElementM eventHandler a -- ^ The child elements (the third argument to @React.createElement@).
    -> ReactElementM eventHandler a
-el name attrs handlers (ReactElementM child) =
+el name attrs (ReactElementM child) =
     let (a, childEl) = runWriter child
-     in elementToM a $ ForeignElement name (object attrs) handlers childEl
+     in elementToM a $ ForeignElement name attrs childEl
 
 {-
 -- | Create a 'ReactElement' for a class defined in javascript.

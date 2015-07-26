@@ -23,7 +23,7 @@ library
   exposed-modules: React.Flux
                    React.Flux.DOM
                    React.Flux.Element
-                   React.Flux.Events
+                   React.Flux.PropertiesAndEvents
                    React.Flux.Test
 
   other-modules: React.Flux.Class
@@ -36,7 +36,11 @@ library
                       ExistentialQuantification
                       TypeFamilies
                       GeneralizedNewtypeDeriving
+                      MultiParamTypeClasses
+                      FunctionalDependencies
+                      FlexibleInstances
 
   build-depends: base >=4.8 && < 5
                , mtl >= 2.1
                , aeson >= 0.8
+               , text >= 1.2

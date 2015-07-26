@@ -1,7 +1,8 @@
 -- | This module contains the definitions for the
 -- <https://facebook.github.io/react/docs/events.html React Event System>
-module React.Flux.Events (
-    EventHandler
+module React.Flux.PropertiesAndEvents (
+    PropertyOrHandler
+  , (@=)
   , Event(..)
 
   -- * Keyboard
@@ -18,17 +19,26 @@ module React.Flux.Events (
 ) where
 
 import Data.Aeson
+import Data.Aeson.Types (Pair)
 import React.Flux.JsTypes
+import qualified Data.Text as T
 
 -- | An event handler.  Values of this type are created by the various functions below such as
 -- 'onKeyDown'.  The handler is then passed to the element creation functions in "React.Flux.Dom".
-data EventHandler handler = EventHandler
-  { evtHandlerName :: String
-  , evtHandler :: RawEvent -> handler
-  }
+data PropertyOrHandler handler =
+   Property Pair
+ | EventHandler
+      { evtHandlerName :: String
+      , evtHandler :: RawEvent -> handler
+      }
 
-instance Functor EventHandler where
+instance Functor PropertyOrHandler where
+    fmap _ (Property p) = Property p
     fmap f (EventHandler name h) = EventHandler name (f . h)
+
+-- | Create a property.
+(@=) :: ToJSON a => T.Text -> a -> PropertyOrHandler handler
+n @= a = Property (n, toJSON a)
 
 ----------------------------------------------------------------------------------------------------
 --- Generic Event
@@ -84,7 +94,7 @@ parseEvent (RawEvent _ val) =
 mkHandler :: String -- ^ The event name
           -> (RawEvent -> detail) -- ^ A function parsing the details for the specific event.
           -> (Event -> detail -> handler) -- ^ The function implementing the handler.
-          -> EventHandler handler
+          -> PropertyOrHandler handler
 mkHandler name parseDetail f = EventHandler
     { evtHandlerName = name
     , evtHandler = \raw -> f (parseEvent raw) (parseDetail raw)
@@ -145,11 +155,11 @@ parseKeyboardEvent (RawEvent ref val) =
                 { keyGetModifierState = getModifierState ref
                 }
 
-onKeyDown :: (Event -> KeyboardEvent -> handler) -> EventHandler handler
+onKeyDown :: (Event -> KeyboardEvent -> handler) -> PropertyOrHandler handler
 onKeyDown = mkHandler "onKeyDown" parseKeyboardEvent
 
-onKeyPress :: (Event -> KeyboardEvent -> handler) -> EventHandler handler
+onKeyPress :: (Event -> KeyboardEvent -> handler) -> PropertyOrHandler handler
 onKeyPress = mkHandler "onKeyPress" parseKeyboardEvent
 
-onKeyUp :: (Event -> KeyboardEvent -> handler) -> EventHandler handler
+onKeyUp :: (Event -> KeyboardEvent -> handler) -> PropertyOrHandler handler
 onKeyUp = mkHandler "onKeyUp" parseKeyboardEvent

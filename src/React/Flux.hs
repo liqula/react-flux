@@ -33,7 +33,7 @@ module React.Flux (
 import React.Flux.Class
 import React.Flux.DOM
 import React.Flux.Element
-import React.Flux.Events
+import React.Flux.PropertiesAndEvents
 import React.Flux.Store
 
 ----------------------------------------------------------------------------------------------------
