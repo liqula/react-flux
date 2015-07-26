@@ -2,25 +2,29 @@
 -- | This module contains combinators for creating DOM React elements.
 --
 -- The design of creating 'ReactElement's is loosly based on
--- <https://hackage.haskell.org/package/lucid lucid>.  All the combinators in this module have a
--- type
+-- <https://hackage.haskell.org/package/lucid lucid>
+-- All the combinators in this module have a type:
 --
--- >p_ :: Term eventHandler arg result => arg -> result
+-- @
+-- p_ :: 'Term' eventHandler arg result => arg -> result
+-- @
 --
 -- but you should interpret this as 'p_' having either of the following two types:
 --
--- >p_ :: ['PropertyOrHandler' eventHandler] -> 'ReactElementM' eventHandler a -> 'ReactElementM' eventHandler a
--- >p_ :: 'ReactElementM' eventHandler a -> 'ReactElementM' eventHandler a
+-- @
+-- p_ :: ['PropertyOrHandler' eventHandler] -> 'ReactElementM' eventHandler a -> 'ReactElementM' eventHandler a
+-- p_ :: 'ReactElementM' eventHandler a -> 'ReactElementM' eventHandler a
+-- @
 --
 -- In the first, 'p_' takes a list of properties and handlers plus the child element(s).  In the
 -- second, the list of properties and handlers is omitted. The 'Term' class allows GHC to
 -- automatically select the appropriate type.
 --
--- Properties are built using '(@=)'.  Be aware that in React, there are some
+-- Properties are built using '@='.  Be aware that in React, there are some
 -- <https://facebook.github.io/react/docs/dom-differences.html differences> between the browser DOM
 -- objects/properties and the properties and attributes you pass to React, as well as React only
 -- supports  <https://facebook.github.io/react/docs/tags-and-attributes.html certian attributes>.
--- Event handlers can be created by the combinators in "React.Flux.Events".
+-- Event handlers can be created by the combinators in "React.Flux.PropertiesAndEvents".
 --
 -- Elements not covered by this module can be created manually using 'el'.  But be aware that React
 -- only supports <https://facebook.github.io/react/docs/tags-and-attributes.html certian elements>

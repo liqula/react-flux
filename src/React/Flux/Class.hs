@@ -53,15 +53,15 @@ newtype ReactClass props = ReactClass { reactClassRef :: (ReactClassRef props) }
 #else
 data ReactClass props =
     forall storeData. Typeable storeData =>
-        TestReactControllerView String (storeData -> props -> ReactElement ViewEventHandler)
+        TestReactControllerView String (storeData -> props -> ReactElementM ViewEventHandler ())
 
-  | TestReactView String (props -> ReactElement ViewEventHandler)
-
-  | forall state. (ToJSON state, FromJSON state) =>
-        TestReactStatefulView String (state -> props -> ReactElement (StatefulViewEventHandler state))
+  | TestReactView String (props -> ReactElementM ViewEventHandler ())
 
   | forall state. (ToJSON state, FromJSON state) =>
-        TestReactClass String (state -> props -> IO (ReactElement (ClassEventHandler state)))
+        TestReactStatefulView String (state -> props -> ReactElementM (StatefulViewEventHandler state) ())
+
+  | forall state. (ToJSON state, FromJSON state) =>
+        TestReactClass String (state -> props -> IO (ReactElementM (ClassEventHandler state) ()))
 
 reactClassRef :: ReactClass props -> String
 reactClassRef (TestReactControllerView n _) = n
@@ -98,8 +98,8 @@ type ViewEventHandler = [SomeStoreAction]
 -- controller-views is central to the flux design.
 --
 -- While the above re-rendering on any store data or property change is conceptually what occurs,
--- React uses a process of <https://facebook.github.io/react/docs/reconciliation.html
--- reconciliation> to speed up re-rendering.  The best way of taking advantage of re-rendering is to
+-- React uses a process of <https://facebook.github.io/react/docs/reconciliation.html reconciliation>
+-- to speed up re-rendering.  The best way of taking advantage of re-rendering is to
 -- use key properties with 'rclassWithKey'.
 --
 -- TODO
@@ -109,7 +109,7 @@ type ViewEventHandler = [SomeStoreAction]
 mkControllerView :: (StoreData storeData, Typeable props)
                  => String -- ^ A name for this class
                  -> ReactStore storeData -- ^ The store this controller view should attach to.
-                 -> (storeData -> props -> ReactElement ViewEventHandler) -- ^ The rendering function
+                 -> (storeData -> props -> ReactElementM ViewEventHandler ()) -- ^ The rendering function
                  -> ReactClass props
 mkControllerView name (ReactStore store) buildNode = unsafePerformIO $ do
     renderCb <- syncCallback1 ThrowWouldBlock $ \arg -> do
@@ -143,7 +143,7 @@ runViewHandler = mapM_ dispatchSomeAction
 mkControllerView :: (StoreData storeData, Typeable props)
                  => String -- ^ A name for this class
                  -> ReactStore storeData -- ^ The store this controller view should attach to.
-                 -> (storeData -> props -> ReactElement ViewEventHandler) -- ^ The rendering function
+                 -> (storeData -> props -> ReactElementM ViewEventHandler ()) -- ^ The rendering function
                  -> ReactClass props
 mkControllerView n _ f = TestReactControllerView n f
 
@@ -169,7 +169,7 @@ mkControllerView n _ f = TestReactControllerView n f
 
 mkView :: Typeable props
        => String -- ^ A name for this class
-       -> (props -> ReactElement ViewEventHandler) -- ^ The rendering function
+       -> (props -> ReactElementM ViewEventHandler ()) -- ^ The rendering function
        -> ReactClass props
 mkView name buildNode = unsafePerformIO $ do
     renderCb <- syncCallback1 ThrowWouldBlock $ \arg -> do
@@ -193,7 +193,7 @@ mkView name buildNode = unsafePerformIO $ do
 
 mkView :: Typeable props
        => String -- ^ A name for this class
-       -> (props -> ReactElement ViewEventHandler) -- ^ The rendering function
+       -> (props -> ReactElementM ViewEventHandler ()) -- ^ The rendering function
        -> ReactClass props
 mkView = TestReactView
 
@@ -203,7 +203,7 @@ mkView = TestReactView
 --- Two versions of mkStatefulView
 ---------------------------------------------------------------------------------------------------
 
--- | A stateful class event handler transforms events into store actions and a new state.
+-- | A stateful-view event handler transforms events into store actions and a new state.
 -- If the new state is nothing, no change is made to the state (which allows an optimization in that
 -- we do not need to re-render the view).
 type StatefulViewEventHandler state = ([SomeStoreAction], Maybe state)
@@ -222,7 +222,7 @@ type StatefulViewEventHandler state = ([SomeStoreAction], Maybe state)
 mkStatefulView :: (ToJSON state, FromJSON state, Typeable props)
                => String -- ^ A name for this class
                -> state -- ^ The initial state
-               -> (state -> props -> ReactElement (StatefulViewEventHandler state)) -- ^ The rendering function
+               -> (state -> props -> ReactElementM (StatefulViewEventHandler state) ()) -- ^ The rendering function
                -> ReactClass props
 mkStatefulView name initial render = mkClassHelper runStateViewHandler name initial render'
     where
@@ -243,7 +243,7 @@ runStateViewHandler setStateFn (actions, mNewState) = do
 mkStatefulView :: (ToJSON state, FromJSON state, Typeable props)
                => String -- ^ A name for this class
                -> state -- ^ The initial state
-               -> (state -> props -> ReactElement (StatefulViewEventHandler state)) -- ^ The rendering function
+               -> (state -> props -> ReactElementM (StatefulViewEventHandler state) ()) -- ^ The rendering function
                -> ReactClass props
 mkStatefulView n _ f = TestReactStatefulView n f
 
@@ -265,7 +265,7 @@ type ClassEventHandler state = IO (Maybe state)
 mkClass :: (ToJSON state, FromJSON state, Typeable props)
         => String -- ^ A name for this class
         -> state -- ^ The initial state
-        -> (state -> props -> IO (ReactElement (ClassEventHandler state))) -- ^ The rendering function
+        -> (state -> props -> IO (ReactElementM (ClassEventHandler state) ())) -- ^ The rendering function
         -> ReactClass props
 mkClass = mkClassHelper expandClassHandler
 
@@ -285,7 +285,7 @@ runClassHandler setStateFn handler = do
 mkClass :: (ToJSON state, FromJSON state, Typeable props)
         => String -- ^ A name for this class
         -> state -- ^ The initial state
-        -> (state -> props -> IO (ReactElement (ClassEventHandler state))) -- ^ The rendering function
+        -> (state -> props -> IO (ReactElementM (ClassEventHandler state) ())) -- ^ The rendering function
         -> ReactClass props
 mkClass n _ f = TestReactClass n f
 
@@ -462,7 +462,7 @@ mkClassHelper :: (ToJSON state, FromJSON state, Typeable props)
               => (AlterStateFns -> eventHandler -> IO ()))
               -> String
               -> state
-              -> (state -> props -> IO (ReactElement eventHandler))
+              -> (state -> props -> IO (ReactElementM eventHandler ()))
               -> ReactClass props
 mkClassHelper runHandler name initial render = unsafePerformIO $ do
 
@@ -515,7 +515,7 @@ rclass rc props (ReactElementM child) =
 -- | Create an element from a class, and also pass in a key property for the instance.  Key
 -- properties speed up the <https://facebook.github.io/react/docs/reconciliation.html reconciliation>
 -- of the virtual DOM with the DOM.  The key does not need to be globally unqiue, it only needs to
--- be unique within its siblings, not globally unique.
+-- be unique within its siblings.
 --
 -- TODO
 rclassWithKey :: (Typeable props, ToJSON key) => ReactClass props -- ^ the class

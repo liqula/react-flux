@@ -12,7 +12,7 @@ module React.Flux.Element (
   , el
   , ReactElementRef
   , ReactElement_
-  , mkReactElementM
+  , mkReactElement
 ) where
 
 import Data.String (IsString(..))
@@ -126,7 +126,7 @@ foreignClass name attrs =
 -}
 
 ----------------------------------------------------------------------------------------------------
--- mkReactElementM has two versions
+-- mkReactElement has two versions
 ----------------------------------------------------------------------------------------------------
 
 -- | Execute a ReactElementM to create a javascript React element and a list of callbacks attached
@@ -135,8 +135,8 @@ foreignClass name attrs =
 
 #ifdef __GHCJS__
 
-mkReactElementM :: ReactElementM (IO ()) a -> IO (ReactElementRef, [Callback (IO a)])
-mkReactElementM e = runWriterT $ do
+mkReactElement :: ReactElementM (IO ()) a -> IO (ReactElementRef, [Callback (IO a)])
+mkReactElement e = runWriterT $ do
     let elem = execWriter $ runReactElementM e
     refs <- mkReactElem elem
     case refs of
@@ -215,7 +215,7 @@ mkReactElem (ClassInstance { ceClass = ReactClass rc, ceProps = props, ceKey = m
 
 #else
 
-mkReactElementM :: ReactElementM (IO ()) a -> IO (ReactElementRef, [Callback (IO a)])
-mkReactElementM _ = return ((), [])
+mkReactElement :: ReactElementM (IO ()) a -> IO (ReactElementRef, [Callback (IO a)])
+mkReactElement _ = return ((), [])
 
 #endif

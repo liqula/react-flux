@@ -1,31 +1,35 @@
 module React.Flux.Test where
 
+import Control.Monad.Writer (execWriter)
 import Data.Aeson
+import Data.Typeable (Typeable, cast)
 import React.Flux
 import React.Flux.Class
-import Data.Typeable (Typeable, cast)
+
+runReact :: ReactElementM handler () -> ReactElement handler
+runReact (ReactElementM w) = execWriter w
 
 renderControllerView :: Typeable storeData => ReactClass props -> storeData -> props -> ReactElement ViewEventHandler
 renderControllerView (TestReactControllerView _ f) storeData props =
     case cast storeData of
-        Just storeData' -> f storeData' props
+        Just storeData' -> runReact $ f storeData' props
         Nothing -> error "storeData passed to renderComponentView does not match the storeData in the controller view"
 renderControllerView _ _ _ = error "The ReactClass passed to renderControllerView was not built by mkControllerView"
 
 renderView :: ReactClass props -> props -> ReactElement ViewEventHandler
-renderView (TestReactView _ f) props = f props
+renderView (TestReactView _ f) props = runReact $ f props
 renderView _ _ = error "The ReactClass passed to renderView was not built by mkView"
 
 renderStatefulView :: (ToJSON state, FromJSON state)
                    => ReactClass props -> state -> props -> ReactElement (StatefulViewEventHandler state)
-renderStatefulView (TestReactStatefulView _ f) state props = fmap transHandler $ f (transState state) props
+renderStatefulView (TestReactStatefulView _ f) state props = fmap transHandler $ runReact $ f (transState state) props
     where
         transHandler :: (ToJSON s1, FromJSON s2) => StatefulViewEventHandler s1 -> StatefulViewEventHandler s2
         transHandler (actions, mstate) = (actions, fmap transState mstate)
 renderStatefulView _ _ _ = error "The ReactClass passed to renderStatefulView was not built by mkStatefulView"
 
 renderClass :: (ToJSON state, FromJSON state) => ReactClass props -> state -> props -> IO (ReactElement (ClassEventHandler state))
-renderClass (TestReactClass _ f) state props = fmap transHandler <$> f (transState state) props
+renderClass (TestReactClass _ f) state props = fmap transHandler . runReact <$> f (transState state) props
     where
         transHandler :: (ToJSON s1, FromJSON s2) => ClassEventHandler s1 -> ClassEventHandler s2
         transHandler io = fmap (fmap transState) io

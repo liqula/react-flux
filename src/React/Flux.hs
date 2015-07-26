@@ -45,7 +45,7 @@ import React.Flux.Store
 #ifdef __GHCJS__
 
 reactRender :: String -- ^ The ID of the HTML element to render the application into.
-                      -- (This string is passed to @document.getElementById)
+                      -- (This string is passed to @document.getElementById@)
             -> ReactClass props -- ^ A single instance of this class is created
             -> props -- ^ the properties to pass to the class
             -> IO ()
@@ -60,7 +60,7 @@ foreign import javascript unsafe
 #else
 
 reactRender :: String -- ^ The ID of the HTML element to render the application into.
-                      -- (This string is passed to @document.getElementById)
+                      -- (This string is passed to @document.getElementById@)
             -> ReactClass props -- ^ A single instance of this class is created
             -> props -- ^ the properties to pass to the class
             -> IO ()
