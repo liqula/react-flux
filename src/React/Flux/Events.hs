@@ -9,6 +9,9 @@ module React.Flux.Events (
   , onKeyUp
 ) where
 
+import Data.Aeson
+import React.Flux.JsTypes
+
 -- | TODO
 data EventHandler handler = EventHandler
   { evtHandlerName :: String
@@ -18,13 +21,6 @@ data EventHandler handler = EventHandler
 ----------------------------------------------------------------------------------------------------
 --- Generic Event
 ----------------------------------------------------------------------------------------------------
-
-data RawEvent_
--- | A raw event from React
-newtype RawEvent = RawEvent
-    { rawEventRef :: JSRef RawEvent_
-    , rawEventValue :: Value
-    }
 
 data Event = Event
     { evtType :: String
@@ -39,7 +35,7 @@ data Event = Event
     , evtTimestamp :: Int
     }
 
-instance FromJSON (Event details) where
+instance FromJSON Event where
     parseJSON = withObject "Event" $ \o -> do
         Event <$> o .: "type"
               <*> o .: "bubbles"
@@ -48,8 +44,8 @@ instance FromJSON (Event details) where
               <*> o .: "eventPhase"
               <*> o .: "isTrusted"
               <*> o .: "timestamp"
-              <*> parseJSON (Object o)
 
+{-
 foreign import javascript unsafe
     "$1.preventDefault();"
     js_preventDefault :: JSRef RawEvent_ -> IO ()
@@ -63,9 +59,10 @@ foreign import javascript unsafe
 
 stopPropagation :: RawEvent -> IO ()
 stopPropagation (RawEvent ref _) = js_stopProp ref
+-}
 
 parseEvent :: RawEvent -> Event
-parseEvent (RawEvent ref val) =
+parseEvent (RawEvent _ val) =
     case fromJSON val of
         Error err -> error $ "Unable to parse event: " ++ err
         Success e -> e
@@ -103,7 +100,7 @@ instance FromJSON KeyboardEvent where
         KeyboardEvent <$> o .: "altKey"
                       <*> o .: "charCode"
                       <*> o .: "ctrlKey"
-                      <*> return (pure ()) -- this is set in 'parseKeyboardEvent'
+                      <*> return (pure False) -- this is set in 'parseKeyboardEvent'
                       <*> o .: "key"
                       <*> o .: "keyCode"
                       <*> o .: "locale"
@@ -113,16 +110,24 @@ instance FromJSON KeyboardEvent where
                       <*> o .: "shiftKey"
                       <*> o .: "which"
 
+#ifdef __GHCJS__
 foreign import javascript unsafe
     "$r = $1.getModifierState($2)"
     js_GetModifierState :: JSRef RawEvent_ -> JSString -> JSBool
+
+getModifierState :: JSRef RawEvent_ -> String -> Bool
+getModifierState ref = pFromJSRef . js_GetModifierState . pToJSRef
+#else
+getModifierState :: JSRef RawEvent_ -> String -> Bool
+getModifierState _ _ = False
+#endif
 
 parseKeyboardEvent :: RawEvent -> KeyboardEvent
 parseKeyboardEvent (RawEvent ref val) =
     case fromJSON val of
         Error err -> error $ "Unable to parse keyboard event: " ++ err
         Success e -> e
-                { keyGetModifierState = pFromJSRef . js_GetModifierState . pToJSRef
+                { keyGetModifierState = getModifierState ref
                 }
 
 onKeyDown :: (Event -> KeyboardEvent -> handler) -> EventHandler handler

@@ -3,22 +3,28 @@ module React.Flux.Element (
   , ReactElementM(..)
   , el
   , foreignClass
-  , rclass
-  , rclassWithKey
   , mkReactElementM
-  , ReactElementRef_
-  , ReactElemementRef
 ) where
+
+import Data.String (IsString(..))
+import Data.Aeson
+import Data.Aeson.Types (Pair)
+import Data.Typeable (Typeable)
+import Control.Monad.Writer (Writer, runWriter, WriterT(..))
+import Control.Monad.Identity (Identity(..))
+
+import React.Flux.Events
+import React.Flux.JsTypes
 
 data ReactElement eventHandler
     = ForeignElement
         { fName :: String
-        , fAttrs :: Object
+        , fAttrs :: Value
         , fHandlers :: [EventHandler eventHandler]
         , fChild :: ReactElement eventHandler
         }
-    | forall props key. (Typeable props, ToJSRef key) => ClassElement
-        { ceClass :: ReactClass props
+    | forall props key. (Typeable props, ToJSON key) => ClassElement
+        { ceClass :: ReactClassRef props
         , ceKey :: Maybe key
         -- TODO: ref?  ref support would need to tie into the Class too.
         , ceProps :: props
@@ -33,41 +39,52 @@ instance Monoid (ReactElement eventHandler) where
     mappend x y = Append x y
 
 instance Functor ReactElement where
-    fmap f (ForeignElement n a e c) = ForeignElement n a (map changeHandler e) (map (fmap f) c)
+    fmap f (ForeignElement n a h c) = ForeignElement n a (map changeHandler h) (fmap f c)
         where
-            changeHandler (EventHandler name oldHandler) = EventHandler nane (f . oldHandler)
-    fmap f (ClassElement n k p c) = ClassElement n k p (map (fmap f) c)
+            changeHandler (EventHandler name oldHandler) = EventHandler name (f . oldHandler)
+    fmap f (ClassElement n k p c) = ClassElement n k p (fmap f c)
+    fmap f (Append a b) = Append (fmap f a) (fmap f b)
+    fmap _ (Content s) = Content s
+    fmap _ EmptyElement = EmptyElement
 
 newtype ReactElementM eventHandler a = ReactElementM { runReactElementM :: Writer (ReactElement eventHandler) a }
-    deriving (Functor, Applicative, Monad, MonadPlus, Foldable, Traversable, Alternative)
+    deriving (Functor, Applicative, Monad, Foldable)
+
+instance (a ~ ()) => Monoid (ReactElementM eventHandler a) where
+    mempty = ReactElementM (WriterT (Identity ((), EmptyElement)))
+    mappend e1 e2 =
+        let ((),e1') = runWriter $ runReactElementM e1
+            ((),e2') = runWriter $ runReactElementM e2
+         in ReactElementM (WriterT (Identity ((), Append e1' e2')))
 
 instance (a ~ ()) => IsString (ReactElementM eventHandler a) where
-    fromString s = ReactElementM (WriterT (Identity (Content s, ())))
+    fromString s = ReactElementM (WriterT (Identity ((), Content s)))
 
 
 el :: String -> [Pair] -> [EventHandler eventHandler] -> ReactElementM eventHandler a -> ReactElementM eventHandler a
 el name attrs handlers (ReactElementM child) =
-    let (a, childEl) <- runWriter child
-     in ReactElementM (WriterT (Identity (ForeignElement name (object attrs) handlers childEl, a)))
+    let (a, childEl) = runWriter child
+     in ReactElementM (WriterT (Identity (a, ForeignElement name (object attrs) handlers childEl)))
 
 foreignClass :: String -> [Pair] -> ReactElementM eventHandler a -> ReactElementM eventHandler a
 foreignClass name attrs = el name attrs []
 
+{-
 rclass :: Typeable props => ReactClass props -> props -> ReactElementM eventHandler a -> ReactElementM eventHandler a
 rclass c p (ReactElementM child) =
-    let (a, childEl) <- runWriter child
+    let (a, childEl) = runWriter child
      in ReactElementM (WriterT (Identity (ClassElement c (Nothing :: Maybe ()) props childEl, a)))
 
 rclassWithKey :: (Typeable props, ToJSRef key) => ReactClass props -> key -> props -> ReactElementM eventHandler a -> ReactElementM eventHandler a
 rclassWithKey c key p (ReactElementM child) =
-    let (a, childEl) <- runWriter child
+    let (a, childEl) = runWriter child
      in ReactElementM (WriterT (Identity (ClassElement c (Just key) props childEl, a)))
+-}
 
 ---------------------------
 
 
-data ReactElement_
-type ReactElementRef = JSRef ReactElement_
+#ifdef __GHCJS__
 
 foreign import javascript unsafe
     "React.createElement($1, $2, $3)"
@@ -137,7 +154,7 @@ mkReactElem (ClassInstance { ceClass = ReactClass rc, ceProps = props, ceKey = m
         Nothing -> js_ReactCreateClass rc propsE (pToJSRef childNodes)
     return [e]
 
-mkReactElementM :: ReactElementM (IO ()) a -> IO (ReactElementRef, [Callback])
+mkReactElementM :: ReactElementM (IO ()) a -> IO (ReactElementRef, [Callback (IO a)])
 mkReactElementM e = runWriterT $ do
     let elem = execWriter $ runReactElementM e
     refs <- mkReactElem elem
@@ -145,3 +162,8 @@ mkReactElementM e = runWriterT $ do
         [] -> lift $ js_ReactCreateElement "div" jsNull jsNull
         [x] -> return x
         xs -> lift $ js_ReactCreateElement "div" jsNull (pToJSRef xs)
+
+#else
+mkReactElementM :: ReactElementM (IO ()) a -> IO (ReactElementRef, [Callback (IO a)])
+mkReactElementM _ = return ((), [])
+#endif
