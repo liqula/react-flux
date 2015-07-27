@@ -8,18 +8,17 @@ type Callback a = JSRef a
 type Export a = JSRef a
 #endif
 
--- | Represents the raw javascript event from React.
-data RawEvent_
+-- | This type is for the argument to the event handler
+newtype RawEventRef = RawEventRef (JSRef ())
 
 -- | The raw event received from React, and a decoded version of the event.
 data RawEvent = RawEvent
-    { _rawEventRef :: JSRef RawEvent_
+    { _rawEventRef :: RawEventRef
     , _rawEventValue :: Value
     }
 
 -- | This type is for the return value of React.createClass.
-data ReactClass_
-type ReactClassRef props = JSRef ReactClass_
+newtype ReactClassRef props = ReactClassRef (JSRef ())
 
-data ReactElement_
-type ReactElementRef = JSRef ReactElement_
+-- | This type is for the return value of React.createElement
+newtype ReactElementRef = ReactElementRef (JSRef ())

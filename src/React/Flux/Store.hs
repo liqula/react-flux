@@ -24,8 +24,7 @@ import React.Flux.JsTypes
 --     add and remove from this property directly inside their lifecycle methods.
 --
 -- This type is used to represent this foreign javascript object
-data ReactStore_
-type ReactStoreRef storeData = JSRef ReactStore_
+newtype ReactStoreRef storeData = ReactStoreRef (JSRef ())
 
 -- | A store contains application state, receives actions from the dispatcher, and notifies
 -- component views to re-render themselves.
@@ -85,34 +84,10 @@ foreign import javascript unsafe
     "{sdata:$1, views: []}"
     js_CreateStore :: Export storeData -> IO (ReactStoreRef storeData)
 
--- | When updating the store data we need call 'releaseExport' on the old store data, and we
--- want this to be safe even if an exception occurs.  To do so, the update function receives a
--- javascript object with a single property @export@.  Initially, this contains the Export for the
--- new data.  The update first swaps this property with the current data, and then calls out to the
--- component views to notify them of the change.  This type is for this argument object.
-data UpdateStoreArgument_
-type UpdateStoreArgument = JSRef UpdateStoreArgument_
-
--- | Create a new argument object to pass to UpdateStore.
+-- | Perform the update, swapping the old export and the new export and then notifying the component views.
 foreign import javascript unsafe
-    "{export:$1}"
-    js_UpdateStore_CreateArgument :: Export storeData -> IO UpdateStoreArgument
-
--- | Perform the update, swapping the old export and the new export and then notifying the component
--- views.
-foreign import javascript unsafe
-    "(function(store, arg) { \
-        var oldD = store.sdata; \
-        store.sdata = arg.export; \
-        arg.export = oldD; \
-        store.views.map(function(f) { f(store.sdata); }; \
-    })($1, $2)"
-    js_UpdateStore :: ReactStoreRef storeData -> UpdateStoreArgument -> IO ()
-
--- | Retrieve the old export so that it can be released.
-foreign import javascript unsafe
-    "$1.export"
-    js_UpdateStore_RetrieveOldExport :: UpdateStoreArgument -> IO (Export storeData)
+    "hsreact$transform_store($1, $2)"
+    js_UpdateStore :: ReactStoreRef storeData -> Export storeData -> IO ()
 
 #else
 
@@ -137,15 +112,9 @@ mkStore initial = unsafePerformIO $ do
 
 dispatch :: StoreData storeData => ReactStore storeData -> StoreAction storeData -> IO ()
 dispatch store action = modifyMVar_ (storeData store) $ \oldData -> do
-
     newData <- transform action oldData
     newDataE <- export newData
-    
-    arg <- js_UpdateStore_CreateArgument newDataE
-
-    js_UpdateStore (storeRef store) arg
-        `finally` js_UpdateStore_RetrieveOldState arg >>= releaseExport
-
+    js_UpdateStore (storeRef store) newDataE
     return newData
 
 #else

@@ -13,7 +13,7 @@ module React.Flux.PropertiesAndEvents (
 
   -- * Creating your own handlers
   , mkHandler
-  , RawEvent_
+  , RawEventRef(..)
   , RawEvent(..)
   , parseEvent
 ) where
@@ -137,13 +137,13 @@ instance FromJSON KeyboardEvent where
 
 #ifdef __GHCJS__
 foreign import javascript unsafe
-    "$r = $1.getModifierState($2)"
-    js_GetModifierState :: JSRef RawEvent_ -> JSString -> JSBool
+    "$1.getModifierState($2)"
+    js_GetModifierState :: RawEventRef -> JSString -> JSBool
 
-getModifierState :: JSRef RawEvent_ -> String -> Bool
+getModifierState :: RawEventRef -> String -> Bool
 getModifierState ref = pFromJSRef . js_GetModifierState . pToJSRef
 #else
-getModifierState :: JSRef RawEvent_ -> String -> Bool
+getModifierState :: RawEventRef -> String -> Bool
 getModifierState _ _ = False
 #endif
 

@@ -131,7 +131,7 @@ foreignClass name attrs =
 
 -- | Execute a ReactElementM to create a javascript React element and a list of callbacks attached
 -- to nodes within the element.  These callbacks will need to be released with 'releaseCallback'
--- once the class is re-rendered.  The built-in views do this automatically.
+-- once the class is re-rendered.
 
 #ifdef __GHCJS__
 
@@ -144,27 +144,20 @@ mkReactElement e = runWriterT $ do
         [x] -> return x
         xs -> lift $ js_ReactCreateElement "div" jsNull (pToJSRef xs)
 
-
 foreign import javascript unsafe
     "React.createElement($1, $2, $3)"
-    js_ReactCreateElement :: JSRef a -- ^ will either be a string or a ReactClassRef
-                          -> JSRef b -- ^ the raw properties
-                          -> JSRef [ReactElementRef] -- ^ children
-                          -> IO ReactElementRef
+    js_ReactCreateElement :: JSRef a -> JSRef b -> JSRef [ReactElementRef] -> IO ReactElementRef
 
 foreign import javascript unsafe
     "React.createElement($1, {hs:$2}, $3)"
-    js_ReactCreateClass :: JSRef a -- ^ will either be a string or a ReactClassRef
-                        -> JSRef props -- ^ the properties
-                        -> JSRef [ReactElementRef] -- ^ children
-                        -> IO ReactElementRef
+    js_ReactCreateClass :: JSRef a -> JSRef props -> JSRef [ReactElementRef] -> IO ReactElementRef
 
 foreign import javascript unsafe
     "React.createElement($1, {key: $2, hs:$3}, $4)"
-    js_ReactCreateKeyedClass :: JSRef a -- ^ will either be a string or a ReactClassRef
+    js_ReactCreateKeyedClass :: JSRef a
                              -> JSRef key
-                             -> JSRef props -- ^ the properties
-                             -> JSRef [ReactElementRef] -- ^ children
+                             -> JSRef props
+                             -> JSRef [ReactElementRef]
                              -> IO ReactElementRef
 
 js_ReactCreateContent :: String -> ReactElementRef

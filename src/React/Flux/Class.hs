@@ -49,7 +49,7 @@ import React.Flux.Element
 -- escape-hatch in 'mkClass'.
 
 #ifdef __GHCJS__
-newtype ReactClass props = ReactClass { reactClassRef :: (ReactClassRef props) }
+newtype ReactClass props = ReactClass { reactClassRef :: ReactClassRef props }
 #else
 data ReactClass props =
     forall storeData. Typeable storeData =>
@@ -125,14 +125,10 @@ mkControllerView name (ReactStore store) buildNode = unsafePerformIO $ do
         let node = fmap runViewHandler $ buildNode storeData props
         (element, evtCallbacks) <- runWriterT $ renderNode node
 
-        evtCallbacksRef <- toJSArg evtCallbacks
+        evtCallbacksRef <- toJSRef evtCallbacks
         js_RenderCbSetResults arg evtCallbacks element
 
-    releaseCb <- syncCallback1 ThrowWouldBlock releaseCallback
-
-    releaseProps <- syncCallback1 ThrowWouldBlock releaseExport
-
-    ReactClass <$> js_createControllerView (toJSString name) store renderCb releaseCb releaseProps
+    ReactClass <$> js_createControllerView (toJSString name) store renderCb
 
 -- | Transform a controller view handler to a raw handler.
 runViewHandler :: ViewEventHandler -> IO ()
@@ -184,10 +180,7 @@ mkView name buildNode = unsafePerformIO $ do
         evtCallbacksRef <- toJSArg evtCallbacks
         js_RenderCbSetResults arg evtCallbacks element
 
-    releaseCb <- syncCallback1 ThrowWouldBlock releaseCallback
-    releaseProps <- syncCallback1 ThrowWouldBlock releaseExport
-
-    ReactClass <$> js_createView (toJSString name) renderCb releaseCb releaseProps
+    ReactClass <$> js_createView (toJSString name) renderCb
 
 #else
 
@@ -324,25 +317,25 @@ mkClass n _ f = TestReactClass n f
 --  In addition, for classes (not controller-views), there is one additional property @alterState@
 --  which is used inside the event handlers.  @alterState@ has two properties, @setState@ and
 --  @getState@.
-data RenderCbArgs
+newtype RenderCbArgs = RenderCbArgs (JSRef ())
 
 foriegn import javascript unsafe
     "$1.state"
-    js_RenderCbRetrieveState :: JSRef RenderCbArgs -> IO (JSRef state)
+    js_RenderCbRetrieveState :: RenderCbArgs -> IO (JSRef state)
 
 foreign import javascript unsafe
     "$1.props"
-    js_RenderCbRetrieveProps :: JSRef RenderCbArgs -> IO (Export props)
+    js_RenderCbRetrieveProps :: RenderCbArgs -> IO (Export props)
 
 foreign import javascript unsafe
     "$1.newCallbacks = $2; $1.elem = $3;"
-    js_RenderCbSetResults :: JSRef RenderCbArgs -> JSRef a -> JSRef b -> IO ()
+    js_RenderCbSetResults :: RenderCbArgs -> JSRef a -> JSRef b -> IO ()
 
-type AlterStateFns = JSRef (JSRef state -> IO (), IO (JSRef state))
+newtype AlterStateFns = AlterStateFns (JSRef ())
 
 foreign import javascript unsafe
     "$1.alterState"
-    js_RenderCbRetrieveAlterStateFns :: JSRef RenderCbArgs -> IO AlterStateFns
+    js_RenderCbRetrieveAlterStateFns :: RenderCbArgs -> IO AlterStateFns
 
 foreign import javascript unsafe
     "$1.setState($2)"
@@ -352,129 +345,27 @@ foreign import javascript unsafe
     "$1.getState()"
     js_GetState :: AlterStateFns -> IO (JSRef state)
 
--- | Create a controller view.  On mounting and unmounting, register with the store to be notified
--- of state changes.  Any time the properties change they must be released, so @releaseProps@
--- is 'releaseExport' exported to javascript.  Also, the event callbacks created during a render
--- must eventually be cleaned up.  So 'releaseCb' is 'releaseCallback' exported to javascript, and
--- is used after rendering to clean up the callbacks from the previous render.
---
--- Also, the haskell props of type @Export props@ are in the @hs@ property of the React props.  This
--- is so that we can pass a javascript object with reserved config entries like @key@ in the call to
--- createElement.
 foreign import javascript unsafe
-    "(function(name, store, renderCb, releaseCb, releaseProps) {
-        React.createClass({ \
-            displayName: name,
-            getInitialState: function() { \
-                return store.sdata; \
-            }, \
-            componentDidMount: function() { \
-                store.views.push(this.setState); \
-            }, \
-            componentWillUnmount: function() {
-                var idx = store.views.indexOf(this.setState); \
-                if (idx >= 0) { store.views.splice(idx, 1); } \
-                this._currentCallbacks.map(releaseCb);
-                releaseProps(this.props.hs);
-            }, \
-            componentWillReceiveProps: function() { \
-                releaseProps(this.props.hs); \
-            }, \
-            render: function() { \
-                var arg = { \
-                    state: this.state, \
-                    props: this.props.hs, \
-                    newCallbacks: [], \
-                    elem:null, \
-                }; \
-                renderCb(arg); \
-                this._currentCallbacks.map(releaseCb); \
-                this._currentCallbacks = arg.newCallbacks; \
-                return arg.elem; \
-            }, \
-            _currentCallbacks: [], \
-        }) \
-    })($1, $2, $3, $4, $5)"
+    "hsreact$mk_ctrl_view($1, $2, $3)"
     js_createControllerView :: JSString
-                           -> ReactStoreRef storeData
-                           -> (JSFun (JSRef RenderCbArgs -> IO ()))
-                           -> (JSFun (Callback a -> IO ()))
-                           -> (JSFun (Export a -> IO ())
-                           -> IO (ReactClassRef props)
+                            -> ReactStoreRef storeData
+                            -> Callback (RenderCbArgs -> IO ())
+                            -> IO (ReactClassRef props)
 
 -- | Create a class with no state.
 foreign import javascript unsafe
-    "(function(name, renderCb, releaseCb, releaseProps) {
-        React.createClass({ \
-            displayName: name,
-            componentWillUnmount: function() {
-                this._currentCallbacks.map(releaseCb);
-                releaseProps(this.props.hs);
-            }, \
-            componentWillReceiveProps: function() { \
-                releaseProps(this.props.hs); \
-            }, \
-            render: function() { \
-                var arg = { \
-                    props: this.props.hs, \
-                    newCallbacks: [], \
-                    elem:0, \
-                }; \
-                renderCb(arg); \
-                this._currentCallbacks.map(releaseCb); \
-                this._currentCallbacks = arg.newCallbacks; \
-                return x.r; \
-            }, \
-            _currentCallbacks: [], \
-        }) \
-    })($1, $2, $3, $4)"
+    "hsreact$mk_view($1, $2, $3)"
     js_createView :: JSString
-                  -> JSFun (JSRef RenderCbArgs -> IO ())
-                  -> JSFun (Callback a -> IO ())
-                  -> JSFun (Export a -> IO ())
+                  -> Callbac (RenderCbArgs -> IO ())
                   -> IO (ReactClassRef props)
 
 -- | Create a class which tracks its own state.  Similar releasing needs to happen for callbacks and
 -- properties as for controller views.
 foreign import javascript unsafe
-    "(function(name, initialState, renderCb, releaseCb, releaseProps) {
-        React.createClass({ \
-            displayName: name,
-            getInitialState: function() { \
-                return initialState;
-            }, \
-            componentWillUnmount: function() {
-                this._currentCallbacks.map(releaseCb);
-                releaseProps(this.props.hs);
-            }, \
-            componentWillReceiveProps: function() { \
-                releaseProps(this.props.hs); \
-            }, \
-            render: function() { \
-                var that = this; \
-                var arg = { \
-                    state: this.state, \
-                    props: this.props.hs, \
-                    newCallbacks: [], \
-                    elem:null, \
-                    alterState: { \
-                        getState: function() { return that.state; }, \
-                        setState: function(st) { that.setState(st); }, \
-                    }, \
-                }; \
-                renderCb(arg); \
-                this._currentCallbacks.map(releaseCb); \
-                this._currentCallbacks = arg.newCallbacks; \
-                return x.r; \
-            }, \
-            _currentCallbacks: [], \
-        }) \
-    })($1, $2, $3, $4, $5)"
+    "hsreact$mk_class($1, $2, $3)"
     js_createClass :: JSString
                    -> JSRef state
-                   -> JSFun (JSRef RenderCbArgs -> IO ())
-                   -> JSFun (Callback a -> IO ())
-                   -> JSFun (Export a -> IO ())
+                   -> Callback (RenderCbArgs -> IO ())
                    -> IO (ReactClassRef props)
 
 -- | Helper function used for 'mkStatefulView' and 'mkClass'
@@ -504,11 +395,7 @@ mkClassHelper runHandler name initial render = unsafePerformIO $ do
         evtCallbacksRef <- toJSArg evtCallbacks
         js_RenderCbSetResults arg evtCallbacks element
 
-    releaseCb <- syncCallback1 ThrowWouldBlock releaseCallback
-
-    releaseProps <- syncCallback1 ThrowWouldBlock releaseExport
-
-    ReactClass <$> js_createClass (toJSString name) initialRef renderCb releaseCb releaseProps
+    ReactClass <$> js_createClass (toJSString name) initialRef renderCb
 
 parseState :: FromJSON state => JSRef state -> IO state
 parseState stateRef = do
