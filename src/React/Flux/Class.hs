@@ -112,27 +112,13 @@ mkControllerView :: (StoreData storeData, Typeable props)
                  -> (storeData -> props -> ReactElementM ViewEventHandler ()) -- ^ The rendering function
                  -> ReactClass props
 mkControllerView name (ReactStore store) buildNode = unsafePerformIO $ do
-    renderCb <- syncCallback1 ThrowWouldBlock $ \arg -> do
-
-        storeDataE <- js_RenderCbRetrieveState arg
-        mdata <- derefExport storeDataE
-        storeData <- maybe (error "Unable to load store state") return mdata
-
-        propsE <- js_RenderCbRetrieveProps arg
-        mprops <- derefExport propsE
-        props <- maybe (error "Unable to load props") return mprops
-
-        let node = fmap runViewHandler $ buildNode storeData props
-        (element, evtCallbacks) <- runWriterT $ renderNode node
-
-        evtCallbacksRef <- toJSRef evtCallbacks
-        js_RenderCbSetResults arg evtCallbacks element
-
+    let render state props = return $ buildNode state props
+    renderCb <- mkRenderCallback parseExportStoreData runViewHandler render
     ReactClass <$> js_createControllerView (toJSString name) store renderCb
 
 -- | Transform a controller view handler to a raw handler.
-runViewHandler :: ViewEventHandler -> IO ()
-runViewHandler = mapM_ dispatchSomeAction
+runViewHandler :: RenderCbArgs -> ViewEventHandler -> IO ()
+runViewHandler _ = mapM_ dispatchSomeAction
 
 #else
 
@@ -168,18 +154,8 @@ mkView :: Typeable props
        -> (props -> ReactElementM ViewEventHandler ()) -- ^ The rendering function
        -> ReactClass props
 mkView name buildNode = unsafePerformIO $ do
-    renderCb <- syncCallback1 ThrowWouldBlock $ \arg -> do
-
-        propsE <- js_RenderCbRetrieveProps arg
-        mprops <- derefExport propsE
-        props <- maybe (error "Unable to load props") return mprops
-
-        let node = fmap expandViewHandler $ buildNode props
-        (element, evtCallbacks) <- runWriterT $ renderNode node
-
-        evtCallbacksRef <- toJSArg evtCallbacks
-        js_RenderCbSetResults arg evtCallbacks element
-
+    let render () props = return $ buildNode props
+    renderCb <- mkRenderCallback (const ()) runViewHandler render
     ReactClass <$> js_createView (toJSString name) renderCb
 
 #else
@@ -222,15 +198,18 @@ mkStatefulView :: (ToJSON state, FromJSON state, Typeable props)
                -> state -- ^ The initial state
                -> (state -> props -> ReactElementM (StatefulViewEventHandler state) ()) -- ^ The rendering function
                -> ReactClass props
-mkStatefulView name initial render = mkClassHelper runStateViewHandler name initial render'
-    where
-        render' state props = return $ render state props
+mkStatefulView name initial buildNode = do
+    initialRef <- toJSRef_aeson initial
+    let render state props = return $ render state props
+    renderCb <- mkRenderCallback parseJsonState runStateViewHandler render
+    ReactClass <$> js_createClass (toJSString name) initialRef renderCb
 
 -- | Transform a stateful class event handler to a raw event handler
 runStateViewHandler :: (ToJSON state, FromJSON state)
-                    => AlterStateFns -> StatefulViewEventHandler state -> IO ()
-runStateViewHandler alterState (actions, mNewState) = do
-    st <- parseState =<< js_GetState alterState
+                    => RenderCbArgs -> StatefulViewEventHandler state -> IO ()
+runStateViewHandler args (actions, mNewState) = do
+    alterState <- js_RenderCbRetrieveAlterStateFns args
+    st <- parseJsonState =<< js_GetState alterState
     case mNewState of
         Nothing -> return ()
         Just newState -> do
@@ -270,13 +249,17 @@ mkClass :: (ToJSON state, FromJSON state, Typeable props)
         -> state -- ^ The initial state
         -> (state -> props -> IO (ReactElementM (ClassEventHandler state) ())) -- ^ The rendering function
         -> ReactClass props
-mkClass = mkClassHelper expandClassHandler
+mkClass name initialState render = do
+    initialRef <- toJSRef_aeson intial
+    renderCb <- mkRenderCallback parseJsonState runClassHandler render
+    ReactClass <$> js_createClass (toJSString name) initialRef renderCb
 
 -- | Transform a class event handler to a raw event handler.
 runClassHandler :: (FromJSON state, ToJSON state)
-                => AlterStateFns -> ClassEventHandler state -> IO ()
-runClassHandler alterState handler = do
-    st <- parseState =<< js_GetState alterState
+                => RenderCbArgs -> ClassEventHandler state -> IO ()
+runClassHandler args handler = do
+    alterState <- js_RenderCbRetrieveAlterStateFns args
+    st <- parseJsonState =<< js_GetState alterState
     mNewState <- handler st
     case mNewState of
         Nothing -> return ()
@@ -368,18 +351,14 @@ foreign import javascript unsafe
                    -> Callback (RenderCbArgs -> IO ())
                    -> IO (ReactClassRef props)
 
--- | Helper function used for 'mkStatefulView' and 'mkClass'
-mkClassHelper :: (ToJSON state, FromJSON state, Typeable props)
-              => (AlterStateFns -> eventHandler -> IO ()))
-              -> String
-              -> state
+-- | Create the render callback that can be passed to createClass.
+mkRenderCallback :: Typeable props
+              => (JSRef state -> IO state) -- ^ parse state
+              -> (RenderCbArgs -> eventHandler -> IO ())) -- ^ execute event args
               -> (state -> props -> IO (ReactElementM eventHandler ()))
-              -> ReactClass props
-mkClassHelper runHandler name initial render = unsafePerformIO $ do
-
-    initialRef <- toJSRef_aeson initial
-
-    renderCb <- syncCallback1 ThrowWouldBlock $ \arg -> do
+              -> IO (Callback (RenderCbArgs -> IO ()))
+mkRenderCallback parseState runHandler render =
+    syncCallback1 ThrowWouldBlock $ \arg -> do
 
         state <- parseState =<< js_RenderCbRetrieveState arg
 
@@ -387,23 +366,27 @@ mkClassHelper runHandler name initial render = unsafePerformIO $ do
         mprops <- derefExport propsE
         props <- maybe (error "Unable to load props") return mprops
 
-        alterStateFns <- js_RenderCbRetrieveAlterStateFns
-        node <- fmap (runHandler alterStateFns) <$> render state props
+        node <- fmap (runHandler args) <$> render state props
 
         (element, evtCallbacks) <- runWriterT $ renderNode node
 
         evtCallbacksRef <- toJSArg evtCallbacks
         js_RenderCbSetResults arg evtCallbacks element
 
-    ReactClass <$> js_createClass (toJSString name) initialRef renderCb
 
-parseState :: FromJSON state => JSRef state -> IO state
-parseState stateRef = do
+parseJsonState :: FromJSON state => JSRef state -> IO state
+parseJsonState stateRef = do
     mstate <- fromJSRef stateRef
     stateVal <- maybe (error "Unable to decode class state") return mstate
     state <- case fromJSON stateVal of
                 Error err -> error $ "Unable to decode class state: " ++ err
                 Success s -> return s
+
+parseExportStoreData :: Typeable storeData => Export storeData -> IO storeData
+parseExportStoreData storeDataE = do
+    mdata <- derefExport storeDataE
+    maybe (error "Unable to load store state") return mdata
+
 #endif
 
 ----------------------------------------------------------------------------------------------------
