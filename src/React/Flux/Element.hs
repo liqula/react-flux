@@ -31,10 +31,10 @@ import React.Flux.JsTypes
 --
 -- A 'ReactElement' is parametrized by the type @eventHandler@, which is the type of the event
 -- handlers that can be attached to DOM elements.  Event handlers are created by combinators in
--- "React.Flux.Events".
+-- "React.Flux.PropertiesAndEvents".
 data ReactElement eventHandler
     = ForeignElement
-        { fName :: String
+        { fName :: Either String (ReactClassRef Object)
         , fProps :: [PropertyOrHandler eventHandler]
         , fChild :: ReactElement eventHandler
         }
@@ -114,16 +114,16 @@ el :: String -- ^ The element name (the first argument to @React.createElement@)
    -> ReactElementM eventHandler a
 el name attrs (ReactElementM child) =
     let (a, childEl) = runWriter child
-     in elementToM a $ ForeignElement name attrs childEl
+     in elementToM a $ ForeignElement (Left name) attrs childEl
 
-{-
 -- | Create a 'ReactElement' for a class defined in javascript.
-foreignClass :: String -- ^ A javascript expression for 
-             -> [Pair]
+foreignClass :: JSRef ()
+             -> [PropertyOrHandler eventHandler]
              -> ReactElementM eventHandler a
              -> ReactElementM eventHandler a
-foreignClass name attrs =
--}
+foreignClass name attrs (ReactElementM child) =
+    let (a, childEl) = runWriter child
+     in elementToM a $ ForeignElement (Right name) attrs childEl
 
 ----------------------------------------------------------------------------------------------------
 -- mkReactElement has two versions
@@ -138,7 +138,7 @@ foreignClass name attrs =
 mkReactElement :: ReactElementM (IO ()) a -> IO (ReactElementRef, [Callback (IO a)])
 mkReactElement e = runWriterT $ do
     let elem = execWriter $ runReactElementM e
-    refs <- mkReactElem elem
+    refs <- createElement elem
     case refs of
         [] -> lift $ js_ReactCreateElement "div" jsNull jsNull
         [x] -> return x
@@ -154,51 +154,38 @@ foreign import javascript unsafe
 
 foreign import javascript unsafe
     "React.createElement($1, {key: $2, hs:$3}, $4)"
-    js_ReactCreateKeyedClass :: JSRef a
-                             -> JSRef key
-                             -> JSRef props
-                             -> JSRef [ReactElementRef]
-                             -> IO ReactElementRef
+    js_ReactCreateKeyedClass :: JSRef a -> JSRef key -> JSRef props -> JSRef [ReactElementRef] -> IO ReactElementRef
 
 js_ReactCreateContent :: String -> ReactElementRef
 js_ReactCreateContent = castRef . toJSString
 
-data ReactElementArg_
-type ReactElementArg = JSRef ReactElementArg_
-
-foreign import javascript unsafe
-    "$1[$2] = $3;"
-    js_AddHandler :: ReactElementArg
-                  -> JSString
-                  -> (Callback (Event -> IO ()))
-                  -> IO ()
-
-mkEventHandler :: ReactElementArg -> EventHandler (IO ()) -> WriterT [Callback] IO ReactElementArg
-mkEventHandler arg (EventHandler str handler) = do
-    -- this will be released by the render function of the class.
+addPropOrHandlerToObj :: Object -> PropertyOrHandler (IO ()) -> WriterT [Callback] IO ()
+addPropOrHandlerToObj obj (Property (n, v)) = do
+    vRef <- toJSRef_aeson v
+    setProp n vRef obj
+addPropOrHandlerToObj obj (EventHandler str handler) = do
+    -- this will be released by the render function of the class (jsbits/class.js)
     cb <- lift $ asyncCallback1 $ \evtRef -> do
         mevtVal <- fromJSRef evtRef
         evtVal <- maybe (error "Unable to parse event as a javascript object") return mevtVal
         handler $ RawEvent evtRef evtVal
 
     tell [cb]
+    setProp str cb obj
 
-    js_AddHandler arg str cb
-    return arg
-
-mkReactElem :: ReactElement eventHandler -> WriterT [Callback] IO [ReactElementRef]
-mkReactElem EmptyElement = return []
-mkReactElem (Append x y) = (++) <$> mkReactElem x <*> mkReactElem y
-mkReactElem (Content s) = return [js_ReactCreateContent s]
-mkReactElem (f@(ForeignElement{})) = do
-    props <- lift $ toJSRef_aeson $ fAttrs f
-    foldM_ mkEventHandler props $ fEvents f
-    childNodes <- mkReactElem $ fChild f
-    e <- lift $ js_ReactCreateElement (toJSString $ fName f) props (pToJSRef childNodes)
+createElement :: ReactElement eventHandler -> WriterT [Callback] IO [ReactElementRef]
+createElement EmptyElement = return []
+createElement (Append x y) = (++) <$> mkReactElem x <*> mkReactElem y
+createElement (Content s) = return [js_ReactCreateContent s]
+createElement (f@(ForeignElement{})) = do
+    obj <- create
+    mapM_ (addPropOrHandlerToObj obj) $ fProps f
+    childNodes <- createElement $ fChild f
+    e <- lift $ js_ReactCreateElement (either toJSString id $ fName f) props (pToJSRef childNodes)
     return [e]
-mkReactElem (ClassInstance { ceClass = ReactClass rc, ceProps = props, ceKey = mkey, ceChild = child }) = do
-    childNodes <- mkReactElem child
-    propsE <- lift $ export props -- this will be released inside the lifetime events for the class
+createElement (ClassInstance { ceClass = ReactClass rc, ceProps = props, ceKey = mkey, ceChild = child }) = do
+    childNodes <- createElement child
+    propsE <- lift $ export props -- this will be released inside the lifetime events for the class (jsbits/class.js)
     e <- lift $ case mkey of
         Just key -> do
             keyRef <- toJSRef key
