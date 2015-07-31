@@ -22,7 +22,7 @@ module React.Flux (
   , ReactElementM(..)
   , rclass
   , rclassWithKey
-  --, foreignClass
+  , foreignClass
   , module React.Flux.DOM
   , module React.Flux.PropertiesAndEvents
 
@@ -41,14 +41,14 @@ import React.Flux.Store
 ----------------------------------------------------------------------------------------------------
 
 -- | Render your React application into the DOM.
-
-#ifdef __GHCJS__
-
 reactRender :: String -- ^ The ID of the HTML element to render the application into.
                       -- (This string is passed to @document.getElementById@)
             -> ReactClass props -- ^ A single instance of this class is created
             -> props -- ^ the properties to pass to the class
             -> IO ()
+
+#ifdef __GHCJS__
+
 reactRender htmlId rc props = do
     (elem, _) <- mkReactElementM $ ClassInstance rc props Nothing EmptyElement
     js_ReactRender elem (toJSString htmlId)
@@ -59,11 +59,6 @@ foreign import javascript unsafe
 
 #else
 
-reactRender :: String -- ^ The ID of the HTML element to render the application into.
-                      -- (This string is passed to @document.getElementById@)
-            -> ReactClass props -- ^ A single instance of this class is created
-            -> props -- ^ the properties to pass to the class
-            -> IO ()
 reactRender _ _ _ = return ()
 
 #endif

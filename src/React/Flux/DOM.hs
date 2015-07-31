@@ -2,8 +2,8 @@
 -- | This module contains combinators for creating DOM React elements.
 --
 -- The design of creating 'ReactElement's is loosly based on
--- <https://hackage.haskell.org/package/lucid lucid>
--- All the combinators in this module have a type:
+-- <https://hackage.haskell.org/package/lucid lucid>:
+-- all the combinators in this module have a type:
 --
 -- @
 -- p_ :: 'Term' eventHandler arg result => arg -> result
@@ -26,7 +26,7 @@
 -- supports  <https://facebook.github.io/react/docs/tags-and-attributes.html certian attributes>.
 -- Event handlers can be created by the combinators in "React.Flux.PropertiesAndEvents".
 --
--- Elements not covered by this module can be created manually using 'el'.  But be aware that React
+-- Elements not covered by this module can be created manually using 'el'.  But React
 -- only supports <https://facebook.github.io/react/docs/tags-and-attributes.html certian elements>
 -- and they should all be covered by this module.
 --
@@ -36,6 +36,8 @@ module React.Flux.DOM where
 import React.Flux.Element
 import React.Flux.PropertiesAndEvents
 
+-- | This class allows the DOM combinators to optionally take a list of properties or handlers, or
+-- for the list to be omitted.
 class Term eventHandler arg result | result -> arg, result -> eventHandler where
     term :: String -> arg -> result
 

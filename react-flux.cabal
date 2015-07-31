@@ -24,7 +24,6 @@ library
                    React.Flux.DOM
                    React.Flux.Element
                    React.Flux.PropertiesAndEvents
-                   React.Flux.Test
 
   other-modules: React.Flux.Class
                  React.Flux.JsTypes

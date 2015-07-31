@@ -47,28 +47,7 @@ import React.Flux.Element
 -- 'transform' function on the store. Occasionally, you may need to create a class that performs
 -- arbitrary IO either during rendering or event handlers, and this module does provide an
 -- escape-hatch in 'mkClass'.
-
-#ifdef __GHCJS__
 newtype ReactClass props = ReactClass { reactClassRef :: ReactClassRef props }
-#else
-data ReactClass props =
-    forall storeData. Typeable storeData =>
-        TestReactControllerView String (storeData -> props -> ReactElementM ViewEventHandler ())
-
-  | TestReactView String (props -> ReactElementM ViewEventHandler ())
-
-  | forall state. (ToJSON state, FromJSON state) =>
-        TestReactStatefulView String (state -> props -> ReactElementM (StatefulViewEventHandler state) ())
-
-  | forall state. (ToJSON state, FromJSON state) =>
-        TestReactClass String (state -> props -> IO (ReactElementM (ClassEventHandler state) ()))
-
-reactClassRef :: ReactClass props -> String
-reactClassRef (TestReactControllerView n _) = n
-reactClassRef (TestReactView n _) = n
-reactClassRef (TestReactStatefulView n _) = n
-reactClassRef (TestReactClass n _) = n
-#endif
 
 ---------------------------------------------------------------------------------------------------
 --- Two versions of mkControllerView
@@ -103,14 +82,14 @@ type ViewEventHandler = [SomeStoreAction]
 -- use key properties with 'rclassWithKey'.
 --
 -- TODO
-
-#ifdef __GHCJS__
-
 mkControllerView :: (StoreData storeData, Typeable props)
                  => String -- ^ A name for this class
                  -> ReactStore storeData -- ^ The store this controller view should attach to.
                  -> (storeData -> props -> ReactElementM ViewEventHandler ()) -- ^ The rendering function
                  -> ReactClass props
+
+#ifdef __GHCJS__
+
 mkControllerView name (ReactStore store) buildNode = unsafePerformIO $ do
     let render state props = return $ buildNode state props
     renderCb <- mkRenderCallback parseExportStoreData runViewHandler render
@@ -122,12 +101,7 @@ runViewHandler _ = mapM_ dispatchSomeAction
 
 #else
 
-mkControllerView :: (StoreData storeData, Typeable props)
-                 => String -- ^ A name for this class
-                 -> ReactStore storeData -- ^ The store this controller view should attach to.
-                 -> (storeData -> props -> ReactElementM ViewEventHandler ()) -- ^ The rendering function
-                 -> ReactClass props
-mkControllerView n _ f = TestReactControllerView n f
+mkControllerView _ _ _ = ReactClass (ReactClassRef ())
 
 #endif
 
@@ -147,12 +121,13 @@ mkControllerView n _ f = TestReactControllerView n f
 -- 'rclassWithKey'.  The key property allows React to more easily reconcile the virtual DOM with the
 -- browser DOM.
 
-#ifdef __GHCJS__
-
 mkView :: Typeable props
        => String -- ^ A name for this class
        -> (props -> ReactElementM ViewEventHandler ()) -- ^ The rendering function
        -> ReactClass props
+
+#ifdef __GHCJS__
+
 mkView name buildNode = unsafePerformIO $ do
     let render () props = return $ buildNode props
     renderCb <- mkRenderCallback (const ()) runViewHandler render
@@ -160,11 +135,7 @@ mkView name buildNode = unsafePerformIO $ do
 
 #else
 
-mkView :: Typeable props
-       => String -- ^ A name for this class
-       -> (props -> ReactElementM ViewEventHandler ()) -- ^ The rendering function
-       -> ReactClass props
-mkView = TestReactView
+mkView _ _ = ReactClass (ReactClassRef ())
 
 #endif
 
@@ -179,7 +150,8 @@ mkView = TestReactView
 -- The handler takes a state as input.  Changing the state causes a re-render which
 -- will cause a new event handler to be created with the new state.  But there is a race if multiple
 -- events occur before React causes a re-render.  Therefore, the handler takes the current state and
--- it should ignore the state passed into the render function.
+-- it should ignore the state passed into the render function; the state passed to the handler will
+-- always be up to date.
 type StatefulViewEventHandler state = state -> ([SomeStoreAction], Maybe state)
 
 -- | A stateful view is a re-usable component of the page which keeps track of internal state.
@@ -190,14 +162,14 @@ type StatefulViewEventHandler state = state -> ([SomeStoreAction], Maybe state)
 -- new state.
 --
 -- TODO
-
-#ifdef __GHCJS__
-
 mkStatefulView :: (ToJSON state, FromJSON state, Typeable props)
                => String -- ^ A name for this class
                -> state -- ^ The initial state
                -> (state -> props -> ReactElementM (StatefulViewEventHandler state) ()) -- ^ The rendering function
                -> ReactClass props
+
+#ifdef __GHCJS__
+
 mkStatefulView name initial buildNode = do
     initialRef <- toJSRef_aeson initial
     let render state props = return $ render state props
@@ -219,12 +191,7 @@ runStateViewHandler args (actions, mNewState) = do
 
 #else
 
-mkStatefulView :: (ToJSON state, FromJSON state, Typeable props)
-               => String -- ^ A name for this class
-               -> state -- ^ The initial state
-               -> (state -> props -> ReactElementM (StatefulViewEventHandler state) ()) -- ^ The rendering function
-               -> ReactClass props
-mkStatefulView n _ f = TestReactStatefulView n f
+mkStatefulView _ _ _ = ReactClass (ReactClassRef ())
 
 #endif
 
@@ -241,14 +208,17 @@ mkStatefulView n _ f = TestReactStatefulView n f
 type ClassEventHandler state = state -> IO (Maybe state)
 
 -- | Create a class allowed to perform arbitrary IO during rendering and event handlers.
-
-#ifdef __GHCJS__
-
 mkClass :: (ToJSON state, FromJSON state, Typeable props)
         => String -- ^ A name for this class
         -> state -- ^ The initial state
-        -> (state -> props -> IO (ReactElementM (ClassEventHandler state) ())) -- ^ The rendering function
+        -> (state -> props -> IO (ReactElementM (ClassEventHandler state) ()))
+        -- ^ The rendering function.  This function cannot block (for example, it cannot take an
+        -- MVar).  If it does block, it will be aborted and a javascript execption will be thrown
+        -- back to React causing React to abort the rendering.
         -> ReactClass props
+
+#ifdef __GHCJS__
+
 mkClass name initialState render = do
     initialRef <- toJSRef_aeson intial
     renderCb <- mkRenderCallback parseJsonState runClassHandler render
@@ -269,12 +239,7 @@ runClassHandler args handler = do
 
 #else
 
-mkClass :: (ToJSON state, FromJSON state, Typeable props)
-        => String -- ^ A name for this class
-        -> state -- ^ The initial state
-        -> (state -> props -> IO (ReactElementM (ClassEventHandler state) ())) -- ^ The rendering function
-        -> ReactClass props
-mkClass n _ f = TestReactClass n f
+mkClass _ _ _ = ReactClass (ReactClassRef ())
 
 #endif
 
@@ -408,7 +373,7 @@ rclass rc props (ReactElementM child) =
 -- | Create an element from a class, and also pass in a key property for the instance.  Key
 -- properties speed up the <https://facebook.github.io/react/docs/reconciliation.html reconciliation>
 -- of the virtual DOM with the DOM.  The key does not need to be globally unqiue, it only needs to
--- be unique within its siblings.
+-- be unique within the siblings of an element.
 --
 -- TODO
 rclassWithKey :: (Typeable props, ToJSON key) => ReactClass props -- ^ the class

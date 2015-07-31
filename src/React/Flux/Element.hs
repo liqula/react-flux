@@ -10,6 +10,7 @@ module React.Flux.Element (
   , ReactElementM(..)
   , elementToM
   , el
+  , foreignClass
   , ReactElementRef
   , ReactElement_
   , mkReactElement
@@ -24,10 +25,10 @@ import Control.Monad.Identity (Identity(..))
 import React.Flux.PropertiesAndEvents
 import React.Flux.JsTypes
 
--- | A React element is the result of the rendering functions on the classes.  It is a node or list
+-- | A React element is the result of the rendering function of a class.  It is a node or list
 -- of nodes in a virtual DOM built by the rendering functions of classes, and React then reconciles
 -- this virtual DOM with the browser DOM.  The 'ReactElement' is a monoid, so dispite its name can
--- represent more than one element.
+-- represent more than one element as siblings.
 --
 -- A 'ReactElement' is parametrized by the type @eventHandler@, which is the type of the event
 -- handlers that can be attached to DOM elements.  Event handlers are created by combinators in
@@ -39,12 +40,7 @@ data ReactElement eventHandler
         , fChild :: ReactElement eventHandler
         }
     | forall props key. (Typeable props, ToJSON key) => ClassElement
-        {
-#ifdef __GHCJS__
-          ceClass :: ReactClassRef props
-#else
-          ceClass :: String
-#endif
+        { ceClass :: ReactClassRef props
         , ceKey :: Maybe key
         -- TODO: ref?  ref support would need to tie into the Class too.
         , ceProps :: props
@@ -116,10 +112,45 @@ el name attrs (ReactElementM child) =
     let (a, childEl) = runWriter child
      in elementToM a $ ForeignElement (Left name) attrs childEl
 
--- | Create a 'ReactElement' for a class defined in javascript.
-foreignClass :: JSRef ()
-             -> [PropertyOrHandler eventHandler]
-             -> ReactElementM eventHandler a
+-- | Create a 'ReactElement' for a class defined in javascript.  For example, if you would like to
+-- use <https://github.com/JedWatson/react-select react-select>, you could do so as follows:
+--
+-- >foreign import javascript unsafe
+-- >    "require('react-select')"
+-- >    js_GetReactSelectRef :: IO JSRef ()
+-- >
+-- >reactSelectRef :: JSRef ()
+-- >reactSelectRef = unsafePerformIO $ js_GetReactSelectRef
+-- >{-# NOINLINE reactSelectRef #-}
+-- >
+-- >select_ :: [PropertyOrHandler eventHandler] -> ReactElementM eventHandler a
+-- >select_ props = foreignClass reactSelectRef props mempty
+-- >
+-- >onSelectChange :: FromJSON a
+-- >               => (a -> handler) -- ^ receives the new value and performs an action.
+-- >               -> PropertyOrHandler handler
+-- >onSelectChange f = on "onChange" $ \handlerArg -> f $ parse handlerArg
+-- >    where
+-- >        parse (HandlerArg _ v) =
+-- >            case fromJSON v of
+-- >                Error err -> error $ "Unable to parse new value for select onChange: " ++ err
+-- >                Success e -> e
+--
+-- This could then be used as part of a rendering function like so:
+--
+-- >div_ $ select_ [ "name" @= "form-field-name"
+-- >               , "value" @= "one"
+-- >               , "options" @= [ object [ "value" .= "one", "label" .= "One" ]
+-- >                              , object [ "value" .= "two", "label" .= "Two" ]
+-- >                              ]
+-- >               , onSelectChange $ \newValue -> [AnAction newValue]
+-- >               ]
+--
+-- Of course, in a real program the value and options would be built from the properties and/or
+-- state of the view.
+foreignClass :: JSRef () -- ^ The javascript reference to the class
+             -> [PropertyOrHandler eventHandler] -- ^ properties and handlers to pass when creating an instance of this class.
+             -> ReactElementM eventHandler a -- ^ The child element or elements
              -> ReactElementM eventHandler a
 foreignClass name attrs (ReactElementM child) =
     let (a, childEl) = runWriter child
@@ -132,10 +163,10 @@ foreignClass name attrs (ReactElementM child) =
 -- | Execute a ReactElementM to create a javascript React element and a list of callbacks attached
 -- to nodes within the element.  These callbacks will need to be released with 'releaseCallback'
 -- once the class is re-rendered.
+mkReactElement :: ReactElementM (IO ()) a -> IO (ReactElementRef, [Callback (IO a)])
 
 #ifdef __GHCJS__
 
-mkReactElement :: ReactElementM (IO ()) a -> IO (ReactElementRef, [Callback (IO a)])
 mkReactElement e = runWriterT $ do
     let elem = execWriter $ runReactElementM e
     refs <- createElement elem
@@ -195,7 +226,6 @@ createElement (ClassInstance { ceClass = ReactClass rc, ceProps = props, ceKey =
 
 #else
 
-mkReactElement :: ReactElementM (IO ()) a -> IO (ReactElementRef, [Callback (IO a)])
 mkReactElement _ = return ((), [])
 
 #endif

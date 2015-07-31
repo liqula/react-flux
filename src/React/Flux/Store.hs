@@ -16,14 +16,7 @@ import System.IO.Unsafe (unsafePerformIO)
 
 import React.Flux.JsTypes
 
--- | As part of each store, we have a javascript object with two properties:
---
--- * sdata: holds a value of type @Export storeData@ which is the current data for the store
---
--- * views: an array of @setState@ functions for component views.  The component views
---     add and remove from this property directly inside their lifecycle methods.
---
--- This type is used to represent this foreign javascript object
+-- | This type is used to represent the foreign javascript object part of the store.
 newtype ReactStoreRef storeData = ReactStoreRef (JSRef ())
 
 -- | A store contains application state, receives actions from the dispatcher, and notifies
@@ -69,10 +62,10 @@ data SomeStoreAction = forall storeData. StoreData storeData
 ----------------------------------------------------------------------------------------------------
 
 -- | Create a new store from the initial data.
+mkStore :: StoreData storeData => storeData -> ReactStore storeData
 
 #ifdef __GHCJS__
 
-mkStore :: StoreData storeData => storeData -> ReactStore storeData
 mkStore initial = unsafePerformIO $ do
     i <- export initial
     storeRef <- jsCreateStore i
@@ -91,7 +84,6 @@ foreign import javascript unsafe
 
 #else
 
-mkStore :: StoreData storeData => storeData -> ReactStore storeData
 mkStore initial = unsafePerformIO $ do
     storeMVar <- newMVar initial
     return $ ReactStore () storeMVar
@@ -107,10 +99,10 @@ mkStore initial = unsafePerformIO $ do
 --
 -- This function uses an MVar to make sure only a single thread is updating the store and
 -- re-rendering the view at a single time.  Thus this function can block.
+dispatch :: StoreData storeData => ReactStore storeData -> StoreAction storeData -> IO ()
 
 #ifdef __GHCJS__
 
-dispatch :: StoreData storeData => ReactStore storeData -> StoreAction storeData -> IO ()
 dispatch store action = modifyMVar_ (storeData store) $ \oldData -> do
     newData <- transform action oldData
     newDataE <- export newData
@@ -119,7 +111,6 @@ dispatch store action = modifyMVar_ (storeData store) $ \oldData -> do
 
 #else
 
-dispatch :: StoreData storeData => ReactStore storeData -> StoreAction storeData -> IO ()
 dispatch store action = modifyMVar_ (storeData store) (transform action)
 
 #endif

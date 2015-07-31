@@ -1,7 +1,7 @@
 -- | This module contains the definitions for the
 -- <https://facebook.github.io/react/docs/events.html React Event System>
 module React.Flux.PropertiesAndEvents (
-    PropertyOrHandler
+    PropertyOrHandler(..)
   , (@=)
   , Event(..)
 
@@ -12,9 +12,8 @@ module React.Flux.PropertiesAndEvents (
   , onKeyUp
 
   -- * Creating your own handlers
-  , mkHandler
-  , RawEventRef(..)
-  , RawEvent(..)
+  , on
+  , HandlerArg(..)
   , parseEvent
 ) where
 
@@ -23,13 +22,22 @@ import Data.Aeson.Types (Pair)
 import React.Flux.JsTypes
 import qualified Data.Text as T
 
--- | An event handler.  Values of this type are created by the various functions below such as
--- 'onKeyDown'.  The handler is then passed to the element creation functions in "React.Flux.Dom".
+-- | The first parameter of the callback function, and a decoded version of the argument.
+data HandlerArg = HandlerArg
+    { handlerArgRef :: JSRef ()
+    , handlerArgVal :: Value
+    }
+
+-- | Either a property or an event handler.
+--
+-- The combination of all properties and event handlers are used to create the javascript object
+-- passed as the second argument to @React.createElement@.  Properties are created with '(@=)' and
+-- event handlers are created using the various functions below such as 'onKeyDown'.
 data PropertyOrHandler handler =
    Property Pair
  | EventHandler
       { evtHandlerName :: String
-      , evtHandler :: RawEvent -> handler
+      , evtHandler :: HandlerArg -> handler
       }
 
 instance Functor PropertyOrHandler where
@@ -84,13 +92,18 @@ stopPropagation :: RawEvent -> IO ()
 stopPropagation (RawEvent ref _) = js_stopProp ref
 -}
 
-parseEvent :: RawEvent -> Event
-parseEvent (RawEvent _ val) =
+-- | Utility function to parse an 'Event' from the handler argument.
+parseEvent :: HandlerArg -> Event
+parseEvent (HandlerArg _ val) =
     case fromJSON val of
         Error err -> error $ "Unable to parse event: " ++ err
         Success e -> e
 
--- | Construct an 'EventHandler' 
+-- | Create an event handler from a name and a handler function.
+on :: String -> (HandlerArg -> handler) -> PropertyOrHandler handler
+on = EventHandler
+
+-- | Construct a handler from a detail parser, used for the various events below.
 mkHandler :: String -- ^ The event name
           -> (RawEvent -> detail) -- ^ A function parsing the details for the specific event.
           -> (Event -> detail -> handler) -- ^ The function implementing the handler.
