@@ -105,6 +105,8 @@ mkControllerView _ _ _ = ReactClass (ReactClassRef ())
 
 #endif
 
+{-# NOINLINE mkControllerView #-}
+
 ---------------------------------------------------------------------------------------------------
 --- Two versions of mkView
 ---------------------------------------------------------------------------------------------------
@@ -138,6 +140,8 @@ mkView name buildNode = unsafePerformIO $ do
 mkView _ _ = ReactClass (ReactClassRef ())
 
 #endif
+
+{-# NOINLINE mkView #-}
 
 ---------------------------------------------------------------------------------------------------
 --- Two versions of mkStatefulView
@@ -195,6 +199,8 @@ mkStatefulView _ _ _ = ReactClass (ReactClassRef ())
 
 #endif
 
+{-# NOINLINE mkStatefulView #-}
+
 ---------------------------------------------------------------------------------------------------
 --- Two versions of mkClass
 ---------------------------------------------------------------------------------------------------
@@ -219,7 +225,7 @@ mkClass :: (ToJSON state, FromJSON state, Typeable props)
 
 #ifdef __GHCJS__
 
-mkClass name initialState render = do
+mkClass name initialState render = unsafePerformIO $ do
     initialRef <- toJSRef_aeson intial
     renderCb <- mkRenderCallback parseJsonState runClassHandler render
     ReactClass <$> js_createClass (toJSString name) initialRef renderCb
@@ -243,6 +249,7 @@ mkClass _ _ _ = ReactClass (ReactClassRef ())
 
 #endif
 
+{-# NOINLINE mkClass #-}
 
 ---------------------------------------------------------------------------------------------------
 --- Various GHCJS only utilities

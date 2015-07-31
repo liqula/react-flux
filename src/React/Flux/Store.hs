@@ -90,6 +90,8 @@ mkStore initial = unsafePerformIO $ do
 
 #endif
 
+{-# NOINLINE mkStore #-}
+
 ----------------------------------------------------------------------------------------------------
 -- dispatch has two versions
 ----------------------------------------------------------------------------------------------------
@@ -105,8 +107,13 @@ dispatch :: StoreData storeData => ReactStore storeData -> StoreAction storeData
 
 dispatch store action = modifyMVar_ (storeData store) $ \oldData -> do
     newData <- transform action oldData
-    newDataE <- export newData
-    js_UpdateStore (storeRef store) newDataE
+
+    -- There is a hack in PropertiesAndEvents that the fake event store for propagation and prevent
+    -- default does not have a javascript store, so the store is nullRef.
+    when (not $ isNull $ storeRef store) $ do
+        newDataE <- export newData
+        js_UpdateStore (storeRef store) newDataE
+
     return newData
 
 #else

@@ -4,6 +4,8 @@ module React.Flux.PropertiesAndEvents (
     PropertyOrHandler(..)
   , (@=)
   , Event(..)
+  , preventDefault
+  , stopPropagation
 
   -- * Keyboard
   , KeyboardEvent(..)
@@ -64,10 +66,16 @@ data Event = Event
     -- evtNativeEvent
     -- evtTarget
     , evtTimestamp :: Int
+    , evtHandlerArg :: HandlerArg
     }
 
-instance FromJSON Event where
-    parseJSON = withObject "Event" $ \o -> do
+-- | In the FromJSON instance, we cannot fill in evtHandlerArg so it must be undefined.
+-- This newtype is here so that we do not export this FromJSON instance.  Instead, we export
+-- parseEvent which correctly sets evtHandlerArg.
+newtype EventWithUndefinedHandlerArg = EvtNoHArg Event
+
+instance FromJSON EventWithUndefinedHandlerArg where
+    parseJSON = withObject "Event" $ \o -> EvtNoHArg <$> do
         Event <$> o .: "type"
               <*> o .: "bubbles"
               <*> o .: "cancelable"
@@ -75,35 +83,20 @@ instance FromJSON Event where
               <*> o .: "eventPhase"
               <*> o .: "isTrusted"
               <*> o .: "timestamp"
-
-{-
-foreign import javascript unsafe
-    "$1.preventDefault();"
-    js_preventDefault :: JSRef RawEvent_ -> IO ()
-
-preventDefault :: RawEvent -> IO ()
-preventDefault (RawEvent ref _) = js_preventDefault ref
-
-foreign import javascript unsafe
-    "$1.stopPropagation();"
-    js_stopProp :: JSRef RawEvent_ -> IO ()
-
-stopPropagation :: RawEvent -> IO ()
-stopPropagation (RawEvent ref _) = js_stopProp ref
--}
+              <*> undefined
 
 -- | Utility function to parse an 'Event' from the handler argument.
 parseEvent :: HandlerArg -> Event
-parseEvent (HandlerArg _ val) =
+parseEvent arg@(HandlerArg _ val) =
     case fromJSON val of
         Error err -> error $ "Unable to parse event: " ++ err
-        Success e -> e
+        Success (EvtNoHArg e) -> e { evtHandlerArg = arg }
 
 -- | Create an event handler from a name and a handler function.
 on :: String -> (HandlerArg -> handler) -> PropertyOrHandler handler
 on = EventHandler
 
--- | Construct a handler from a detail parser, used for the various events below.
+-- | Construct a handler from a detail parser, used by the various events below.
 mkHandler :: String -- ^ The event name
           -> (RawEvent -> detail) -- ^ A function parsing the details for the specific event.
           -> (Event -> detail -> handler) -- ^ The function implementing the handler.
@@ -112,6 +105,53 @@ mkHandler name parseDetail f = EventHandler
     { evtHandlerName = name
     , evtHandler = \raw -> f (parseEvent raw) (parseDetail raw)
     }
+
+
+-- | In a hack, the prevent default and stop propagation are actions since that is the easiest way
+-- of allowing users to specify these actions (IO is not available in view event handlers).  We
+-- create a fake store to handle these actions.
+newtype FakeEventStoreData = FakeEventStoreData
+
+-- | The fake store, doesn't store any data.  Also, the dispatch function correctly detects
+-- nullRef and will not attempt to notify any controller-views.
+fakeEventStore :: ReactStore FakeEventStoreData
+fakeEventStore = unsafePerformIO $ newMVar FakeEventStoreData >>= ReactStore nullRef
+{-# NOINLINE fakeEventStore #-}
+
+-- | The actions for the fake store
+data FakeEventStoreAction = PrevetDefault HandlerArg
+                          | StopPropagation HandlerArg
+
+#ifdef __GHCJS__
+
+instance StoreData FakeEventStoreData where
+    type StoreAction FakeEventStoreData = FakeEventStoreAction
+    transform (PreventDefault (HandlerArg ref _)) _ = js_preventDefault ref >> return FakeEventStoreAction
+    transform (StopPropagation (HandlerArg ref _)) _ = js_stopProp ref >> return FakeEventStoreAction
+
+foreign import javascript unsafe
+    "$1.preventDefault();"
+    js_preventDefault :: JSRef () -> IO ()
+
+foreign import javascript unsafe
+    "$1.stopPropagation();"
+    js_stopProp :: JSRef () -> IO ()
+
+#else
+
+instance StoreData FakeEventStoreData where
+    type StoreAction FakeEventStoreData = FakeEventStoreAction
+    transform _ _ = return FakeEventStoreAction
+
+#endif
+
+-- | Prevent the default browser action from occuring in response to this event.
+preventDefault :: Event -> SomeStoreAction
+preventDefault = SomeStoreAction fakeEventStore . PreventDefault . evtHandlerArg
+
+-- | Stop propagating this event up the DOM tree.
+stopPropagation :: Event -> SomeStoreAction
+stopPropagation = SomeStoreAction fakeEventStore . StopPropagation . evtHandlerArg
 
 ---------------------------------------------------------------------------------------------------
 --- Keyboard
@@ -151,17 +191,17 @@ instance FromJSON KeyboardEvent where
 #ifdef __GHCJS__
 foreign import javascript unsafe
     "$1.getModifierState($2)"
-    js_GetModifierState :: RawEventRef -> JSString -> JSBool
+    js_GetModifierState :: JSRef () -> JSString -> JSBool
 
-getModifierState :: RawEventRef -> String -> Bool
-getModifierState ref = pFromJSRef . js_GetModifierState . pToJSRef
+getModifierState :: JSRef () -> String -> Bool
+getModifierState ref = pFromJSRef . js_GetModifierState ref . pToJSRef
 #else
-getModifierState :: RawEventRef -> String -> Bool
+getModifierState :: JSRef () -> String -> Bool
 getModifierState _ _ = False
 #endif
 
 parseKeyboardEvent :: RawEvent -> KeyboardEvent
-parseKeyboardEvent (RawEvent ref val) =
+parseKeyboardEvent (HandlerArg ref val) =
     case fromJSON val of
         Error err -> error $ "Unable to parse keyboard event: " ++ err
         Success e -> e
