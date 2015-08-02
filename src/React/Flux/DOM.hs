@@ -33,8 +33,7 @@
 -- TODO
 module React.Flux.DOM where
 
-import React.Flux.Element
-import React.Flux.PropertiesAndEvents
+import React.Flux.Internal
 
 -- | This class allows the DOM combinators to optionally take a list of properties or handlers, or
 -- for the list to be omitted.

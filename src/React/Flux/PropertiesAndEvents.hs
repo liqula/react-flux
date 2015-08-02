@@ -19,32 +19,19 @@ module React.Flux.PropertiesAndEvents (
   , parseEvent
 ) where
 
+import Control.Concurrent.MVar (newMVar)
 import Data.Aeson
-import Data.Aeson.Types (Pair)
-import React.Flux.JsTypes
+import System.IO.Unsafe (unsafePerformIO)
 import qualified Data.Text as T
 
--- | The first parameter of the callback function, and a decoded version of the argument.
-data HandlerArg = HandlerArg
-    { handlerArgRef :: JSRef ()
-    , handlerArgVal :: Value
-    }
+import React.Flux.Internal
+import React.Flux.Store
 
--- | Either a property or an event handler.
---
--- The combination of all properties and event handlers are used to create the javascript object
--- passed as the second argument to @React.createElement@.  Properties are created with '(@=)' and
--- event handlers are created using the various functions below such as 'onKeyDown'.
-data PropertyOrHandler handler =
-   Property Pair
- | EventHandler
-      { evtHandlerName :: String
-      , evtHandler :: HandlerArg -> handler
-      }
-
-instance Functor PropertyOrHandler where
-    fmap _ (Property p) = Property p
-    fmap f (EventHandler name h) = EventHandler name (f . h)
+#ifdef __GHCJS__
+import GHCJS.Types (JSRef, nullRef)
+import GHCJS.Marshal.Pure (pFromJSRef)
+import qualified Data.JSString as JSString
+#endif
 
 -- | Create a property.
 (@=) :: ToJSON a => T.Text -> a -> PropertyOrHandler handler
@@ -98,7 +85,7 @@ on = EventHandler
 
 -- | Construct a handler from a detail parser, used by the various events below.
 mkHandler :: String -- ^ The event name
-          -> (RawEvent -> detail) -- ^ A function parsing the details for the specific event.
+          -> (HandlerArg -> detail) -- ^ A function parsing the details for the specific event.
           -> (Event -> detail -> handler) -- ^ The function implementing the handler.
           -> PropertyOrHandler handler
 mkHandler name parseDetail f = EventHandler
@@ -110,24 +97,24 @@ mkHandler name parseDetail f = EventHandler
 -- | In a hack, the prevent default and stop propagation are actions since that is the easiest way
 -- of allowing users to specify these actions (IO is not available in view event handlers).  We
 -- create a fake store to handle these actions.
-newtype FakeEventStoreData = FakeEventStoreData
+data FakeEventStoreData = FakeEventStoreData
 
 -- | The fake store, doesn't store any data.  Also, the dispatch function correctly detects
 -- nullRef and will not attempt to notify any controller-views.
 fakeEventStore :: ReactStore FakeEventStoreData
-fakeEventStore = unsafePerformIO $ newMVar FakeEventStoreData >>= ReactStore nullRef
+fakeEventStore = unsafePerformIO (ReactStore (ReactStoreRef nullRef) <$> newMVar FakeEventStoreData)
 {-# NOINLINE fakeEventStore #-}
 
 -- | The actions for the fake store
-data FakeEventStoreAction = PrevetDefault HandlerArg
+data FakeEventStoreAction = PreventDefault HandlerArg
                           | StopPropagation HandlerArg
 
 #ifdef __GHCJS__
 
 instance StoreData FakeEventStoreData where
     type StoreAction FakeEventStoreData = FakeEventStoreAction
-    transform (PreventDefault (HandlerArg ref _)) _ = js_preventDefault ref >> return FakeEventStoreAction
-    transform (StopPropagation (HandlerArg ref _)) _ = js_stopProp ref >> return FakeEventStoreAction
+    transform (PreventDefault (HandlerArg ref _)) _ = js_preventDefault ref >> return FakeEventStoreData
+    transform (StopPropagation (HandlerArg ref _)) _ = js_stopProp ref >> return FakeEventStoreData
 
 foreign import javascript unsafe
     "$1.preventDefault();"
@@ -191,16 +178,16 @@ instance FromJSON KeyboardEvent where
 #ifdef __GHCJS__
 foreign import javascript unsafe
     "$1.getModifierState($2)"
-    js_GetModifierState :: JSRef () -> JSString -> JSBool
+    js_GetModifierState :: JSRef () -> JSString.JSString -> JSRef Bool
 
 getModifierState :: JSRef () -> String -> Bool
-getModifierState ref = pFromJSRef . js_GetModifierState ref . pToJSRef
+getModifierState ref = pFromJSRef . js_GetModifierState ref . JSString.pack
 #else
 getModifierState :: JSRef () -> String -> Bool
 getModifierState _ _ = False
 #endif
 
-parseKeyboardEvent :: RawEvent -> KeyboardEvent
+parseKeyboardEvent :: HandlerArg -> KeyboardEvent
 parseKeyboardEvent (HandlerArg ref val) =
     case fromJSON val of
         Error err -> error $ "Unable to parse keyboard event: " ++ err

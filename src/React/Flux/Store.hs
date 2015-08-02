@@ -1,7 +1,6 @@
 -- | Internal module containing the store definitions.
 module React.Flux.Store (
-    ReactStore_
-  , ReactStoreRef
+    ReactStoreRef(..)
   , ReactStore(..)
   , StoreData(..)
   , SomeStoreAction(..)
@@ -14,7 +13,13 @@ import Control.Concurrent.MVar (MVar, newMVar, modifyMVar_)
 import Data.Typeable (Typeable)
 import System.IO.Unsafe (unsafePerformIO)
 
-import React.Flux.JsTypes
+#ifdef __GHCJS__
+import GHCJS.Types (JSRef, isNull)
+import GHCJS.Foreign.Export (Export, export)
+#else
+type JSRef a = ()
+type Export a = ()
+#endif
 
 -- | This type is used to represent the foreign javascript object part of the store.
 newtype ReactStoreRef storeData = ReactStoreRef (JSRef ())
@@ -68,9 +73,9 @@ mkStore :: StoreData storeData => storeData -> ReactStore storeData
 
 mkStore initial = unsafePerformIO $ do
     i <- export initial
-    storeRef <- jsCreateStore i
+    ref <- js_CreateStore i
     storeMVar <- newMVar initial
-    return $ ReactStore storeRef storeMVar
+    return $ ReactStore ref storeMVar
 
 -- | Create the javascript half of the store.
 foreign import javascript unsafe
@@ -110,9 +115,11 @@ dispatch store action = modifyMVar_ (storeData store) $ \oldData -> do
 
     -- There is a hack in PropertiesAndEvents that the fake event store for propagation and prevent
     -- default does not have a javascript store, so the store is nullRef.
-    when (not $ isNull $ storeRef store) $ do
-        newDataE <- export newData
-        js_UpdateStore (storeRef store) newDataE
+    case storeRef store of
+        ReactStoreRef ref | not $ isNull ref -> do
+            newDataE <- export newData
+            js_UpdateStore (storeRef store) newDataE
+        _ -> return ()
 
     return newData
 

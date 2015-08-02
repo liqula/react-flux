@@ -22,17 +22,17 @@ library
 
   exposed-modules: React.Flux
                    React.Flux.DOM
-                   React.Flux.Element
                    React.Flux.PropertiesAndEvents
+                   React.Flux.Internal
 
   other-modules: React.Flux.Class
-                 React.Flux.JsTypes
                  React.Flux.Store
 
   default-extensions: CPP
                       EmptyDataDecls
                       OverloadedStrings
                       ExistentialQuantification
+                      ScopedTypeVariables
                       TypeFamilies
                       GeneralizedNewtypeDeriving
                       MultiParamTypeClasses
@@ -40,6 +40,7 @@ library
                       FlexibleInstances
 
   build-depends: base >=4.8 && < 5
+               , ghcjs-base
                , mtl >= 2.1
                , aeson >= 0.8
                , text >= 1.2

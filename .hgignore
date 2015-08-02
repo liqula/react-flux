@@ -1,3 +1,6 @@
 syntax:glob
 .stack-work
 .*.swp
+dist/
+.cabal-sandbox
+cabal.sandbox.config
