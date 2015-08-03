@@ -1,5 +1,5 @@
 -- | Internal module containing the class definitions
-module React.Flux.Class(
+module React.Flux.Class (
     ReactClass(..)
   , mkControllerView
   , mkView
@@ -24,7 +24,7 @@ import React.Flux.Internal
 #ifdef __GHCJS__
 import GHCJS.Types (JSRef, castRef)
 import GHCJS.Foreign.Export (Export, derefExport)
-import GHCJS.Foreign.Callback
+import GHCJS.Foreign.Callback (syncCallback1, OnBlocked(..), Callback)
 import GHCJS.Marshal (toJSRef_aeson, fromJSRef, toJSRef)
 import qualified Data.JSString as JSString
 #endif
@@ -99,12 +99,12 @@ mkControllerView :: (StoreData storeData, Typeable props)
 #ifdef __GHCJS__
 
 mkControllerView name (ReactStore store _) buildNode = unsafePerformIO $ do
-    --let render sd props = return $ buildNode sd props
-    renderCb <- undefined -- mkRenderCallback parseExportStoreData runViewHandler render
+    let render sd props = return $ buildNode sd props
+    renderCb <- mkRenderCallback parseExportStoreData runViewHandler render
     ReactClass <$> js_createControllerView (JSString.pack name) store renderCb
 
 -- | Transform a controller view handler to a raw handler.
-runViewHandler :: RenderCbArgs () props -> ViewEventHandler -> IO ()
+runViewHandler :: RenderCbArgs state props -> ViewEventHandler -> IO ()
 runViewHandler _ = mapM_ dispatchSomeAction
 
 #else
@@ -186,7 +186,6 @@ mkStatefulView name initial buildNode = unsafePerformIO $ do
     initialRef <- toJSRef_aeson initial
     let render state props = return $ buildNode state props
     renderCb <- mkRenderCallback parseJsonState runStateViewHandler render
-    renderCb <- undefined
     ReactClass <$> js_createClass (JSString.pack name) initialRef renderCb
 
 -- | Transform a stateful class event handler to a raw event handler
@@ -195,12 +194,15 @@ runStateViewHandler :: (ToJSON state, FromJSON state)
 runStateViewHandler args handler = do
     alterState <- js_RenderCbRetrieveAlterStateFns args
     st <- parseJsonState =<< js_GetState alterState
+
     let (actions, mNewState) = handler st
+
     case mNewState of
         Nothing -> return ()
         Just newState -> do
             newStateRef <- toJSRef_aeson newState
             js_SetState alterState newStateRef
+
     mapM_ dispatchSomeAction actions
 
 #else
@@ -224,34 +226,20 @@ mkStatefulView _ _ _ = ReactClass (ReactClassRef ())
 type ClassEventHandler state = state -> IO (Maybe state)
 
 -- | Create a class allowed to perform arbitrary IO during rendering and event handlers.
-mkClass :: (ToJSON state, FromJSON state, Typeable props)
+mkClass :: (ToJSON state, FromJSON state)
         => String -- ^ A name for this class
         -> state -- ^ The initial state
-        -> (state -> props -> IO (ReactElementM (ClassEventHandler state) ()))
+        -> (state -> Int -> IO (ReactElementM (ClassEventHandler state) ()))
         -- ^ The rendering function.  This function cannot block (for example, it cannot take an
         -- MVar).  If it does block, it will be aborted and a javascript execption will be thrown
         -- back to React causing React to abort the rendering.
-        -> ReactClass props
+        -> ReactClass Int
 
 #ifdef __GHCJS__
 
 mkClass name initialState render = unsafePerformIO $ do
     initialRef <- toJSRef_aeson initialState
-    renderCb <- syncCallback1 ThrowWouldBlock $ \arg -> do
-        stateRef <- js_RenderCbRetrieveState arg
-        state <- parseJsonState stateRef
-
-        propsE <- undefined --js_RenderCbRetrieveProps arg
-        mprops <- derefExport propsE
-        props <- maybe (error "Unable to load props") return mprops
-
-        node <- render state props
-
-        (element, evtCallbacks) <- mkReactElement (runClassHandler arg) node
-
-        evtCallbacksRef <- toJSRef evtCallbacks
-        js_RenderCbSetResults arg evtCallbacksRef element
-    
+    renderCb <- mkRenderCallback parseJsonState runClassHandler render
     ReactClass <$> js_createClass (JSString.pack name) initialRef renderCb
 
 -- | Transform a class event handler to a raw event handler.
@@ -266,6 +254,7 @@ runClassHandler args handler = do
         Just newState -> do
             newStateRef <- toJSRef_aeson newState
             js_SetState alterState newStateRef
+    return ()
 
 #else
 
@@ -296,7 +285,7 @@ mkClass _ _ _ = ReactClass (ReactClassRef ())
 --  In addition, for classes (not controller-views), there is one additional property @alterState@
 --  which is used inside the event handlers.  @alterState@ has two properties, @setState@ and
 --  @getState@.
-type RenderCbArgs state props = JSRef (state, props)
+newtype RenderCbArgs state props = RenderCbArgs (JSRef ())
 
 foreign import javascript unsafe
     "$1.state"
@@ -308,34 +297,34 @@ foreign import javascript unsafe
 
 foreign import javascript unsafe
     "$1.newCallbacks = $2; $1.elem = $3;"
-    js_RenderCbSetResults :: RenderCbArgs state props -> JSRef a -> ReactElementRef -> IO ()
+    js_RenderCbSetResults :: RenderCbArgs state props -> JSRef [Callback (JSRef Value -> IO ())] -> ReactElementRef -> IO ()
 
-newtype AlterStateFns = AlterStateFns (JSRef ())
+newtype AlterStateFns state = AlterStateFns (JSRef ())
 
 foreign import javascript unsafe
     "$1.alterState"
-    js_RenderCbRetrieveAlterStateFns :: RenderCbArgs state props -> IO AlterStateFns
+    js_RenderCbRetrieveAlterStateFns :: RenderCbArgs state props -> IO (AlterStateFns state)
 
 foreign import javascript unsafe
     "$1.setState($2)"
-    js_SetState :: AlterStateFns -> JSRef state -> IO ()
+    js_SetState :: AlterStateFns state -> JSRef state -> IO ()
 
 foreign import javascript unsafe
     "$1.getState()"
-    js_GetState :: AlterStateFns -> IO (JSRef state)
+    js_GetState :: AlterStateFns state -> IO (JSRef state)
 
 foreign import javascript unsafe
     "hsreact$mk_ctrl_view($1, $2, $3)"
     js_createControllerView :: JSString.JSString
                             -> ReactStoreRef storeData
-                            -> Callback (RenderCbArgs state props -> IO ())
+                            -> Callback (JSRef () -> IO ())
                             -> IO (ReactClassRef props)
 
 -- | Create a class with no state.
 foreign import javascript unsafe
     "hsreact$mk_view($1, $2)"
     js_createView :: JSString.JSString
-                  -> Callback (RenderCbArgs state props -> IO ())
+                  -> Callback (JSRef () -> IO ())
                   -> IO (ReactClassRef props)
 
 -- | Create a class which tracks its own state.  Similar releasing needs to happen for callbacks and
@@ -344,39 +333,41 @@ foreign import javascript unsafe
     "hsreact$mk_class($1, $2, $3)"
     js_createClass :: JSString.JSString
                    -> JSRef state
-                   -> Callback (RenderCbArgs state props -> IO ())
+                   -> Callback (JSRef () -> IO ())
                    -> IO (ReactClassRef props)
 
 mkRenderCallback :: Typeable props
                  => (JSRef state -> IO state) -- ^ parse state
                  -> (RenderCbArgs state props -> eventHandler -> IO ()) -- ^ execute event args
                  -> (state -> props -> IO (ReactElementM eventHandler ())) -- ^ renderer
-                 -> IO (Callback (RenderCbArgs state props -> IO ()))
-mkRenderCallback parseState runHandler render = syncCallback1 ThrowWouldBlock $ \arg -> do
-    state <- undefined --parseState arg
+                 -> IO (Callback (JSRef () -> IO ()))
+mkRenderCallback parseState runHandler render = syncCallback1 ThrowWouldBlock $ \argRef -> do
+    let args = RenderCbArgs argRef
+    stateRef <- js_RenderCbRetrieveState args
+    state <- parseState stateRef
 
-    propsE <- undefined --js_RenderCbRetrieveProps arg
+    propsE <- js_RenderCbRetrieveProps args
     mprops <- derefExport propsE
     props <- maybe (error "Unable to load props") return mprops
 
     node <- render state props
 
-    (element, evtCallbacks) <- mkReactElement (runHandler arg) node
+    (element, evtCallbacks) <- mkReactElement (runHandler args) node
 
     evtCallbacksRef <- toJSRef evtCallbacks
-    js_RenderCbSetResults arg evtCallbacksRef element
+    js_RenderCbSetResults args evtCallbacksRef element
 
 parseJsonState :: FromJSON state => JSRef state -> IO state
 parseJsonState stateRef = do
-    mstate <- fromJSRef $ castRef stateRef
-    stateVal <- maybe (error "Unable to decode class state") return mstate
-    case fromJSON stateVal of
+    let valRef :: JSRef Value = castRef stateRef
+    mval <- fromJSRef valRef
+    case maybe (error "Unable to decode class state") fromJSON mval of
         Error err -> error $ "Unable to decode class state: " ++ err
         Success s -> return s
 
 parseExportStoreData :: Typeable storeData => JSRef storeData -> IO storeData
-parseExportStoreData storeDataE = do
-    mdata <- derefExport $ castRef storeDataE
+parseExportStoreData storeDataRef = do
+    mdata <- derefExport $ castRef storeDataRef
     maybe (error "Unable to load store state") return mdata
 
 #endif
