@@ -13,10 +13,60 @@ module React.Flux.PropertiesAndEvents (
   , onKeyPress
   , onKeyUp
 
+  -- * Focus
+  , onBlur
+  , onFocus
+
+  -- * Form
+  , onChange
+  , onInput
+  , onSubmit
+
+  -- * Mouse
+  , MouseEvent(..)
+  , onClick
+  , onContextMenu
+  , onDoubleClick
+  , onDrag
+  , onDragEnd
+  , onDragEnter
+  , onDragExit
+  , onDragLeave
+  , onDragOver
+  , onDragStart
+  , onDrop
+  , onMouseDown
+  , onMouseEnter
+  , onMouseLeave
+  , onMouseMove
+  , onMouseOut
+  , onMouseOver
+  , onMouseUp
+
+  -- * Touch
+  , initializeTouchEvents
+  , TouchEvent(..)
+  , onTouchCancel
+  , onTouchEnd
+  , onTouchMove
+  , onTouchStart
+
+  -- * UI
+  , UIEvent(..)
+  , onScroll
+
+  -- * Wheel
+  , WheelEvent(..)
+  , onWheel
+
   -- * Creating your own handlers
   , on
   , HandlerArg(..)
   , parseEvent
+  , parseKeyboardEvent
+  , parseMouseEvent
+  , parseTouchEvent
+  , parseWheelEvent
 ) where
 
 import Control.Concurrent.MVar (newMVar)
@@ -191,9 +241,7 @@ parseKeyboardEvent :: HandlerArg -> KeyboardEvent
 parseKeyboardEvent (HandlerArg ref val) =
     case fromJSON val of
         Error err -> error $ "Unable to parse keyboard event: " ++ err
-        Success e -> e
-                { keyGetModifierState = getModifierState ref
-                }
+        Success e -> e { keyGetModifierState = getModifierState ref }
 
 onKeyDown :: (Event -> KeyboardEvent -> handler) -> PropertyOrHandler handler
 onKeyDown = mkHandler "onKeyDown" parseKeyboardEvent
@@ -203,3 +251,215 @@ onKeyPress = mkHandler "onKeyPress" parseKeyboardEvent
 
 onKeyUp :: (Event -> KeyboardEvent -> handler) -> PropertyOrHandler handler
 onKeyUp = mkHandler "onKeyUp" parseKeyboardEvent
+
+--------------------------------------------------------------------------------
+-- Focus Events
+--------------------------------------------------------------------------------
+
+onBlur :: (Event -> handler) -> PropertyOrHandler handler
+onBlur f = on "onBlur" (f . parseEvent)
+
+onFocus :: (Event -> handler) -> PropertyOrHandler handler
+onFocus f = on "onFocus" (f . parseEvent)
+
+--------------------------------------------------------------------------------
+-- Form Events
+--------------------------------------------------------------------------------
+
+onChange :: (Event -> handler) -> PropertyOrHandler handler
+onChange f = on "onChange" (f . parseEvent)
+
+onInput :: (Event -> handler) -> PropertyOrHandler handler
+onInput f = on "onInput" (f . parseEvent)
+
+onSubmit :: (Event -> handler) -> PropertyOrHandler handler
+onSubmit f = on "onSubmit" (f . parseEvent)
+
+--------------------------------------------------------------------------------
+-- Mouse Events
+--------------------------------------------------------------------------------
+
+data MouseEvent = MouseEvent
+  { mouseAltKey :: Bool
+  , mouseButton :: Int
+  , mouseButtons :: Int
+  , mouseClientX :: Int
+  , mouseClientY :: Int
+  , mouseCtrlKey :: Bool
+  , mouseGetModifierState :: String -> Bool
+  , mouseMetaKey :: Bool
+  , mousePageX :: Int
+  , mousePageY :: Int
+  -- relatedTarget
+  , mouseScreenX :: Int
+  , mouseScreenY :: Int
+  , mouseShiftKey :: Bool
+  }
+
+instance FromJSON MouseEvent where
+    parseJSON = withObject "Mouse Event" $ \o ->
+        MouseEvent <$> o .: "altKey"
+                   <*> o .: "button"
+                   <*> o .: "buttons"
+                   <*> o .: "clientX"
+                   <*> o .: "clientY"
+                   <*> o .: "ctrlKey"
+                   <*> return (pure False)
+                   <*> o .: "metaKey"
+                   <*> o .: "pageX"
+                   <*> o .: "pageY"
+                   <*> o .: "screenX"
+                   <*> o .: "screenY"
+                   <*> o .: "shiftKey"
+
+parseMouseEvent :: HandlerArg -> MouseEvent
+parseMouseEvent (HandlerArg ref val) =
+    case fromJSON val of
+        Error err -> error $ "Unable to parse mouse event: " ++ err
+        Success e -> e { mouseGetModifierState = getModifierState ref }
+
+onClick :: (Event -> MouseEvent -> handler) -> PropertyOrHandler handler
+onClick = mkHandler "onClick" parseMouseEvent
+
+onContextMenu :: (Event -> MouseEvent -> handler) -> PropertyOrHandler handler
+onContextMenu = mkHandler "onContextMenu" parseMouseEvent
+
+onDoubleClick :: (Event -> MouseEvent -> handler) -> PropertyOrHandler handler
+onDoubleClick = mkHandler "onDoubleClick" parseMouseEvent
+
+onDrag :: (Event -> MouseEvent -> handler) -> PropertyOrHandler handler
+onDrag = mkHandler "onDrag" parseMouseEvent
+
+onDragEnd :: (Event -> MouseEvent -> handler) -> PropertyOrHandler handler
+onDragEnd = mkHandler "onDragEnd" parseMouseEvent
+
+onDragEnter :: (Event -> MouseEvent -> handler) -> PropertyOrHandler handler
+onDragEnter = mkHandler "onDragEnter" parseMouseEvent
+
+onDragExit :: (Event -> MouseEvent -> handler) -> PropertyOrHandler handler
+onDragExit = mkHandler "onDragExit" parseMouseEvent
+
+onDragLeave :: (Event -> MouseEvent -> handler) -> PropertyOrHandler handler
+onDragLeave = mkHandler "onDragLeave" parseMouseEvent
+
+onDragOver :: (Event -> MouseEvent -> handler) -> PropertyOrHandler handler
+onDragOver = mkHandler "onDragOver" parseMouseEvent
+
+onDragStart :: (Event -> MouseEvent -> handler) -> PropertyOrHandler handler
+onDragStart = mkHandler "onDragStart" parseMouseEvent
+
+onDrop :: (Event -> MouseEvent -> handler) -> PropertyOrHandler handler
+onDrop = mkHandler "onDrop" parseMouseEvent
+
+onMouseDown :: (Event -> MouseEvent -> handler) -> PropertyOrHandler handler
+onMouseDown = mkHandler "onMouseDown" parseMouseEvent
+
+onMouseEnter :: (Event -> MouseEvent -> handler) -> PropertyOrHandler handler
+onMouseEnter = mkHandler "onMouseEnter" parseMouseEvent
+
+onMouseLeave :: (Event -> MouseEvent -> handler) -> PropertyOrHandler handler
+onMouseLeave = mkHandler "onMouseLeave" parseMouseEvent
+
+onMouseMove :: (Event -> MouseEvent -> handler) -> PropertyOrHandler handler
+onMouseMove = mkHandler "onMouseMove" parseMouseEvent
+
+onMouseOut :: (Event -> MouseEvent -> handler) -> PropertyOrHandler handler
+onMouseOut = mkHandler "onMouseOut" parseMouseEvent
+
+onMouseOver :: (Event -> MouseEvent -> handler) -> PropertyOrHandler handler
+onMouseOver = mkHandler "onMouseOver" parseMouseEvent
+
+onMouseUp :: (Event -> MouseEvent -> handler) -> PropertyOrHandler handler
+onMouseUp = mkHandler "onMouseUp" parseMouseEvent
+
+--------------------------------------------------------------------------------
+-- Touch
+--------------------------------------------------------------------------------
+
+foreign import javascript unsafe
+    "React.initializeTouchEvents(true)"
+    initializeTouchEvents :: IO ()
+
+data TouchEvent = TouchEvent {
+    touchAltKey :: Bool
+  -- changedTouches
+  , touchCtrlKey :: Bool
+  , touchGetModifierState :: String -> Bool
+  , touchMetaKey :: Bool
+  , touchShiftKey :: Bool
+  -- touch targets
+  -- touches
+  }
+
+instance FromJSON TouchEvent where
+    parseJSON = withObject "touch event" $ \o ->
+        TouchEvent <$> o .: "altKey"
+                   <*> o .: "ctrlKey"
+                   <*> return (pure False)
+                   <*> o .: "metaKey"
+                   <*> o .: "shiftKey"
+
+parseTouchEvent :: HandlerArg -> TouchEvent
+parseTouchEvent (HandlerArg ref val) =
+    case fromJSON val of
+        Error err -> error $ "Unable to parse touch event: " ++ err
+        Success e -> e { touchGetModifierState = getModifierState ref }
+
+onTouchCancel :: (Event -> TouchEvent -> handler) -> PropertyOrHandler handler
+onTouchCancel = mkHandler "onTouchCancel" parseTouchEvent
+
+onTouchEnd :: (Event -> TouchEvent -> handler) -> PropertyOrHandler handler
+onTouchEnd = mkHandler "onTouchEnd" parseTouchEvent
+
+onTouchMove :: (Event -> TouchEvent -> handler) -> PropertyOrHandler handler
+onTouchMove = mkHandler "onTouchMove" parseTouchEvent
+
+onTouchStart :: (Event -> TouchEvent -> handler) -> PropertyOrHandler handler
+onTouchStart = mkHandler "onTouchStart" parseTouchEvent
+
+--------------------------------------------------------------------------------
+-- UI Events
+--------------------------------------------------------------------------------
+
+data UIEvent = UIEvent {
+    uiDetail :: Int
+}
+
+instance FromJSON UIEvent where
+    parseJSON = withObject "ui event" $ \o -> UIEvent <$> o .: "detail"
+
+parseUIEvent :: HandlerArg -> UIEvent
+parseUIEvent (HandlerArg _ val) =
+    case fromJSON val of
+        Error err -> error $ "Unable to parse ui event: " ++ err
+        Success e -> e
+
+onScroll :: (Event -> UIEvent -> handler) -> PropertyOrHandler handler
+onScroll = mkHandler "onScroll" parseUIEvent
+
+--------------------------------------------------------------------------------
+-- Wheel
+--------------------------------------------------------------------------------
+
+data WheelEvent = WheelEvent {
+    wheelDeltaMode :: Int
+  , wheelDeltaX :: Int
+  , wheelDeltaY :: Int
+  , wheelDeltaZ :: Int
+}
+
+instance FromJSON WheelEvent where
+    parseJSON = withObject "wheel event" $ \o ->
+        WheelEvent <$> o .: "deltaMode"
+                   <*> o .: "deltaX"
+                   <*> o .: "deltaY"
+                   <*> o .: "deltaZ"
+
+parseWheelEvent :: HandlerArg -> WheelEvent
+parseWheelEvent (HandlerArg _ val) =
+    case fromJSON val of
+        Error err -> error $ "Unable to parse wheel event: " ++ err
+        Success e -> e
+
+onWheel :: (Event -> WheelEvent -> handler) -> PropertyOrHandler handler
+onWheel = mkHandler "onWheel" parseWheelEvent
