@@ -1,7 +1,7 @@
 -- | This module contains the definitions for the
 -- <https://facebook.github.io/react/docs/events.html React Event System>
 module React.Flux.PropertiesAndEvents (
-    PropertyOrHandler(..)
+    PropertyOrHandler
   , (@=)
   , Event(..)
   , preventDefault

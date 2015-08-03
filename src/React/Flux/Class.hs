@@ -29,16 +29,22 @@ import GHCJS.Marshal (toJSRef_aeson, fromJSRef, toJSRef)
 import qualified Data.JSString as JSString
 #endif
 
--- | A React class is conceptually a (stateful) function from properties to a tree of elements.
+-- | A React class is conceptually a (stateful) function from @props@ to a tree of elements.
+-- The rendering function receives a value of type @props@ from its parent in the virtual DOM.
+-- Additionally, the rendering function can depend on some internal state.  Based on the @props@ and
+-- the internal state, the rendering function produces a virtual tree of elements which React then
+-- reconciles with the browser DOM.
 --
--- This module supports 3 kinds of pure classes and 1 unpure class.
+-- This module supports 3 kinds of pure classes and 1 unpure class, differing in how they manage the
+-- internal state.
 --
 -- * Controller View, created by 'mkControllerView'.  A controller view provides the glue code
 -- between a store and the view, and as such is a pure function taking as input the store data and
 -- the properties and producing a tree of elements.  In addition, any event handlers attached to
--- elements can only produce actions.
+-- elements can only produce actions.  No internal state is allowed.
 --
--- * View.  A view is pure function from props to a tree of elements.  It can eiter be modeled by
+-- * View.  A view is pure function from props to a tree of elements which does not maintain any
+-- internal state.  It can eiter be modeled by
 -- just a Haskell function without a 'ReactClass', or as a 'ReactClass' created by 'mkView'.  Using
 -- the machinery of a 'ReactClass' is helpful because it allows React to more easily reconcile the
 -- virtual DOM with the DOM and leads to faster rendering (as long as you use 'rclassWithKey'
@@ -125,8 +131,7 @@ mkControllerView _ _ _ = ReactClass (ReactClassRef ())
 -- whenever the properties change.
 --
 -- One option to implement views is to just use a Haskell function taking the @props@ as input and
--- produce a 'ReactElementM'.  For small views, such a Haskell function is ideal.
---
+-- producing a 'ReactElementM'.  For small views, such a Haskell function is ideal.
 -- Using a view class provides more than just a Haskell function when used with a key property with
 -- 'rclassWithKey'.  The key property allows React to more easily reconcile the virtual DOM with the
 -- browser DOM.
@@ -155,15 +160,15 @@ mkView _ _ = ReactClass (ReactClassRef ())
 --- Two versions of mkStatefulView
 ---------------------------------------------------------------------------------------------------
 
--- | A stateful-view event handler transforms events into store actions and a new state.
--- If the new state is nothing, no change is made to the state (which allows an optimization in that
--- we do not need to re-render the view).
+-- | A stateful-view event handler produces a list of store actions and potentially a new state.  If
+-- the new state is nothing, no change is made to the state (which allows an optimization in that we
+-- do not need to re-render the view).
 --
--- The handler takes a state as input.  Changing the state causes a re-render which
--- will cause a new event handler to be created with the new state.  But there is a race if multiple
--- events occur before React causes a re-render.  Therefore, the handler takes the current state and
--- it should ignore the state passed into the render function; the state passed to the handler will
--- always be up to date.
+-- Changing the state causes a re-render which will cause a new event handler to be created.  If the
+-- handler closes over the state passed into the rendering function, there is a race if multiple
+-- events occur before React causes a re-render.  Therefore, the handler takes the current state as
+-- input.  Your handlers therefore should ignore the state passed into the render function and
+-- instead use the state passed directly to the handler.
 type StatefulViewEventHandler state = state -> ([SomeStoreAction], Maybe state)
 
 -- | A stateful view is a re-usable component of the page which keeps track of internal state.
@@ -226,14 +231,14 @@ mkStatefulView _ _ _ = ReactClass (ReactClassRef ())
 type ClassEventHandler state = state -> IO (Maybe state)
 
 -- | Create a class allowed to perform arbitrary IO during rendering and event handlers.
-mkClass :: (ToJSON state, FromJSON state)
+mkClass :: (ToJSON state, FromJSON state, Typeable props)
         => String -- ^ A name for this class
         -> state -- ^ The initial state
-        -> (state -> Int -> IO (ReactElementM (ClassEventHandler state) ()))
+        -> (state -> props -> IO (ReactElementM (ClassEventHandler state) ()))
         -- ^ The rendering function.  This function cannot block (for example, it cannot take an
         -- MVar).  If it does block, it will be aborted and a javascript execption will be thrown
         -- back to React causing React to abort the rendering.
-        -> ReactClass Int
+        -> ReactClass props
 
 #ifdef __GHCJS__
 

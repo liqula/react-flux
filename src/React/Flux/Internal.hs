@@ -1,9 +1,7 @@
 -- | Internal module for React.Flux
 --
 -- Normally you should not need to use anything in this module.  This module is only needed if you have
--- complicated interaction with custom javascript rendering code that isn't covered by the
--- combinators in "React.Flux.DOM".  Actually, I cannot think of any case not covered by the
--- existing combinators, but I exported this module anyway just in case.
+-- complicated interaction with third-party javascript rendering code.
 module React.Flux.Internal(
     ReactClassRef(..)
   , ReactElementRef(..)
@@ -54,8 +52,7 @@ data HandlerArg = HandlerArg
 -- | Either a property or an event handler.
 --
 -- The combination of all properties and event handlers are used to create the javascript object
--- passed as the second argument to @React.createElement@.  Properties are created with '(@=)' and
--- event handlers are created using the various functions below such as 'onKeyDown'.
+-- passed as the second argument to @React.createElement@.
 data PropertyOrHandler handler =
    Property Pair
  | EventHandler
@@ -68,10 +65,11 @@ instance Functor PropertyOrHandler where
     fmap f (EventHandler name h) = EventHandler name (f . h)
 
 
--- | A React element is the result of the rendering function of a class.  It is a node or list
--- of nodes in a virtual DOM built by the rendering functions of classes, and React then reconciles
--- this virtual DOM with the browser DOM.  The 'ReactElement' is a monoid, so dispite its name can
--- represent more than one element as siblings.
+-- | A React element is a node or list of nodes in a virtual tree.  Elements are the output of the
+-- rendering functions of classes.  React takes the output of the rendering function (which is a
+-- tree of elements) and then reconciles it with the actual DOM elements in the browser.  The
+-- 'ReactElement' is a monoid, so dispite its name can represent more than one element.  Multiple
+-- elements are rendered into the browser DOM as siblings.
 --
 -- A 'ReactElement' is parametrized by the type @eventHandler@, which is the type of the event
 -- handlers that can be attached to DOM elements.  Event handlers are created by combinators in

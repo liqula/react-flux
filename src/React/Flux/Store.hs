@@ -52,9 +52,9 @@ class Typeable storeData => StoreData storeData where
     -- | The actions that this store accepts
     type StoreAction storeData
 
-    -- | The action that the store uses to transform the data.  Note that if this action
+    -- | Transform the store data according to the action.  Note that if this
     -- throws an exception, the transform will be aborted and the old store data will be kept
-    -- unchanged.
+    -- unchanged.  The exception will then be thrown from 'dispatch'.
     transform :: StoreAction storeData -> storeData -> IO storeData
 
 -- | An existential type for some store action.  It is used for event handlers in controller-views

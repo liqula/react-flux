@@ -9,13 +9,13 @@ module React.Flux (
 
   -- * Classes
   , ReactClass
-  , ViewEventHandler
   , mkControllerView
+  , ViewEventHandler
   , mkView
-  , StatefulViewEventHandler
   , mkStatefulView
-  , ClassEventHandler
+  , StatefulViewEventHandler
   , mkClass
+  , ClassEventHandler
 
   -- * Elements
   , ReactElement
