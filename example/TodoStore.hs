@@ -1,4 +1,8 @@
+{-# LANGUAGE TypeFamilies #-}
 module TodoStore where
+
+import React.Flux
+import Data.Typeable (Typeable)
 
 data Todo = Todo {
     todoText :: String
@@ -18,7 +22,7 @@ data TodoAction = TodoCreate String
 
 instance StoreData TodoState where
     type StoreAction TodoState = TodoAction
-    transform (TodoState todos) action = undefined
+    transform action (TodoState todos) = undefined
 
 todoStore :: ReactStore TodoState
 todoStore = mkStore $ TodoState []

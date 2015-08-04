@@ -1,6 +1,7 @@
 module Main where
 
+import React.Flux
 import TodoViews
 
 main :: IO ()
-main = reactRender mainApp ()
+main = reactRender "todoApp" todoApp ()

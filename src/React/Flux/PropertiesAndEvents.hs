@@ -3,6 +3,7 @@
 module React.Flux.PropertiesAndEvents (
     PropertyOrHandler
   , (@=)
+  , ($=)
   , Event(..)
   , EventTarget(..)
   , eventTargetProp
@@ -95,6 +96,11 @@ import qualified JavaScript.Array as JSArray
 -- | Create a property.
 (@=) :: ToJSON a => T.Text -> a -> PropertyOrHandler handler
 n @= a = Property (n, toJSON a)
+
+-- | Create a text-valued property.  This is here to avoid problems when OverloadedStrings extension
+-- is enabled
+($=) :: T.Text -> T.Text -> PropertyOrHandler handler
+n $= a = Property (n, toJSON a)
 
 ----------------------------------------------------------------------------------------------------
 --- Generic Event
