@@ -152,15 +152,15 @@ newtype PartialEvent a = PartialEvent a
 
 instance FromJSON (PartialEvent Event) where
     parseJSON = withObject "Event" $ \o -> PartialEvent <$> do
-        Event <$> o .: "type"
-              <*> o .: "bubbles"
-              <*> o .: "cancelable"
+        Event <$> o .:? "type" .!= ""
+              <*> o .:? "bubbles" .!= False
+              <*> o .:? "cancelable" .!= False
               <*> pure undefined -- current target
-              <*> o .: "defaultPrevented"
-              <*> o .: "eventPhase"
-              <*> o .: "isTrusted"
+              <*> o .:? "defaultPrevented" .!= False
+              <*> o .:? "eventPhase" .!= 0
+              <*> o .:? "isTrusted" .!= False
               <*> pure undefined -- target
-              <*> o .: "timestamp"
+              <*> o .:? "timeStamp" .!= 0
               <*> pure undefined -- handler arg
 
 foreign import javascript unsafe
@@ -171,7 +171,7 @@ foreign import javascript unsafe
 parseEvent :: HandlerArg -> Event
 parseEvent arg@(HandlerArg ref val) =
     case fromJSON val of
-        Error err -> error $ "Unable to parse event: " ++ err
+        Error err -> error $ "Unable to parse event: " ++ err ++ " " ++ show val
         Success (PartialEvent e) -> e
             { evtCurrentTarget = EventTarget $ js_GetEventRef ref "currentTarget"
             , evtTarget = EventTarget $ js_GetEventRef ref "target"

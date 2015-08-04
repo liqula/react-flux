@@ -57,11 +57,11 @@ function hsreact$mk_view(name, renderCb) {
     });
 }
 
-function hsreact$mk_class(name, intialState, renderCb) {
+function hsreact$mk_class(name, initialState, renderCb) {
     return React.createClass({ 
         displayName: name,
         getInitialState: function() { 
-            return initialState;
+            return { hs: initialState };
         }, 
         componentWillUnmount: function() {
             this._currentCallbacks.map(h$release);
@@ -73,13 +73,13 @@ function hsreact$mk_class(name, intialState, renderCb) {
         render: function() { 
             var that = this; 
             var arg = { 
-                state: this.state, 
-                props: this.props.hs, 
+                state: this.state.hs,
+                props: this.props.hs,
                 newCallbacks: [], 
                 elem:null, 
                 alterState: { 
-                    getState: function() { return that.state; }, 
-                    setState: this.setState,
+                    getState: function() { return that.state.hs; }, 
+                    setState: function(s) { that.setState({hs: s}); },
                 }, 
             }; 
             renderCb(arg); 
