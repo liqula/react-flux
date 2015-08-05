@@ -22,20 +22,16 @@ import Control.Monad.Writer
 import Control.Monad.Identity (Identity(..))
 
 #ifdef __GHCJS__
-import GHCJS.Types (JSRef, castRef)
-import GHCJS.Foreign.Callback (Callback, asyncCallback1)
-import GHCJS.Foreign.Export (export)
+import GHCJS.Types (JSRef, castRef, JSString, JSArray, JSObject, JSFun)
+import qualified GHCJS.Foreign as Foreign
 import GHCJS.Marshal (toJSRef_aeson, fromJSRef)
-import GHCJS.Marshal.Pure (pToJSRef)
-import qualified Data.JSString as JSString
-import qualified Data.JSString.Text as JSString
-import qualified JavaScript.Array as JSArray
-import qualified JavaScript.Object as JSObject
+import React.Flux.Export
 #else
 type JSRef a = ()
-type Callback a = JSRef a
 type Export a = JSRef a
 #endif
+
+type Callback a = JSFun a
 
 -- | This type is for the return value of @React.createClass@
 newtype ReactClassRef props = ReactClassRef { reactClassRef :: JSRef () }
@@ -173,67 +169,73 @@ mkReactElement runHandler eM = runWriterT $ do
         [] -> lift $ js_ReactCreateElementNoChildren "div"
         [x] -> return x
         xs -> lift $ do
-            emptyObj <- JSObject.create
-            js_ReactCreateElementName "div" emptyObj (JSArray.fromList $ map reactElementRef xs)
+            emptyObj <- Foreign.newObj
+            arr <- Foreign.toArray $ map reactElementRef xs
+            js_ReactCreateElementName "div" emptyObj arr
 
 foreign import javascript unsafe
     "React.createElement($1)"
-    js_ReactCreateElementNoChildren :: JSString.JSString -> IO ReactElementRef
+    js_ReactCreateElementNoChildren :: JSString -> IO ReactElementRef
 
 foreign import javascript unsafe
     "React.createElement($1, $2, $3)"
-    js_ReactCreateElementName :: JSString.JSString -> JSObject.Object -> JSArray.JSArray -> IO ReactElementRef
+    js_ReactCreateElementName :: JSString -> JSObject b -> JSArray c -> IO ReactElementRef
 
 foreign import javascript unsafe
     "React.createElement($1, $2, $3)"
-    js_ReactCreateForeignElement :: ReactClassRef a -> JSObject.Object -> JSArray.JSArray -> IO ReactElementRef
+    js_ReactCreateForeignElement :: ReactClassRef a -> JSObject b -> JSArray c -> IO ReactElementRef
 
 foreign import javascript unsafe
     "React.createElement($1, {hs:$2}, $3)"
-    js_ReactCreateClass :: ReactClassRef a -> JSRef props -> JSArray.JSArray -> IO ReactElementRef
+    js_ReactCreateClass :: ReactClassRef a -> Export props -> JSArray b -> IO ReactElementRef
 
 foreign import javascript unsafe
     "React.createElement($1, {key: $2, hs:$3}, $4)"
-    js_ReactCreateKeyedElement :: ReactClassRef a -> JSRef key -> JSRef props -> JSArray.JSArray -> IO ReactElementRef
+    js_ReactCreateKeyedElement :: ReactClassRef a -> JSRef key -> Export props -> JSArray b -> IO ReactElementRef
 
 js_ReactCreateContent :: String -> ReactElementRef
-js_ReactCreateContent = ReactElementRef . castRef . pToJSRef
+js_ReactCreateContent = ReactElementRef . castRef . Foreign.toJSString
 
-addPropOrHandlerToObj :: JSObject.Object -> PropertyOrHandler (IO ()) -> WriterT [Callback (JSRef Value -> IO ())] IO ()
+addPropOrHandlerToObj :: JSObject a -> PropertyOrHandler (IO ()) -> WriterT [Callback (JSRef Value -> IO ())] IO ()
 addPropOrHandlerToObj obj (Property (n, v)) = lift $ do
     vRef <- toJSRef_aeson v
-    JSObject.setProp (JSString.textToJSString n) vRef obj
+    Foreign.setProp (Foreign.toJSString n) vRef obj
 addPropOrHandlerToObj obj (EventHandler str handler) = do
     -- this will be released by the render function of the class (jsbits/class.js)
-    cb <- lift $ asyncCallback1 $ \evtRef -> do
+    cb <- lift $ Foreign.asyncCallback1 Foreign.AlwaysRetain $ \evtRef -> do
+        putStrLn "Starting event handler"
         (mevtVal :: Maybe Value) <- fromJSRef evtRef
+        putStrLn "Converted from event ref to Maybe Val"
         evtVal <- maybe (error "Unable to parse event as a javascript object") return mevtVal
+        putStrLn $ "About to pass to handler : " ++ show evtVal
         handler $ HandlerArg (castRef evtRef) evtVal
+        putStrLn "Handler finished"
 
     tell [cb]
-    lift $ JSObject.setProp (JSString.pack str) (pToJSRef cb) obj
+    lift $ Foreign.setProp (Foreign.toJSString str) cb obj
 
 createElement :: ReactElement (IO ()) -> WriterT [Callback (JSRef Value -> IO ())] IO [ReactElementRef]
 createElement EmptyElement = return []
 createElement (Append x y) = (++) <$> createElement x <*> createElement y
 createElement (Content s) = return [js_ReactCreateContent s]
 createElement (f@(ForeignElement{})) = do
-    obj <- lift $ JSObject.create
+    obj <- lift $ Foreign.newObj
     mapM_ (addPropOrHandlerToObj obj) $ fProps f
     childNodes <- createElement $ fChild f
-    let childArr = JSArray.fromList $ map reactElementRef childNodes
+    childArr <- lift $ Foreign.toArray $ map reactElementRef childNodes
     e <- lift $ case fName f of
-        Left s -> js_ReactCreateElementName (JSString.pack s) obj childArr
+        Left s -> js_ReactCreateElementName (Foreign.toJSString s) obj childArr
         Right ref -> js_ReactCreateForeignElement ref obj childArr
     return [e]
 createElement (ClassElement { ceClass = rc, ceProps = props, ceKey = mkey, ceChild = child }) = do
     childNodes <- createElement child
     propsE <- lift $ export props -- this will be released inside the lifetime events for the class (jsbits/class.js)
+    arr <- lift $ Foreign.toArray $ map reactElementRef childNodes
     e <- lift $ case mkey of
         Just key -> do
             keyRef <- toJSRef_aeson key
-            js_ReactCreateKeyedElement rc keyRef propsE (JSArray.fromList $ map reactElementRef childNodes)
-        Nothing -> js_ReactCreateClass rc propsE (JSArray.fromList $ map reactElementRef childNodes)
+            js_ReactCreateKeyedElement rc keyRef propsE arr
+        Nothing -> js_ReactCreateClass rc propsE arr
     return [e]
 
 #else

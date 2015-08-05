@@ -4,11 +4,14 @@ function hsreact$mk_ctrl_view(name, store, renderCb) {
         getInitialState: function() { 
             return store.sdata; 
         }, 
+        _onViewChange: function(x) { // allows binding to this
+            this.setState(x);
+        },
         componentDidMount: function() { 
-            store.views.push(this.setState); 
+            store.views.push(this._onViewChange); 
         }, 
         componentWillUnmount: function() {
-            var idx = store.views.indexOf(this.setState); 
+            var idx = store.views.indexOf(this._onViewChange); 
             if (idx >= 0) { store.views.splice(idx, 1); } 
             this._currentCallbacks.map(h$release);
             h$release(this.props.hs);

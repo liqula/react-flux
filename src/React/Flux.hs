@@ -31,13 +31,15 @@ module React.Flux (
 ) where
 
 import Data.Typeable (Typeable)
-import qualified Data.JSString as JSString
 
 import React.Flux.Class
 import React.Flux.DOM
 import React.Flux.Internal
 import React.Flux.PropertiesAndEvents
 import React.Flux.Store
+
+import GHCJS.Types (JSString)
+import GHCJS.Foreign (toJSString)
 
 ----------------------------------------------------------------------------------------------------
 -- reactRender has two versions
@@ -55,11 +57,11 @@ reactRender :: Typeable props
 
 reactRender htmlId rc props = do
     (e, _) <- mkReactElement id $ rclass rc props mempty
-    js_ReactRender e (JSString.pack htmlId)
+    js_ReactRender e (toJSString htmlId)
 
 foreign import javascript unsafe
     "React.render($1, document.getElementById($2))"
-    js_ReactRender :: ReactElementRef -> JSString.JSString -> IO ()
+    js_ReactRender :: ReactElementRef -> JSString -> IO ()
 
 #else
 

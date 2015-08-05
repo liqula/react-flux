@@ -78,6 +78,7 @@ module React.Flux.PropertiesAndEvents (
 
 import Control.Concurrent.MVar (newMVar)
 import Data.String (IsString(..))
+import Data.Maybe (fromMaybe)
 import Data.Aeson
 import System.IO.Unsafe (unsafePerformIO)
 import qualified Data.Text as T
@@ -86,11 +87,9 @@ import React.Flux.Internal
 import React.Flux.Store
 
 #ifdef __GHCJS__
-import GHCJS.Types (JSRef, nullRef)
-import GHCJS.Marshal (fromJSRef)
-import GHCJS.Marshal.Pure (PFromJSRef(..))
-import qualified Data.JSString as JSString
-import qualified JavaScript.Array as JSArray
+import GHCJS.Types (JSRef, nullRef, JSString, JSArray, JSBool)
+import GHCJS.Foreign (toJSString, lengthArray, indexArray, fromJSBool)
+import GHCJS.Marshal (FromJSRef(..))
 #endif
 
 -- | Create a property.
@@ -112,11 +111,12 @@ newtype EventTarget = EventTarget (JSRef ())
 
 foreign import javascript unsafe
     "$r = $1[$2]"
-    js_eventTargetProp :: EventTarget -> JSString.JSString -> JSRef val
+    js_eventTargetProp :: EventTarget -> JSString -> JSRef val
 
 -- | Use this to access a property of an event target.
-eventTargetProp :: PFromJSRef val => EventTarget -> String -> val
-eventTargetProp evt prop = pFromJSRef $ js_eventTargetProp evt (fromString prop)
+eventTargetProp :: FromJSRef val => EventTarget -> String -> val
+eventTargetProp evt prop = fromMaybe (error "Unable to decode event target") $ unsafePerformIO $
+    fromJSRef $ js_eventTargetProp evt (fromString prop)
 
 -- | Every event in React is a synthetic event, a cross-browser wrapper around the native event.
 data Event = Event
@@ -142,7 +142,7 @@ data Event = Event
 -- >           ]
 --
 -- In this case, @val@ would coorespond to the javascript expression @evt.target.value@.
-target :: PFromJSRef val => Event -> String -> val
+target :: FromJSRef val => Event -> String -> val
 target e s = eventTargetProp (evtTarget e) s
 
 -- | In the FromJSON instance, we cannot fill in properties of an event which rely on the underlying
@@ -165,7 +165,7 @@ instance FromJSON (PartialEvent Event) where
 
 foreign import javascript unsafe
     "$r = $1[$2]"
-    js_GetEventRef :: JSRef () -> JSString.JSString -> JSRef ()
+    js_GetEventRef :: JSRef () -> JSString -> JSRef ()
 
 -- | Utility function to parse an 'Event' from the handler argument.
 parseEvent :: HandlerArg -> Event
@@ -282,10 +282,10 @@ instance FromJSON (PartialEvent KeyboardEvent) where
 #ifdef __GHCJS__
 foreign import javascript unsafe
     "$1.getModifierState($2)"
-    js_GetModifierState :: JSRef () -> JSString.JSString -> JSRef Bool
+    js_GetModifierState :: JSRef () -> JSString -> JSBool
 
 getModifierState :: JSRef () -> String -> Bool
-getModifierState ref = pFromJSRef . js_GetModifierState ref . JSString.pack
+getModifierState ref = fromJSBool . js_GetModifierState ref . toJSString
 #else
 getModifierState :: JSRef () -> String -> Bool
 getModifierState _ _ = False
@@ -482,13 +482,13 @@ data TouchEvent = TouchEvent {
 
 foreign import javascript unsafe
     "$r = $1[$2]"
-    js_GetTouchList :: JSRef () -> JSString.JSString -> JSArray.JSArray
+    js_GetTouchList :: JSRef () -> JSString -> JSArray a
 
-parseTouchList :: JSRef () -> JSString.JSString -> [Touch]
-parseTouchList obj key = map f [0..(JSArray.length arr - 1)]
+parseTouchList :: JSRef () -> JSString -> [Touch]
+parseTouchList obj key = map f [0..(unsafePerformIO (lengthArray arr) - 1)]
     where
         arr = js_GetTouchList obj key
-        f idx = let jsref = JSArray.index idx arr
+        f idx = let jsref = unsafePerformIO $ indexArray idx arr
                     val = unsafePerformIO $ maybe (error "Unable to parse touch") return =<< fromJSRef jsref
                   in case fromJSON val of
                         Error err -> error $ "Unable to parse touch: " ++ err

@@ -12,7 +12,7 @@ import TodoComponents
 todoApp :: ReactClass ()
 todoApp = mkControllerView "todo app" todoStore $ \todoState () ->
     div_ $ do
-        todoHeader_
+        --todoHeader_
         mainSection_ todoState
         --todoFooter_ todoState
 

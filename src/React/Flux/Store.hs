@@ -15,7 +15,8 @@ import System.IO.Unsafe (unsafePerformIO)
 
 #ifdef __GHCJS__
 import GHCJS.Types (JSRef, isNull)
-import GHCJS.Foreign.Export (Export, export)
+import React.Flux.Export (Export, export)
+--import GHCJS.Foreign.Export (Export, export)
 #else
 type JSRef a = ()
 type Export a = ()
