@@ -24,7 +24,7 @@ import Control.Monad.Identity (Identity(..))
 #ifdef __GHCJS__
 import GHCJS.Types (JSRef, castRef, JSString, JSArray, JSObject, JSFun)
 import qualified GHCJS.Foreign as Foreign
-import GHCJS.Marshal (toJSRef_aeson, fromJSRef)
+import GHCJS.Marshal (toJSRef_aeson)
 import React.Flux.Export
 #else
 type JSRef a = ()
@@ -39,11 +39,11 @@ newtype ReactClassRef props = ReactClassRef { reactClassRef :: JSRef () }
 -- | This type is for the return value of @React.createElement@
 newtype ReactElementRef = ReactElementRef { reactElementRef :: JSRef () }
 
--- | The first parameter of an event handler registered with React, and a decoded version of the argument.
-data HandlerArg = HandlerArg
-    { handlerArgRef :: JSRef ()
-    , handlerArgVal :: Value
-    }
+-- | The first parameter of an event handler registered with React.
+newtype HandlerArg = HandlerArg (JSRef ())
+
+instance Show HandlerArg where
+    show _ = "HandlerArg"
 
 -- | Either a property or an event handler.
 --
@@ -203,13 +203,7 @@ addPropOrHandlerToObj obj (Property (n, v)) = lift $ do
 addPropOrHandlerToObj obj (EventHandler str handler) = do
     -- this will be released by the render function of the class (jsbits/class.js)
     cb <- lift $ Foreign.asyncCallback1 Foreign.AlwaysRetain $ \evtRef -> do
-        putStrLn "Starting event handler"
-        (mevtVal :: Maybe Value) <- fromJSRef evtRef
-        putStrLn "Converted from event ref to Maybe Val"
-        evtVal <- maybe (error "Unable to parse event as a javascript object") return mevtVal
-        putStrLn $ "About to pass to handler : " ++ show evtVal
-        handler $ HandlerArg (castRef evtRef) evtVal
-        putStrLn "Handler finished"
+        handler $ HandlerArg (castRef evtRef)
 
     tell [cb]
     lift $ Foreign.setProp (Foreign.toJSString str) cb obj

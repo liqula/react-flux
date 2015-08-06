@@ -77,29 +77,29 @@ module React.Flux.PropertiesAndEvents (
 ) where
 
 import Control.Concurrent.MVar (newMVar)
-import Data.String (IsString(..))
+import Control.Monad (forM)
 import Data.Maybe (fromMaybe)
-import Data.Aeson
 import System.IO.Unsafe (unsafePerformIO)
 import qualified Data.Text as T
+import qualified Data.Aeson as A
 
 import React.Flux.Internal
 import React.Flux.Store
 
 #ifdef __GHCJS__
-import GHCJS.Types (JSRef, nullRef, JSString, JSArray, JSBool)
+import GHCJS.Types (JSRef, nullRef, JSString, JSBool)
 import GHCJS.Foreign (toJSString, lengthArray, indexArray, fromJSBool)
 import GHCJS.Marshal (FromJSRef(..))
 #endif
 
 -- | Create a property.
-(@=) :: ToJSON a => T.Text -> a -> PropertyOrHandler handler
-n @= a = Property (n, toJSON a)
+(@=) :: A.ToJSON a => T.Text -> a -> PropertyOrHandler handler
+n @= a = Property (n, A.toJSON a)
 
 -- | Create a text-valued property.  This is here to avoid problems when OverloadedStrings extension
 -- is enabled
 ($=) :: T.Text -> T.Text -> PropertyOrHandler handler
-n $= a = Property (n, toJSON a)
+n $= a = Property (n, A.toJSON a)
 
 ----------------------------------------------------------------------------------------------------
 --- Generic Event
@@ -109,14 +109,22 @@ n $= a = Property (n, toJSON a)
 -- <https://developer.mozilla.org/en-US/docs/Web/API/Event/target>
 newtype EventTarget = EventTarget (JSRef ())
 
-foreign import javascript unsafe
-    "$r = $1[$2]"
-    js_eventTargetProp :: EventTarget -> JSString -> JSRef val
+instance Show (EventTarget) where
+    show _ = "EventTarget"
 
--- | Use this to access a property of an event target.
+foreign import javascript unsafe
+    "$1[$2]"
+    js_getProp :: JSRef a -> JSString -> JSRef b
+
+-- | Access a property from an object.  Since event objects are immutable, we can use
+-- unsafePerformIO to obtain a little lazyness, so that unaccessed event properties are not decoded.
+(.:) :: FromJSRef b => JSRef a -> JSString -> b
+obj .: key = fromMaybe (error "Unable to decode event target") $ unsafePerformIO $
+    fromJSRef $ js_getProp obj key
+
+-- | Access a property in an event target
 eventTargetProp :: FromJSRef val => EventTarget -> String -> val
-eventTargetProp evt prop = fromMaybe (error "Unable to decode event target") $ unsafePerformIO $
-    fromJSRef $ js_eventTargetProp evt (fromString prop)
+eventTargetProp (EventTarget ref) key = ref .: toJSString key
 
 -- | Every event in React is a synthetic event, a cross-browser wrapper around the native event.
 data Event = Event
@@ -131,7 +139,7 @@ data Event = Event
     , evtTarget :: EventTarget
     , evtTimestamp :: Int
     , evtHandlerArg :: HandlerArg
-    }
+    } deriving (Show)
 
 -- | A version of 'eventTargetProp' which accesses the property of 'evtTarget' in the event.  This
 -- is useful for example:
@@ -145,38 +153,20 @@ data Event = Event
 target :: FromJSRef val => Event -> String -> val
 target e s = eventTargetProp (evtTarget e) s
 
--- | In the FromJSON instance, we cannot fill in properties of an event which rely on the underlying
--- JSRef.  This newtype is here so that we do not export this FromJSON instance.  Instead, we export
--- parseEvent which correctly sets these properties.
-newtype PartialEvent a = PartialEvent a
-
-instance FromJSON (PartialEvent Event) where
-    parseJSON = withObject "Event" $ \o -> PartialEvent <$> do
-        Event <$> o .:? "type" .!= ""
-              <*> o .:? "bubbles" .!= False
-              <*> o .:? "cancelable" .!= False
-              <*> pure undefined -- current target
-              <*> o .:? "defaultPrevented" .!= False
-              <*> o .:? "eventPhase" .!= 0
-              <*> o .:? "isTrusted" .!= False
-              <*> pure undefined -- target
-              <*> o .:? "timeStamp" .!= 0
-              <*> pure undefined -- handler arg
-
-foreign import javascript unsafe
-    "$r = $1[$2]"
-    js_GetEventRef :: JSRef () -> JSString -> JSRef ()
-
 -- | Utility function to parse an 'Event' from the handler argument.
 parseEvent :: HandlerArg -> Event
-parseEvent arg@(HandlerArg ref val) =
-    case fromJSON val of
-        Error err -> error $ "Unable to parse event: " ++ err ++ " " ++ show val
-        Success (PartialEvent e) -> e
-            { evtCurrentTarget = EventTarget $ js_GetEventRef ref "currentTarget"
-            , evtTarget = EventTarget $ js_GetEventRef ref "target"
-            , evtHandlerArg = arg
-            }
+parseEvent arg@(HandlerArg o) = Event
+    { evtType = o .: "type"
+    , evtBubbles = o .: "bubbles"
+    , evtCancelable = o .: "cancelable"
+    , evtCurrentTarget = EventTarget $ js_getProp o "currentTarget"
+    , evtDefaultPrevented = o .: "defaultPrevented"
+    , evtPhase = o .: "eventPhase"
+    , evtIsTrusted = o .: "isTrusted"
+    , evtTarget = EventTarget $ js_getProp o "target"
+    , evtTimestamp = o .: "timeStamp"
+    , evtHandlerArg = arg
+    }
 
 -- | Create an event handler from a name and a handler function.
 on :: String -> (HandlerArg -> handler) -> PropertyOrHandler handler
@@ -212,8 +202,8 @@ data FakeEventStoreAction = PreventDefault HandlerArg
 
 instance StoreData FakeEventStoreData where
     type StoreAction FakeEventStoreData = FakeEventStoreAction
-    transform (PreventDefault (HandlerArg ref _)) _ = js_preventDefault ref >> return FakeEventStoreData
-    transform (StopPropagation (HandlerArg ref _)) _ = js_stopProp ref >> return FakeEventStoreData
+    transform (PreventDefault (HandlerArg ref)) _ = js_preventDefault ref >> return FakeEventStoreData
+    transform (StopPropagation (HandlerArg ref)) _ = js_stopProp ref >> return FakeEventStoreData
 
 foreign import javascript unsafe
     "$1.preventDefault();"
@@ -264,21 +254,6 @@ data KeyboardEvent = KeyboardEvent
   , keyWhich :: Int
   }
 
-instance FromJSON (PartialEvent KeyboardEvent) where
-    parseJSON = withObject "Keyboard Event" $ \o -> PartialEvent <$> do
-        KeyboardEvent <$> o .: "altKey"
-                      <*> o .: "charCode"
-                      <*> o .: "ctrlKey"
-                      <*> return (pure False) -- this is set in 'parseKeyboardEvent'
-                      <*> o .: "key"
-                      <*> o .: "keyCode"
-                      <*> o .: "locale"
-                      <*> o .: "location"
-                      <*> o .: "metaKey"
-                      <*> o .: "repeat"
-                      <*> o .: "shiftKey"
-                      <*> o .: "which"
-
 #ifdef __GHCJS__
 foreign import javascript unsafe
     "$1.getModifierState($2)"
@@ -292,10 +267,20 @@ getModifierState _ _ = False
 #endif
 
 parseKeyboardEvent :: HandlerArg -> KeyboardEvent
-parseKeyboardEvent (HandlerArg ref val) =
-    case fromJSON val of
-        Error err -> error $ "Unable to parse keyboard event: " ++ err
-        Success (PartialEvent e) -> e { keyGetModifierState = getModifierState ref }
+parseKeyboardEvent (HandlerArg o) = KeyboardEvent
+    { keyEvtAltKey = o .: "altKey"
+    , keyEvtCharCode = o .: "charCode"
+    , keyEvtCtrlKey = o .: "ctrlKey"
+    , keyGetModifierState = getModifierState o
+    , keyKey = o .: "key"
+    , keyCode = o .: "keyCode"
+    , keyLocale = o .: "locale"
+    , keyLocation = o .: "location"
+    , keyMetaKey = o .: "metaKey"
+    , keyRepeat = o .: "repeat"
+    , keyShiftKey = o .: "shiftKey"
+    , keyWhich = o .: "which"
+    }
 
 onKeyDown :: (Event -> KeyboardEvent -> handler) -> PropertyOrHandler handler
 onKeyDown = mkHandler "onKeyDown" parseKeyboardEvent
@@ -312,10 +297,10 @@ onKeyUp = mkHandler "onKeyUp" parseKeyboardEvent
 
 data FocusEvent = FocusEvent {
     focusRelatedTarget :: EventTarget
-}
+} deriving (Show)
 
 parseFocusEvent :: HandlerArg -> FocusEvent
-parseFocusEvent (HandlerArg ref _) = FocusEvent $ EventTarget $ js_GetEventRef ref "relatedTarget"
+parseFocusEvent (HandlerArg ref) = FocusEvent $ EventTarget $ js_getProp ref "relatedTarget"
 
 onBlur :: (Event -> FocusEvent -> handler) -> PropertyOrHandler handler
 onBlur = mkHandler "onBlur" parseFocusEvent
@@ -359,31 +344,23 @@ data MouseEvent = MouseEvent
   , mouseShiftKey :: Bool
   }
 
-instance FromJSON (PartialEvent MouseEvent) where
-    parseJSON = withObject "Mouse Event" $ \o -> PartialEvent <$> do
-        MouseEvent <$> o .: "altKey"
-                   <*> o .: "button"
-                   <*> o .: "buttons"
-                   <*> o .: "clientX"
-                   <*> o .: "clientY"
-                   <*> o .: "ctrlKey"
-                   <*> return (pure False)
-                   <*> o .: "metaKey"
-                   <*> o .: "pageX"
-                   <*> o .: "pageY"
-                   <*> pure undefined -- related target
-                   <*> o .: "screenX"
-                   <*> o .: "screenY"
-                   <*> o .: "shiftKey"
-
 parseMouseEvent :: HandlerArg -> MouseEvent
-parseMouseEvent (HandlerArg ref val) =
-    case fromJSON val of
-        Error err -> error $ "Unable to parse mouse event: " ++ err
-        Success (PartialEvent e) -> e
-            { mouseGetModifierState = getModifierState ref
-            , mouseRelatedTarget = EventTarget $ js_GetEventRef ref "relatedTarget"
-            }
+parseMouseEvent (HandlerArg o) = MouseEvent
+    { mouseAltKey = o .: "altKey"
+    , mouseButton = o .: "button"
+    , mouseButtons = o .: "buttons"
+    , mouseClientX = o .: "clientX"
+    , mouseClientY = o .: "clientY"
+    , mouseCtrlKey = o .: "ctrlKey"
+    , mouseGetModifierState = getModifierState o
+    , mouseMetaKey = o .: "metaKey"
+    , mousePageX = o .: "pageX"
+    , mousePageY = o .: "pageY"
+    , mouseRelatedTarget = EventTarget $ js_getProp o "relatedTarget"
+    , mouseScreenX = o .: "screenX"
+    , mouseScreenY = o .: "screenY"
+    , mouseShiftKey = o .: "shiftKey"
+    }
 
 onClick :: (Event -> MouseEvent -> handler) -> PropertyOrHandler handler
 onClick = mkHandler "onClick" parseMouseEvent
@@ -456,18 +433,19 @@ data Touch = Touch {
   , touchClientY :: Int
   , touchPageX :: Int
   , touchPageY :: Int
-}
+} deriving (Show)
 
-instance FromJSON Touch where
-    parseJSON = withObject "touch" $ \o ->
-        Touch <$> o .: "identifier"
-              <*> pure undefined
-              <*> o .: "screenX"
-              <*> o .: "screenY"
-              <*> o .: "clientX"
-              <*> o .: "clientY"
-              <*> o .: "pageX"
-              <*> o .: "pageY"
+parseTouch :: JSRef a -> Touch
+parseTouch o = Touch
+    { touchIdentifier = o .: "identifier"
+    , touchTarget = EventTarget $ js_getProp o "target"
+    , touchScreenX = o .: "screenX"
+    , touchScreenY = o .: "screenY"
+    , touchClientX = o .: "clientX"
+    , touchClientY = o .: "clientY"
+    , touchPageX = o .: "pageX"
+    , touchPageY = o .: "pageY"
+    }
 
 data TouchEvent = TouchEvent {
     touchAltKey :: Bool
@@ -480,41 +458,25 @@ data TouchEvent = TouchEvent {
   , touches :: [Touch]
   }
 
-foreign import javascript unsafe
-    "$r = $1[$2]"
-    js_GetTouchList :: JSRef () -> JSString -> JSArray a
-
-parseTouchList :: JSRef () -> JSString -> [Touch]
-parseTouchList obj key = map f [0..(unsafePerformIO (lengthArray arr) - 1)]
-    where
-        arr = js_GetTouchList obj key
-        f idx = let jsref = unsafePerformIO $ indexArray idx arr
-                    val = unsafePerformIO $ maybe (error "Unable to parse touch") return =<< fromJSRef jsref
-                  in case fromJSON val of
-                        Error err -> error $ "Unable to parse touch: " ++ err
-                        Success s -> s { touchTarget = EventTarget $ js_GetEventRef obj "target" }
-
-instance FromJSON (PartialEvent TouchEvent) where
-    parseJSON = withObject "touch event" $ \o -> PartialEvent <$> do
-        TouchEvent <$> o .: "altKey"
-                   <*> pure []
-                   <*> o .: "ctrlKey"
-                   <*> return (pure False)
-                   <*> o .: "metaKey"
-                   <*> o .: "shiftKey"
-                   <*> pure []
-                   <*> pure []
+parseTouchList :: JSRef a -> JSString -> [Touch]
+parseTouchList obj key = unsafePerformIO $ do
+    let arr = js_getProp obj key
+    len <- lengthArray arr
+    forM [0..len-1] $ \idx -> do
+        jsref <- indexArray idx arr
+        return $ parseTouch jsref
 
 parseTouchEvent :: HandlerArg -> TouchEvent
-parseTouchEvent (HandlerArg ref val) =
-    case fromJSON val of
-        Error err -> error $ "Unable to parse touch event: " ++ err
-        Success (PartialEvent e) -> e
-            { changedTouches = parseTouchList ref "changedTouches"
-            , touchGetModifierState = getModifierState ref
-            , touchTargets = parseTouchList ref "targets"
-            , touches = parseTouchList ref "targets"
-            }
+parseTouchEvent (HandlerArg o) = TouchEvent
+    { touchAltKey = o .: "altKey"
+    , changedTouches = parseTouchList o "changedTouches"
+    , touchCtrlKey = o .: "ctrlKey"
+    , touchGetModifierState = getModifierState o
+    , touchMetaKey = o .: "metaKey"
+    , touchShiftKey = o .: "shiftKey"
+    , touchTargets = parseTouchList o "targets"
+    , touches = parseTouchList o "touches"
+    }
 
 onTouchCancel :: (Event -> TouchEvent -> handler) -> PropertyOrHandler handler
 onTouchCancel = mkHandler "onTouchCancel" parseTouchEvent
@@ -535,16 +497,12 @@ onTouchStart = mkHandler "onTouchStart" parseTouchEvent
 data UIEvent = UIEvent {
     uiDetail :: Int
   -- abstract view
-}
-
-instance FromJSON UIEvent where
-    parseJSON = withObject "ui event" $ \o -> UIEvent <$> o .: "detail"
+} deriving (Show)
 
 parseUIEvent :: HandlerArg -> UIEvent
-parseUIEvent (HandlerArg _ val) =
-    case fromJSON val of
-        Error err -> error $ "Unable to parse ui event: " ++ err
-        Success e -> e
+parseUIEvent (HandlerArg o) = UIEvent
+    { uiDetail = o .: "detail"
+    }
 
 onScroll :: (Event -> UIEvent -> handler) -> PropertyOrHandler handler
 onScroll = mkHandler "onScroll" parseUIEvent
@@ -558,20 +516,15 @@ data WheelEvent = WheelEvent {
   , wheelDeltaX :: Int
   , wheelDeltaY :: Int
   , wheelDeltaZ :: Int
-}
-
-instance FromJSON WheelEvent where
-    parseJSON = withObject "wheel event" $ \o ->
-        WheelEvent <$> o .: "deltaMode"
-                   <*> o .: "deltaX"
-                   <*> o .: "deltaY"
-                   <*> o .: "deltaZ"
+} deriving (Show)
 
 parseWheelEvent :: HandlerArg -> WheelEvent
-parseWheelEvent (HandlerArg _ val) =
-    case fromJSON val of
-        Error err -> error $ "Unable to parse wheel event: " ++ err
-        Success e -> e
+parseWheelEvent (HandlerArg o) = WheelEvent
+    { wheelDeltaMode = o .: "deltaMode"
+    , wheelDeltaX = o .: "deltaX"
+    , wheelDeltaY = o .: "deltaY"
+    , wheelDeltaZ = o .: "deltaZ"
+    }
 
 onWheel :: (Event -> WheelEvent -> handler) -> PropertyOrHandler handler
 onWheel = mkHandler "onWheel" parseWheelEvent
