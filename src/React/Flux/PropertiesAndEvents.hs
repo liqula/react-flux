@@ -77,6 +77,7 @@ module React.Flux.PropertiesAndEvents (
 ) where
 
 import Control.Concurrent.MVar (newMVar)
+import Control.DeepSeq
 import Control.Monad (forM)
 import Data.Maybe (fromMaybe)
 import System.IO.Unsafe (unsafePerformIO)
@@ -117,7 +118,7 @@ foreign import javascript unsafe
     js_getProp :: JSRef a -> JSString -> JSRef b
 
 -- | Access a property from an object.  Since event objects are immutable, we can use
--- unsafePerformIO to obtain a little lazyness, so that unaccessed event properties are not decoded.
+-- unsafePerformIO without worry.
 (.:) :: FromJSRef b => JSRef a -> JSString -> b
 obj .: key = fromMaybe (error "Unable to decode event target") $ unsafePerformIO $
     fromJSRef $ js_getProp obj key
@@ -198,12 +199,22 @@ fakeEventStore = unsafePerformIO (ReactStore (ReactStoreRef nullRef) <$> newMVar
 data FakeEventStoreAction = PreventDefault HandlerArg
                           | StopPropagation HandlerArg
 
-#ifdef __GHCJS__
-
 instance StoreData FakeEventStoreData where
     type StoreAction FakeEventStoreData = FakeEventStoreAction
-    transform (PreventDefault (HandlerArg ref)) _ = js_preventDefault ref >> return FakeEventStoreData
-    transform (StopPropagation (HandlerArg ref)) _ = js_stopProp ref >> return FakeEventStoreData
+    transform _ _ = return FakeEventStoreData
+
+#ifdef __GHCJS__
+
+-- | What a hack!  React re-uses event objects in a pool.  To make sure this is OK, we must perform
+-- all computation involving the event object before it is returned to React.  But the callback
+-- registered in the handler will return anytime the Haskell thread blocks, and the Haskell thread
+-- will continue asynchronously.  If this occurs, the event object is no longer valid.  Thus, inside
+-- the event handlers in Class.hs, the handler will use 'deepseq' to force all the actions before
+-- starting any of the transforms (which could block).  We rely on this call plus use
+-- unsafePerformIO to call the appropriate functions on the event object.
+instance NFData FakeEventStoreAction where
+    rnf (PreventDefault (HandlerArg ref)) = unsafePerformIO (js_preventDefault ref) `deepseq` ()
+    rnf (StopPropagation (HandlerArg ref)) = unsafePerformIO (js_stopProp ref) `deepseq` ()
 
 foreign import javascript unsafe
     "$1.preventDefault();"
@@ -215,9 +226,8 @@ foreign import javascript unsafe
 
 #else
 
-instance StoreData FakeEventStoreData where
-    type StoreAction FakeEventStoreData = FakeEventStoreAction
-    transform _ _ = return FakeEventStoreAction
+instance NFData FakeEventStoreAction where
+    rnf _ = ()
 
 #endif
 

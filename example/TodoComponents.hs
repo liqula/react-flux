@@ -19,9 +19,12 @@ todoTextInput = mkStatefulView "todo text input" "" $ \curText args ->
            , "placeholder" @= tiaPlaceholder args
            , "value" @= curText
            , "autoFocus" @= True
-           , onBlur $ \_ _ curState -> ([tiaOnSave args curState], Nothing)
+           , onBlur $ \_ _ curState -> ([tiaOnSave args curState | not $ null curState], Just "")
            , onChange $ \evt _ -> ([], Just $ target evt "value")
-           , onKeyDown $ \_ evt curState -> ([ tiaOnSave args curState | keyCode evt == 13], Nothing) -- 13 is enter
+           , onKeyDown $ \_ evt curState ->
+                if keyCode evt == 13 && not (null curState) -- 13 is enter
+                    then ([tiaOnSave args curState], Just "")
+                    else ([], Nothing)
            ] mempty
 
 todoTextInput_ :: TextInputArgs -> ReactElementM eventHandler ()

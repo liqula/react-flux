@@ -36,18 +36,19 @@ library
 
   default-extensions: CPP
                       EmptyDataDecls
-                      OverloadedStrings
                       ExistentialQuantification
-                      ScopedTypeVariables
-                      TypeFamilies
+                      FlexibleContexts
+                      FlexibleInstances
+                      FunctionalDependencies
                       GeneralizedNewtypeDeriving
                       MultiParamTypeClasses
-                      FunctionalDependencies
-                      FlexibleInstances
+                      OverloadedStrings
+                      ScopedTypeVariables
+                      TypeFamilies
 
   build-depends: base >=4.8 && < 5
                , ghcjs-base
-               , ghc-prim
+               , deepseq
                , mtl >= 2.1
                , aeson >= 0.8
                , text >= 1.2
@@ -63,3 +64,4 @@ executable todo
    main-is: Main.hs
    build-depends: base
                 , react-flux
+                , deepseq

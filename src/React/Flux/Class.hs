@@ -13,9 +13,10 @@ module React.Flux.Class (
   , foreignClass
 ) where
 
+import Control.DeepSeq
+import Control.Monad.Writer
 import Data.Aeson
 import Data.Typeable (Typeable)
-import Control.Monad.Writer
 import System.IO.Unsafe (unsafePerformIO)
 
 import React.Flux.Store
@@ -112,7 +113,7 @@ mkControllerView name (ReactStore store _) buildNode = unsafePerformIO $ do
 
 -- | Transform a controller view handler to a raw handler.
 runViewHandler :: RenderCbArgs state props -> ViewEventHandler -> IO ()
-runViewHandler _ = mapM_ dispatchSomeAction
+runViewHandler _ handler = handler `deepseq` mapM_ dispatchSomeAction handler
 
 #else
 
@@ -209,7 +210,9 @@ runStateViewHandler args handler = do
             newStateRef <- toJSRef_aeson newState
             js_SetState alterState newStateRef
 
-    mapM_ dispatchSomeAction actions
+    -- nothing above here should block, so the handler callback should still be running syncronous,
+    -- so the deepseq of actions should still pick up the proper event object.
+    actions `deepseq` mapM_ dispatchSomeAction actions
 
 #else
 
@@ -229,6 +232,14 @@ mkStatefulView _ _ _ = ReactClass (ReactClassRef ())
 --
 -- Similar to 'StatefulViewEventHandler', the handler takes the current state as input to avoid a
 -- race between changing the state and a re-render.
+--
+-- Also, if the 'IO' action blocks, the event object will become invalid because the haskell thread
+-- will continue asyncronously and the handler registered with React will return. This causes React
+-- to put the event object back into a pool to be reused.  Make sure you force any computation
+-- depending on the event handler using 'deepseq' before it is possible for the IO action to block.
+-- In particular, 'React.Flux.PropertiesAndEvents.preventDefault' and
+-- 'React.Flux.PropertiesAndEvents.stopPropagation' must be forced before a possible block in the IO
+-- action.
 type ClassEventHandler state = state -> IO (Maybe state)
 
 -- | Create a class allowed to perform arbitrary IO during rendering and event handlers.

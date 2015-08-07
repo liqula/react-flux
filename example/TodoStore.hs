@@ -1,7 +1,9 @@
-{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeFamilies, DeriveGeneric, DeriveAnyClass #-}
 module TodoStore where
 
 import React.Flux
+import Control.DeepSeq
+import GHC.Generics (Generic)
 import Data.Typeable (Typeable)
 
 data Todo = Todo {
@@ -18,13 +20,13 @@ data TodoAction = TodoCreate String
                  | UpdateText Int String
                  | ToggleAllComplete
                  | TodoSetComplete Int Bool
-  deriving (Show, Typeable)
+  deriving (Show, Typeable, Generic, NFData)
 
 instance StoreData TodoState where
     type StoreAction TodoState = TodoAction
     transform action (TodoState todos) = do
         putStrLn $ "Action: " ++ show action
-        putStrLn $ "Initial todos " ++ show todos
+        putStrLn $ "Initial todos: " ++ show todos
         newTodos <- return $  case action of
             (TodoCreate txt) -> (maximum (map fst todos) + 1, Todo txt False) : todos
             (TodoDelete i) -> filter ((/=i) . fst) todos
@@ -35,7 +37,7 @@ instance StoreData TodoState where
             TodoSetComplete newIdx newComplete -> [ (idx, Todo txt (if idx == newIdx then newComplete else complete))
                                                   | (idx, Todo txt complete) <- todos
                                                   ]
-        putStrLn $ "New todos " ++ show newTodos
+        putStrLn $ "New todos: " ++ show newTodos
         return $ TodoState newTodos
 
 todoStore :: ReactStore TodoState

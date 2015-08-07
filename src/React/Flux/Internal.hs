@@ -196,13 +196,18 @@ foreign import javascript unsafe
 js_ReactCreateContent :: String -> ReactElementRef
 js_ReactCreateContent = ReactElementRef . castRef . Foreign.toJSString
 
+foreign import javascript unsafe
+    "console.log($1)"
+    js_log :: JSRef a -> IO ()
+
 addPropOrHandlerToObj :: JSObject a -> PropertyOrHandler (IO ()) -> WriterT [Callback (JSRef Value -> IO ())] IO ()
 addPropOrHandlerToObj obj (Property (n, v)) = lift $ do
     vRef <- toJSRef_aeson v
     Foreign.setProp (Foreign.toJSString n) vRef obj
 addPropOrHandlerToObj obj (EventHandler str handler) = do
     -- this will be released by the render function of the class (jsbits/class.js)
-    cb <- lift $ Foreign.asyncCallback1 Foreign.AlwaysRetain $ \evtRef -> do
+    cb <- lift $ Foreign.syncCallback1 Foreign.AlwaysRetain True $ \evtRef -> do
+        js_log evtRef
         handler $ HandlerArg (castRef evtRef)
 
     tell [cb]

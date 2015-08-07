@@ -10,6 +10,7 @@ module React.Flux.Store (
 ) where
 
 import Control.Concurrent.MVar (MVar, newMVar, modifyMVar_)
+import Control.DeepSeq
 import Data.Typeable (Typeable)
 import System.IO.Unsafe (unsafePerformIO)
 
@@ -58,10 +59,20 @@ class Typeable storeData => StoreData storeData where
     -- unchanged.  The exception will then be thrown from 'dispatch'.
     transform :: StoreAction storeData -> storeData -> IO storeData
 
--- | An existential type for some store action.  It is used for event handlers in controller-views
--- and classes, so it is helpful to create utility functions creating 'SomeStoreAction'.
-data SomeStoreAction = forall storeData. StoreData storeData
+-- | An existential type for some store action.  It is used for event handlers in views
+-- and classes, so it is helpful to create utility functions creating 'SomeStoreAction' for your
+-- stores.
+--
+-- The 'NFData' instance is used for a small optimization in event handlers.  React.js keeps event
+-- objects (the object passed to the handlers) in a pool and re-uses them for successive events.
+-- We parse this event object lazily so that only properties actually accessed are parsed, and then
+-- use 'NFData' instance to force the evaluation of the store action(s) resulting from the event.
+-- We can then compute the action before the event object returns to the React pool.
+data SomeStoreAction = forall storeData. (StoreData storeData, NFData (StoreAction storeData))
     => SomeStoreAction (ReactStore storeData) (StoreAction storeData)
+
+instance NFData SomeStoreAction where
+    rnf (SomeStoreAction _ action) = action `deepseq` ()
 
 ----------------------------------------------------------------------------------------------------
 -- mkStore has two versions
