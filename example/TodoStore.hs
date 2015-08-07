@@ -45,8 +45,8 @@ instance StoreData TodoState where
 
 todoStore :: ReactStore TodoState
 todoStore = mkStore $ TodoState
-    [ (0, Todo "Learn react" True)
-    , (1, Todo "Learn react-flux" False)
+    [ (0, Todo "Learn react" True False)
+    , (1, Todo "Learn react-flux" False False)
     ]
 
 todoA :: TodoAction -> SomeStoreAction

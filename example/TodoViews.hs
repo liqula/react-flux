@@ -43,8 +43,8 @@ mainSection_ st = section_ ["id" $= "main"] $ do
     ul_ [ "id" $= "todo-list" ] $ mapM_ todoItem_ $ todoList st
 
 todoItem :: ReactView (Int, Todo)
-todoItem = mkStatefulView "todo item" False $ \isEditing (todoIdx, todo) ->
-    li_ [ "className" @= (intercalate "," ([ "completed" | todoComplete todo] ++ [ "editing" | isEditing ]) :: String)
+todoItem = mkView "todo item" $ \(todoIdx, todo) ->
+    li_ [ "className" @= (intercalate "," ([ "completed" | todoComplete todo] ++ [ "editing" | todoIsEditing todo ]) :: String)
         , "key" @= todoIdx
         ] $ do
         
@@ -52,18 +52,18 @@ todoItem = mkStatefulView "todo item" False $ \isEditing (todoIdx, todo) ->
             input_ [ "className" $= "toggle"
                    , "type" $= "checkbox"
                    , "checked" @= todoComplete todo
-                   , onChange $ \_ _ -> ([todoA $ TodoSetComplete todoIdx $ not $ todoComplete todo], Nothing)
+                   , onChange $ \_ -> [todoA $ TodoSetComplete todoIdx $ not $ todoComplete todo]
                    ] mempty
 
-            label_ [ onDoubleClick $ \_ _ _ -> ([], Just True) ] $
+            label_ [ onDoubleClick $ \_ _ -> [todoA $ TodoEdit todoIdx] ] $
                 fromString $ todoText todo
 
             button_ [ "className" $= "destroy"
-                    , onClick $ \_ _ _ -> ([todoA $ TodoDelete todoIdx], Nothing)
+                    , onClick $ \_ _ -> [todoA $ TodoDelete todoIdx]
                     ]
                     "Delete"
 
-        when isEditing $
+        when (todoIsEditing todo) $
             todoTextInput_ TextInputArgs
                 { tiaId = Nothing
                 , tiaClass = "edit"
