@@ -31,7 +31,7 @@ library
                    React.Flux.Internal
                    React.Flux.Export
 
-  other-modules: React.Flux.Class
+  other-modules: React.Flux.Views
                  React.Flux.Store
 
   default-extensions: CPP
