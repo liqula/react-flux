@@ -209,7 +209,7 @@ instance StoreData FakeEventStoreData where
 -- all computation involving the event object before it is returned to React.  But the callback
 -- registered in the handler will return anytime the Haskell thread blocks, and the Haskell thread
 -- will continue asynchronously.  If this occurs, the event object is no longer valid.  Thus, inside
--- the event handlers in Class.hs, the handler will use 'deepseq' to force all the actions before
+-- the event handlers in Views.hs, the handler will use 'deepseq' to force all the actions before
 -- starting any of the transforms (which could block).  We rely on this call plus use
 -- unsafePerformIO to call the appropriate functions on the event object.
 instance NFData FakeEventStoreAction where

@@ -59,9 +59,8 @@ class Typeable storeData => StoreData storeData where
     -- unchanged.  The exception will then be thrown from 'dispatch'.
     transform :: StoreAction storeData -> storeData -> IO storeData
 
--- | An existential type for some store action.  It is used for event handlers in views
--- and classes, so it is helpful to create utility functions creating 'SomeStoreAction' for your
--- stores.
+-- | An existential type for some store action.  It is used for event handlers in views, so it is
+-- helpful to create utility functions creating 'SomeStoreAction' for your stores.
 --
 -- The 'NFData' instance is used for a small optimization in event handlers.  React.js keeps event
 -- objects (the object passed to the handlers) in a pool and re-uses them for successive events.

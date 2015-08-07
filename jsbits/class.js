@@ -60,7 +60,7 @@ function hsreact$mk_view(name, renderCb) {
     });
 }
 
-function hsreact$mk_class(name, initialState, renderCb) {
+function hsreact$mk_stateful_view(name, initialState, renderCb) {
     return React.createClass({ 
         displayName: name,
         getInitialState: function() { 

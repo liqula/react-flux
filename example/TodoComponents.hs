@@ -13,7 +13,7 @@ data TextInputArgs = TextInputArgs {
     , tiaValue :: Maybe String
 } deriving (Typeable)
 
-todoTextInput :: ReactClass TextInputArgs
+todoTextInput :: ReactView TextInputArgs
 todoTextInput = mkStatefulView "todo text input" "" $ \curText args ->
     input_ [ "className" @= tiaClass args
            , "placeholder" @= tiaPlaceholder args
@@ -28,4 +28,4 @@ todoTextInput = mkStatefulView "todo text input" "" $ \curText args ->
            ] mempty
 
 todoTextInput_ :: TextInputArgs -> ReactElementM eventHandler ()
-todoTextInput_ args = rclass todoTextInput args mempty
+todoTextInput_ args = view todoTextInput args mempty

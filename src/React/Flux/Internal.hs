@@ -3,7 +3,7 @@
 -- Normally you should not need to use anything in this module.  This module is only needed if you have
 -- complicated interaction with third-party javascript rendering code.
 module React.Flux.Internal(
-    ReactClassRef(..)
+    ReactViewRef(..)
   , ReactElementRef(..)
   , HandlerArg(..)
   , PropertyOrHandler(..)
@@ -34,7 +34,7 @@ type Export a = JSRef a
 type Callback a = JSFun a
 
 -- | This type is for the return value of @React.createClass@
-newtype ReactClassRef props = ReactClassRef { reactClassRef :: JSRef () }
+newtype ReactViewRef props = ReactViewRef { reactViewRef :: JSRef () }
 
 -- | This type is for the return value of @React.createElement@
 newtype ReactElementRef = ReactElementRef { reactElementRef :: JSRef () }
@@ -72,12 +72,12 @@ instance Functor PropertyOrHandler where
 -- "React.Flux.PropertiesAndEvents".
 data ReactElement eventHandler
     = ForeignElement
-        { fName :: Either String (ReactClassRef Object)
+        { fName :: Either String (ReactViewRef Object)
         , fProps :: [PropertyOrHandler eventHandler]
         , fChild :: ReactElement eventHandler
         }
-    | forall props key. (Typeable props, ToJSON key) => ClassElement
-        { ceClass :: ReactClassRef props
+    | forall props key. (Typeable props, ToJSON key) => ViewElement
+        { ceClass :: ReactViewRef props
         , ceKey :: Maybe key
         -- TODO: ref?  ref support would need to tie into the Class too.
         , ceProps :: props
@@ -93,7 +93,7 @@ instance Monoid (ReactElement eventHandler) where
 
 instance Functor ReactElement where
     fmap f (ForeignElement n p c) = ForeignElement n (map (fmap f) p) (fmap f c)
-    fmap f (ClassElement n k p c) = ClassElement n k p (fmap f c)
+    fmap f (ViewElement n k p c) = ViewElement n k p (fmap f c)
     fmap f (Append a b) = Append (fmap f a) (fmap f b)
     fmap _ (Content s) = Content s
     fmap _ EmptyElement = EmptyElement
@@ -121,7 +121,7 @@ instance Functor ReactElement where
 -- ></ul>
 --
 -- The "React.Flux.DOM" module contains a large number of combinators for creating HTML elements.
--- 'React.Flux.rclass', 'React.Flux.rclassWithKey', and 'React.Flux.foreignClass' allow creating
+-- 'React.Flux.view', 'React.Flux.viewWithKey', and 'React.Flux.foreignClass' allow creating
 -- React elements from classes.
 newtype ReactElementM eventHandler a = ReactElementM { runReactElementM :: Writer (ReactElement eventHandler) a }
     deriving (Functor, Applicative, Monad, Foldable)
@@ -183,15 +183,15 @@ foreign import javascript unsafe
 
 foreign import javascript unsafe
     "React.createElement($1, $2, $3)"
-    js_ReactCreateForeignElement :: ReactClassRef a -> JSObject b -> JSArray c -> IO ReactElementRef
+    js_ReactCreateForeignElement :: ReactViewRef a -> JSObject b -> JSArray c -> IO ReactElementRef
 
 foreign import javascript unsafe
     "React.createElement($1, {hs:$2}, $3)"
-    js_ReactCreateClass :: ReactClassRef a -> Export props -> JSArray b -> IO ReactElementRef
+    js_ReactCreateClass :: ReactViewRef a -> Export props -> JSArray b -> IO ReactElementRef
 
 foreign import javascript unsafe
     "React.createElement($1, {key: $2, hs:$3}, $4)"
-    js_ReactCreateKeyedElement :: ReactClassRef a -> JSRef key -> Export props -> JSArray b -> IO ReactElementRef
+    js_ReactCreateKeyedElement :: ReactViewRef a -> JSRef key -> Export props -> JSArray b -> IO ReactElementRef
 
 js_ReactCreateContent :: String -> ReactElementRef
 js_ReactCreateContent = ReactElementRef . castRef . Foreign.toJSString
@@ -226,7 +226,7 @@ createElement (f@(ForeignElement{})) = do
         Left s -> js_ReactCreateElementName (Foreign.toJSString s) obj childArr
         Right ref -> js_ReactCreateForeignElement ref obj childArr
     return [e]
-createElement (ClassElement { ceClass = rc, ceProps = props, ceKey = mkey, ceChild = child }) = do
+createElement (ViewElement { ceClass = rc, ceProps = props, ceKey = mkey, ceChild = child }) = do
     childNodes <- createElement child
     propsE <- lift $ export props -- this will be released inside the lifetime events for the class (jsbits/class.js)
     arr <- lift $ Foreign.toArray $ map reactElementRef childNodes

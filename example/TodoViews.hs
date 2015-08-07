@@ -9,14 +9,14 @@ import React.Flux
 import TodoStore
 import TodoComponents
 
-todoApp :: ReactClass ()
+todoApp :: ReactView ()
 todoApp = mkControllerView "todo app" todoStore $ \todoState () ->
     div_ $ do
         todoHeader_
         mainSection_ todoState
         --todoFooter_ todoState
 
-todoHeader :: ReactClass ()
+todoHeader :: ReactView ()
 todoHeader = mkView "header" $ \() ->
     header_ ["id" $= "header"] $ do
         h1_ "todos"
@@ -29,7 +29,7 @@ todoHeader = mkView "header" $ \() ->
           }
 
 todoHeader_ :: ReactElementM eventHandler ()
-todoHeader_ = rclass todoHeader () mempty
+todoHeader_ = view todoHeader () mempty
 
 mainSection_ :: TodoState -> ReactElementM ViewEventHandler ()
 mainSection_ st = section_ ["id" $= "main"] $ do
@@ -42,7 +42,7 @@ mainSection_ st = section_ ["id" $= "main"] $ do
     label_ [ "htmlFor" $= "toggle-all"] "Mark all as complete"
     ul_ [ "id" $= "todo-list" ] $ mapM_ todoItem_ $ todoList st
 
-todoItem :: ReactClass (Int, Todo)
+todoItem :: ReactView (Int, Todo)
 todoItem = mkStatefulView "todo item" False $ \isEditing (todoIdx, todo) ->
     li_ [ "className" @= (intercalate "," ([ "completed" | todoComplete todo] ++ [ "editing" | isEditing ]) :: String)
         , "key" @= todoIdx
@@ -73,4 +73,4 @@ todoItem = mkStatefulView "todo item" False $ \isEditing (todoIdx, todo) ->
                 }
 
 todoItem_ :: (Int, Todo) -> ReactElementM eventHandler ()
-todoItem_ (idx, todo) = rclassWithKey todoItem idx (idx, todo) mempty
+todoItem_ (idx, todo) = viewWithKey todoItem idx (idx, todo) mempty

@@ -7,21 +7,19 @@ module React.Flux (
   , dispatch
   , dispatchSomeAction
 
-  -- * Classes
-  , ReactClass
+  -- * Views
+  , ReactView
   , mkControllerView
-  , ViewEventHandler
   , mkView
+  , ViewEventHandler
   , mkStatefulView
   , StatefulViewEventHandler
-  , mkClass
-  , ClassEventHandler
 
   -- * Elements
   , ReactElement
   , ReactElementM(..)
-  , rclass
-  , rclassWithKey
+  , view
+  , viewWithKey
   , foreignClass
   , module React.Flux.DOM
   , module React.Flux.PropertiesAndEvents
@@ -32,7 +30,7 @@ module React.Flux (
 
 import Data.Typeable (Typeable)
 
-import React.Flux.Class
+import React.Flux.Views
 import React.Flux.DOM
 import React.Flux.Internal
 import React.Flux.PropertiesAndEvents
@@ -49,14 +47,14 @@ import GHCJS.Foreign (toJSString)
 reactRender :: Typeable props
             => String -- ^ The ID of the HTML element to render the application into.
                       -- (This string is passed to @document.getElementById@)
-            -> ReactClass props -- ^ A single instance of this class is created
-            -> props -- ^ the properties to pass to the class
+            -> ReactView props -- ^ A single instance of this view is created
+            -> props -- ^ the properties to pass to the view
             -> IO ()
 
 #ifdef __GHCJS__
 
 reactRender htmlId rc props = do
-    (e, _) <- mkReactElement id $ rclass rc props mempty
+    (e, _) <- mkReactElement id $ view rc props mempty
     js_ReactRender e (toJSString htmlId)
 
 foreign import javascript unsafe
