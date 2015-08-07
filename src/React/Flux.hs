@@ -18,6 +18,8 @@ module React.Flux (
   -- * Elements
   , ReactElement
   , ReactElementM(..)
+  , text
+  , elemShow
   , view
   , viewWithKey
   , foreignClass

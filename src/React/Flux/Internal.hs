@@ -9,6 +9,8 @@ module React.Flux.Internal(
   , PropertyOrHandler(..)
   , ReactElement(..)
   , ReactElementM(..)
+  , text
+  , elemShow
   , el
   , elementToM
   , mkReactElement
@@ -139,6 +141,16 @@ instance (a ~ ()) => Monoid (ReactElementM eventHandler a) where
 
 instance (a ~ ()) => IsString (ReactElementM eventHandler a) where
     fromString s = elementToM () $ Content s
+
+-- | Create a text element from a string.  This is an alias for 'fromString'.  The text content is
+-- escaped to be HTML safe.
+text :: String -> ReactElementM eventHandler ()
+text s = elementToM () $ Content s
+
+-- | Create an element containing text which is the result of 'show'ing the argument.
+-- Note that the resulting string is then escaped to be HTML safe.
+elemShow :: Show a => a -> ReactElementM eventHandler ()
+elemShow s = elementToM () $ Content $ show s
 
 -- | Create a React element.
 el :: String -- ^ The element name (the first argument to @React.createElement@).

@@ -3,7 +3,6 @@ module TodoViews where
 
 import Control.Monad (when)
 import Data.List (intercalate)
-import Data.String (IsString(..))
 import React.Flux
 
 import TodoStore
@@ -14,7 +13,7 @@ todoApp = mkControllerView "todo app" todoStore $ \todoState () ->
     div_ $ do
         todoHeader_
         mainSection_ todoState
-        --todoFooter_ todoState
+        todoFooter_ todoState
 
 todoHeader :: ReactView ()
 todoHeader = mkView "header" $ \() ->
@@ -56,7 +55,7 @@ todoItem = mkView "todo item" $ \(todoIdx, todo) ->
                    ] mempty
 
             label_ [ onDoubleClick $ \_ _ -> [todoA $ TodoEdit todoIdx] ] $
-                fromString $ todoText todo
+                text $ todoText todo
 
             button_ [ "className" $= "destroy"
                     , onClick $ \_ _ -> [todoA $ TodoDelete todoIdx]
@@ -74,3 +73,22 @@ todoItem = mkView "todo item" $ \(todoIdx, todo) ->
 
 todoItem_ :: (Int, Todo) -> ReactElementM eventHandler ()
 todoItem_ (idx, todo) = viewWithKey todoItem idx (idx, todo) mempty
+
+todoFooter :: ReactView TodoState
+todoFooter = mkView "footer" $ \(TodoState todos) ->
+    let completed = length (filter (todoComplete . snd) todos)
+        itemsLeft = length todos - completed
+     in footer_ [ "id" $= "footer"] $ do
+
+            span_ [ "id" $= "todo-count" ] $ do
+                strong_ $ elemShow itemsLeft
+                text $ if itemsLeft == 1 then "item left" else "items left"
+
+            when (completed > 0) $ do
+                button_ [ "id" $= "clear-completed"
+                        , onClick $ \_ _ -> [todoA ClearCompletedTodos]
+                        ] $
+                    text $ "Clear completed (" ++ show completed ++ ")"
+
+todoFooter_ :: TodoState -> ReactElementM eventHandler ()
+todoFooter_ s = view todoFooter s mempty

@@ -22,6 +22,7 @@ data TodoAction = TodoCreate String
                 | UpdateText Int String
                 | ToggleAllComplete
                 | TodoSetComplete Int Bool
+                | ClearCompletedTodos
   deriving (Show, Typeable, Generic, NFData)
 
 instance StoreData TodoState where
@@ -40,6 +41,7 @@ instance StoreData TodoState where
             TodoSetComplete newIdx newComplete -> [ (idx, Todo txt (if idx == newIdx then newComplete else complete) False)
                                                   | (idx, Todo txt complete _) <- todos
                                                   ]
+            ClearCompletedTodos -> filter (not . todoComplete . snd) todos
         putStrLn $ "New todos: " ++ show newTodos
         return $ TodoState newTodos
 
