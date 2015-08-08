@@ -1,10 +1,10 @@
 -- | Internal module containing the view definitions
 module React.Flux.Views (
     ReactView(..)
-  , mkControllerView
-  , mkView
+  , defineControllerView
+  , defineView
   , ViewEventHandler
-  , mkStatefulView
+  , defineStatefulView
   , StatefulViewEventHandler
   , view
   , viewWithKey
@@ -37,19 +37,19 @@ type Callback a = JSFun a
 --
 -- This module supports 3 kinds of views.
 --
--- * Controller View, created by 'mkControllerView'.  A controller view provides the glue code
+-- * Controller View, created by 'defineControllerView'.  A controller view provides the glue code
 -- between a store and the view, and as such is a pure function taking as input the store data and
 -- the properties and producing a tree of elements.  In addition, any event handlers attached to
 -- elements can only produce actions.  No internal state is allowed.
 --
 -- * View.  A view is pure function from props to a tree of elements which does not maintain any
 -- internal state.  It can eiter be modeled by
--- just a Haskell function without a 'ReactView', or as a 'ReactView' created by 'mkView'.  Using
+-- just a Haskell function without a 'ReactView', or as a 'ReactView' created by 'defineView'.  Using
 -- the machinery of a 'ReactView' is helpful because it allows React to more easily reconcile the
 -- virtual DOM with the DOM and leads to faster rendering (as long as you use 'viewWithKey'
 -- when creating an instance of the view).
 --
--- * Stateful View, created by 'mkStatefulView'.  A stateful view keeps track of
+-- * Stateful View, created by 'defineStatefulView'.  A stateful view keeps track of
 -- some internal state.  It
 -- consists of a pure function taking as input the properties and current state and producing a tree
 -- of elements.  Event handlers registered on elements can transform the state and produce actions,
@@ -60,7 +60,7 @@ type Callback a = JSFun a
 newtype ReactView props = ReactView { reactView :: ReactViewRef props }
 
 ---------------------------------------------------------------------------------------------------
---- Two versions of mkControllerView
+--- Two versions of defineControllerView
 ---------------------------------------------------------------------------------------------------
 
 -- | Event handlers in a controller-view and a view transform events into actions, but are not
@@ -91,7 +91,7 @@ type ViewEventHandler = [SomeStoreAction]
 -- use key properties with 'viewWithKey'.
 --
 -- TODO
-mkControllerView :: (StoreData storeData, Typeable props)
+defineControllerView :: (StoreData storeData, Typeable props)
                  => String -- ^ A name for this view
                  -> ReactStore storeData -- ^ The store this controller view should attach to.
                  -> (storeData -> props -> ReactElementM ViewEventHandler ()) -- ^ The rendering function
@@ -99,7 +99,7 @@ mkControllerView :: (StoreData storeData, Typeable props)
 
 #ifdef __GHCJS__
 
-mkControllerView name (ReactStore store _) buildNode = unsafePerformIO $ do
+defineControllerView name (ReactStore store _) buildNode = unsafePerformIO $ do
     let render sd props = return $ buildNode sd props
     renderCb <- mkRenderCallback parseExportStoreData runViewHandler render
     ReactView <$> js_createControllerView (toJSString name) store renderCb
@@ -110,14 +110,14 @@ runViewHandler _ handler = handler `deepseq` mapM_ dispatchSomeAction handler
 
 #else
 
-mkControllerView _ _ _ = ReactView (ReactViewRef ())
+defineControllerView _ _ _ = ReactView (ReactViewRef ())
 
 #endif
 
-{-# NOINLINE mkControllerView #-}
+{-# NOINLINE defineControllerView #-}
 
 ---------------------------------------------------------------------------------------------------
---- Two versions of mkView
+--- Two versions of defineView
 ---------------------------------------------------------------------------------------------------
 
 -- | A view is a re-usable component of the page which does not track any state itself.
@@ -131,28 +131,28 @@ mkControllerView _ _ _ = ReactView (ReactViewRef ())
 -- 'viewWithKey'.  The key property allows React to more easily reconcile the virtual DOM with the
 -- browser DOM.
 
-mkView :: Typeable props
+defineView :: Typeable props
        => String -- ^ A name for this view
        -> (props -> ReactElementM ViewEventHandler ()) -- ^ The rendering function
        -> ReactView props
 
 #ifdef __GHCJS__
 
-mkView name buildNode = unsafePerformIO $ do
+defineView name buildNode = unsafePerformIO $ do
     let render () props = return $ buildNode props
     renderCb <- mkRenderCallback (const $ return ()) runViewHandler render
     ReactView <$> js_createView (toJSString name) renderCb
 
 #else
 
-mkView _ _ = ReactView (ReactViewRef ())
+defineView _ _ = ReactView (ReactViewRef ())
 
 #endif
 
-{-# NOINLINE mkView #-}
+{-# NOINLINE defineView #-}
 
 ---------------------------------------------------------------------------------------------------
---- Two versions of mkStatefulView
+--- Two versions of defineStatefulView
 ---------------------------------------------------------------------------------------------------
 
 -- | A stateful-view event handler produces a list of store actions and potentially a new state.  If
@@ -174,7 +174,7 @@ type StatefulViewEventHandler state = state -> ([SomeStoreAction], Maybe state)
 -- new state.
 --
 -- TODO
-mkStatefulView :: (ToJSON state, FromJSON state, Typeable props)
+defineStatefulView :: (ToJSON state, FromJSON state, Typeable props)
                => String -- ^ A name for this view
                -> state -- ^ The initial state
                -> (state -> props -> ReactElementM (StatefulViewEventHandler state) ()) -- ^ The rendering function
@@ -182,7 +182,7 @@ mkStatefulView :: (ToJSON state, FromJSON state, Typeable props)
 
 #ifdef __GHCJS__
 
-mkStatefulView name initial buildNode = unsafePerformIO $ do
+defineStatefulView name initial buildNode = unsafePerformIO $ do
     initialRef <- toJSRef_aeson initial
     let render state props = return $ buildNode state props
     renderCb <- mkRenderCallback parseJsonState runStateViewHandler render
@@ -209,11 +209,11 @@ runStateViewHandler args handler = do
 
 #else
 
-mkStatefulView _ _ _ = ReactView (ReactViewRef ())
+defineStatefulView _ _ _ = ReactView (ReactViewRef ())
 
 #endif
 
-{-# NOINLINE mkStatefulView #-}
+{-# NOINLINE defineStatefulView #-}
 
 ---------------------------------------------------------------------------------------------------
 --- Various GHCJS only utilities

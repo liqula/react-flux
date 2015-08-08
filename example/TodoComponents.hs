@@ -14,7 +14,7 @@ data TextInputArgs = TextInputArgs {
 } deriving (Typeable)
 
 todoTextInput :: ReactView TextInputArgs
-todoTextInput = mkStatefulView "todo text input" "" $ \curText args ->
+todoTextInput = defineStatefulView "todo text input" "" $ \curText args ->
     input_ [ "className" @= tiaClass args
            , "placeholder" @= tiaPlaceholder args
            , "value" @= curText
