@@ -13,7 +13,6 @@ module React.Flux.Views (
 
 import Control.DeepSeq
 import Control.Monad.Writer
-import Data.Aeson
 import Data.Typeable (Typeable)
 import System.IO.Unsafe (unsafePerformIO)
 
@@ -24,7 +23,7 @@ import React.Flux.Export
 #ifdef __GHCJS__
 import GHCJS.Types (JSRef, castRef, JSFun, JSString)
 import GHCJS.Foreign (syncCallback1, toJSString, ForeignRetention(..))
-import GHCJS.Marshal (toJSRef_aeson, fromJSRef, toJSRef)
+import GHCJS.Marshal (ToJSRef(..))
 #endif
 
 type Callback a = JSFun a
@@ -101,7 +100,7 @@ defineControllerView :: (StoreData storeData, Typeable props)
 
 defineControllerView name (ReactStore store _) buildNode = unsafePerformIO $ do
     let render sd props = return $ buildNode sd props
-    renderCb <- mkRenderCallback parseExportStoreData runViewHandler render
+    renderCb <- mkRenderCallback parseExport runViewHandler render
     ReactView <$> js_createControllerView (toJSString name) store renderCb
 
 -- | Transform a controller view handler to a raw handler.
@@ -174,7 +173,7 @@ type StatefulViewEventHandler state = state -> ([SomeStoreAction], Maybe state)
 -- new state.
 --
 -- TODO
-defineStatefulView :: (ToJSON state, FromJSON state, Typeable props)
+defineStatefulView :: (Typeable state, Typeable props)
                => String -- ^ A name for this view
                -> state -- ^ The initial state
                -> (state -> props -> ReactElementM (StatefulViewEventHandler state) ()) -- ^ The rendering function
@@ -183,24 +182,24 @@ defineStatefulView :: (ToJSON state, FromJSON state, Typeable props)
 #ifdef __GHCJS__
 
 defineStatefulView name initial buildNode = unsafePerformIO $ do
-    initialRef <- toJSRef_aeson initial
+    initialRef <- export initial
     let render state props = return $ buildNode state props
-    renderCb <- mkRenderCallback parseJsonState runStateViewHandler render
+    renderCb <- mkRenderCallback parseExport runStateViewHandler render
     ReactView <$> js_createStatefulView (toJSString name) initialRef renderCb
 
 -- | Transform a stateful view event handler to a raw event handler
-runStateViewHandler :: (ToJSON state, FromJSON state)
+runStateViewHandler :: Typeable state
                     => RenderCbArgs state props -> StatefulViewEventHandler state -> IO ()
 runStateViewHandler args handler = do
     alterState <- js_RenderCbRetrieveAlterStateFns args
-    st <- parseJsonState =<< js_GetState alterState
+    st <- parseExport =<< js_GetState alterState
 
     let (actions, mNewState) = handler st
 
     case mNewState of
         Nothing -> return ()
         Just newState -> do
-            newStateRef <- toJSRef_aeson newState
+            newStateRef <- export newState
             js_SetState alterState newStateRef
 
     -- nothing above here should block, so the handler callback should still be running syncronous,
@@ -240,7 +239,7 @@ newtype RenderCbArgs state props = RenderCbArgs (JSRef ())
 
 foreign import javascript unsafe
     "$1.state"
-    js_RenderCbRetrieveState :: RenderCbArgs state props -> IO (JSRef state)
+    js_RenderCbRetrieveState :: RenderCbArgs state props -> IO (Export state)
 
 foreign import javascript unsafe
     "$1.props"
@@ -248,7 +247,7 @@ foreign import javascript unsafe
 
 foreign import javascript unsafe
     "$1.newCallbacks = $2; $1.elem = $3;"
-    js_RenderCbSetResults :: RenderCbArgs state props -> JSRef [Callback (JSRef Value -> IO ())] -> ReactElementRef -> IO ()
+    js_RenderCbSetResults :: RenderCbArgs state props -> JSRef [Callback (JSRef () -> IO ())] -> ReactElementRef -> IO ()
 
 newtype AlterStateFns state = AlterStateFns (JSRef ())
 
@@ -258,11 +257,11 @@ foreign import javascript unsafe
 
 foreign import javascript unsafe
     "$1.setState($2)"
-    js_SetState :: AlterStateFns state -> JSRef state -> IO ()
+    js_SetState :: AlterStateFns state -> Export state -> IO ()
 
 foreign import javascript unsafe
     "$1.getState()"
-    js_GetState :: AlterStateFns state -> IO (JSRef state)
+    js_GetState :: AlterStateFns state -> IO (Export state)
 
 foreign import javascript unsafe
     "hsreact$mk_ctrl_view($1, $2, $3)"
@@ -283,19 +282,19 @@ foreign import javascript unsafe
 foreign import javascript unsafe
     "hsreact$mk_stateful_view($1, $2, $3)"
     js_createStatefulView :: JSString
-                          -> JSRef state
+                          -> Export state
                           -> Callback (JSRef () -> IO ())
                           -> IO (ReactViewRef props)
 
 mkRenderCallback :: Typeable props
-                 => (JSRef state -> IO state) -- ^ parse state
+                 => (Export state -> IO state) -- ^ parse state
                  -> (RenderCbArgs state props -> eventHandler -> IO ()) -- ^ execute event args
                  -> (state -> props -> IO (ReactElementM eventHandler ())) -- ^ renderer
                  -> IO (Callback (JSRef () -> IO ()))
 mkRenderCallback parseState runHandler render = syncCallback1 AlwaysRetain False $ \argRef -> do
     let args = RenderCbArgs argRef
-    stateRef <- js_RenderCbRetrieveState args
-    state <- parseState stateRef
+    stateE <- js_RenderCbRetrieveState args
+    state <- parseState stateE
 
     propsE <- js_RenderCbRetrieveProps args
     mprops <- derefExport propsE
@@ -308,18 +307,10 @@ mkRenderCallback parseState runHandler render = syncCallback1 AlwaysRetain False
     evtCallbacksRef <- toJSRef evtCallbacks
     js_RenderCbSetResults args evtCallbacksRef element
 
-parseJsonState :: FromJSON state => JSRef state -> IO state
-parseJsonState stateRef = do
-    let valRef :: JSRef Value = castRef stateRef
-    mval <- fromJSRef valRef
-    case maybe (error "Unable to decode view state") fromJSON mval of
-        Error err -> error $ "Unable to decode view state: " ++ err
-        Success s -> return s
-
-parseExportStoreData :: Typeable storeData => JSRef storeData -> IO storeData
-parseExportStoreData storeDataRef = do
-    mdata <- derefExport $ Export $ castRef storeDataRef
-    maybe (error "Unable to load store state") return mdata
+parseExport :: Typeable a => Export a -> IO a
+parseExport a = do
+    mdata <- derefExport a
+    maybe (error "Unable to load export from javascript") return mdata
 
 #endif
 
@@ -339,7 +330,7 @@ view :: Typeable props
      -> ReactElementM eventHandler a
 view rc props (ReactElementM child) =
     let (a, childEl) = runWriter child
-     in elementToM a $ ViewElement (reactView rc) (Nothing :: Maybe ()) props childEl
+     in elementToM a $ ViewElement (reactView rc) (Nothing :: Maybe (JSRef ())) props childEl
 
 -- | Create an element from a view, and also pass in a key property for the instance.  Key
 -- properties speed up the <https://facebook.github.io/react/docs/reconciliation.html reconciliation>
@@ -347,7 +338,7 @@ view rc props (ReactElementM child) =
 -- be unique within the siblings of an element.
 --
 -- TODO
-viewWithKey :: (Typeable props, ToJSON key)
+viewWithKey :: (Typeable props, ToJSRef key)
             => ReactView props -- ^ the view
             -> key -- ^ A value unique within the siblings of this element
             -> props -- ^ The properties to pass to the view instance

@@ -26,7 +26,7 @@ import Control.Monad.Identity (Identity(..))
 #ifdef __GHCJS__
 import GHCJS.Types (JSRef, castRef, JSString, JSArray, JSObject, JSFun)
 import qualified GHCJS.Foreign as Foreign
-import GHCJS.Marshal (toJSRef_aeson)
+import GHCJS.Marshal (toJSRef_aeson, ToJSRef(..))
 import React.Flux.Export
 #else
 type JSRef a = ()
@@ -78,7 +78,7 @@ data ReactElement eventHandler
         , fProps :: [PropertyOrHandler eventHandler]
         , fChild :: ReactElement eventHandler
         }
-    | forall props key. (Typeable props, ToJSON key) => ViewElement
+    | forall props key. (Typeable props, ToJSRef key) => ViewElement
         { ceClass :: ReactViewRef props
         , ceKey :: Maybe key
         -- TODO: ref?  ref support would need to tie into the Class too.
@@ -170,7 +170,7 @@ el name attrs (ReactElementM child) =
 -- once the class is re-rendered.
 mkReactElement :: (eventHandler -> IO ())
                -> ReactElementM eventHandler ()
-               -> IO (ReactElementRef, [Callback (JSRef Value -> IO ())])
+               -> IO (ReactElementRef, [Callback (JSRef () -> IO ())])
 
 #ifdef __GHCJS__
 
@@ -212,7 +212,7 @@ foreign import javascript unsafe
     "console.log($1)"
     js_log :: JSRef a -> IO ()
 
-addPropOrHandlerToObj :: JSObject a -> PropertyOrHandler (IO ()) -> WriterT [Callback (JSRef Value -> IO ())] IO ()
+addPropOrHandlerToObj :: JSObject a -> PropertyOrHandler (IO ()) -> WriterT [Callback (JSRef () -> IO ())] IO ()
 addPropOrHandlerToObj obj (Property (n, v)) = lift $ do
     vRef <- toJSRef_aeson v
     Foreign.setProp (Foreign.toJSString n) vRef obj
@@ -220,12 +220,12 @@ addPropOrHandlerToObj obj (EventHandler str handler) = do
     -- this will be released by the render function of the class (jsbits/class.js)
     cb <- lift $ Foreign.syncCallback1 Foreign.AlwaysRetain True $ \evtRef -> do
         js_log evtRef
-        handler $ HandlerArg (castRef evtRef)
+        handler $ HandlerArg evtRef
 
     tell [cb]
     lift $ Foreign.setProp (Foreign.toJSString str) cb obj
 
-createElement :: ReactElement (IO ()) -> WriterT [Callback (JSRef Value -> IO ())] IO [ReactElementRef]
+createElement :: ReactElement (IO ()) -> WriterT [Callback (JSRef () -> IO ())] IO [ReactElementRef]
 createElement EmptyElement = return []
 createElement (Append x y) = (++) <$> createElement x <*> createElement y
 createElement (Content s) = return [js_ReactCreateContent s]
@@ -244,7 +244,7 @@ createElement (ViewElement { ceClass = rc, ceProps = props, ceKey = mkey, ceChil
     arr <- lift $ Foreign.toArray $ map reactElementRef childNodes
     e <- lift $ case mkey of
         Just key -> do
-            keyRef <- toJSRef_aeson key
+            keyRef <- toJSRef key
             js_ReactCreateKeyedElement rc keyRef propsE arr
         Nothing -> js_ReactCreateClass rc propsE arr
     return [e]
