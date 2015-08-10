@@ -7,6 +7,9 @@ function hsreact$mk_ctrl_view(name, store, renderCb) {
         _onViewChange: function(x) { // allows binding to this
             this.setState(x);
         },
+        shouldComponentUpdate: function(newProps, newState) {
+            return this.props.hs.root != newProps.hs.root || this.state.root != newState.root;
+        },
         componentDidMount: function() {
             store.views.push(this._onViewChange);
         },
@@ -42,6 +45,9 @@ function hsreact$mk_view(name, renderCb) {
             this._currentCallbacks.map(h$release);
             h$release(this.props.hs);
         },
+        shouldComponentUpdate: function(newProps, newState) {
+            return this.props.hs.root != newProps.hs.root;
+        },
         componentWillReceiveProps: function() {
             h$release(this.props.hs);
         },
@@ -65,6 +71,9 @@ function hsreact$mk_stateful_view(name, initialState, renderCb) {
         displayName: name,
         getInitialState: function() {
             return { hs: initialState };
+        },
+        shouldComponentUpdate: function(newProps, newState) {
+            return this.props.hs.root != newProps.hs.root || this.state.hs.root != newState.hs.root;
         },
         componentWillUnmount: function() {
             this._currentCallbacks.map(h$release);
