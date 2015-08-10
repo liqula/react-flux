@@ -89,7 +89,12 @@ type ViewEventHandler = [SomeStoreAction]
 -- to speed up re-rendering.  The best way of taking advantage of reconciliation is to
 -- use key properties with 'viewWithKey'.
 --
--- TODO
+-- >todoApp :: ReactView ()
+-- >todoApp = defineControllerView "todo app" todoStore $ \todoState () ->
+-- >    div_ $ do
+-- >        todoHeader_
+-- >        mainSection_ todoState
+-- >        todoFooter_ todoState
 defineControllerView :: (StoreData storeData, Typeable props)
                  => String -- ^ A name for this view
                  -> ReactStore storeData -- ^ The store this controller view should attach to.
@@ -120,7 +125,6 @@ defineControllerView _ _ _ = ReactView (ReactViewRef ())
 ---------------------------------------------------------------------------------------------------
 
 -- | A view is a re-usable component of the page which does not track any state itself.
---
 -- Each instance of a view accepts properties of type @props@ from its parent and re-renders itself
 -- whenever the properties change.
 --
@@ -129,7 +133,54 @@ defineControllerView _ _ _ = ReactView (ReactViewRef ())
 -- Using a view provides more than just a Haskell function when used with a key property with
 -- 'viewWithKey'.  The key property allows React to more easily reconcile the virtual DOM with the
 -- browser DOM.
-
+--
+-- The following is two example views: @mainSection_@ is just a Haskell function and @todoItem@
+-- is a React view.  We use the convention that an underscore suffix signifies a combinator
+-- which can be used in the rendering function.
+--
+-- >mainSection_ :: TodoState -> ReactElementM ViewEventHandler ()
+-- >mainSection_ st = section_ ["id" $= "main"] $ do
+-- >    input_ [ "id" $= "toggle-all"
+-- >           , "type" $= "checkbox"
+-- >           , "checked" $= if all (todoComplete . snd) $ todoList st then "checked" else ""
+-- >           , onChange $ \_ -> [todoA ToggleAllComplete]
+-- >           ]
+-- >
+-- >    label_ [ "htmlFor" $= "toggle-all"] "Mark all as complete"
+-- >    ul_ [ "id" $= "todo-list" ] $ mapM_ todoItem_ $ todoList st
+-- >
+-- >todoItem :: ReactView (Int, Todo)
+-- >todoItem = defineView "todo item" $ \(todoIdx, todo) ->
+-- >    li_ [ "className" @= (intercalate "," ([ "completed" | todoComplete todo] ++ [ "editing" | todoIsEditing todo ]) :: String)
+-- >        , "key" @= todoIdx
+-- >        ] $ do
+-- >        
+-- >        div_ [ "className" $= "view"] $ do
+-- >            input_ [ "className" $= "toggle"
+-- >                   , "type" $= "checkbox"
+-- >                   , "checked" @= todoComplete todo
+-- >                   , onChange $ \_ -> [todoA $ TodoSetComplete todoIdx $ not $ todoComplete todo]
+-- >                   ]
+-- >
+-- >            label_ [ onDoubleClick $ \_ _ -> [todoA $ TodoEdit todoIdx] ] $
+-- >                text $ todoText todo
+-- >
+-- >            button_ [ "className" $= "destroy"
+-- >                    , onClick $ \_ _ -> [todoA $ TodoDelete todoIdx]
+-- >                    ]
+-- >                    "Delete"
+-- >
+-- >        when (todoIsEditing todo) $
+-- >            todoTextInput_ TextInputArgs
+-- >                { tiaId = Nothing
+-- >                , tiaClass = "edit"
+-- >                , tiaPlaceholder = ""
+-- >                , tiaOnSave = todoA . UpdateText todoIdx
+-- >                , tiaValue = Just $ todoText todo
+-- >                }
+-- >
+-- >todoItem_ :: (Int, Todo) -> ReactElementM eventHandler ()
+-- >todoItem_ (idx, todo) = viewWithKey todoItem idx (idx, todo) mempty
 defineView :: Typeable props
        => String -- ^ A name for this view
        -> (props -> ReactElementM ViewEventHandler ()) -- ^ The rendering function
@@ -172,7 +223,30 @@ type StatefulViewEventHandler state = state -> ([SomeStoreAction], Maybe state)
 -- transform the internal state of the view is via an event handler, which can optionally produce
 -- new state.
 --
--- TODO
+-- >data TextInputArgs = TextInputArgs {
+-- >      tiaId :: Maybe String
+-- >    , tiaClass :: String
+-- >    , tiaPlaceholder :: String
+-- >    , tiaOnSave :: String -> SomeStoreAction
+-- >    , tiaValue :: Maybe String
+-- >} deriving (Typeable)
+-- >
+-- >todoTextInput :: ReactView TextInputArgs
+-- >todoTextInput = defineStatefulView "todo text input" "" $ \curText args ->
+-- >    input_ [ "className" @= tiaClass args
+-- >           , "placeholder" @= tiaPlaceholder args
+-- >           , "value" @= curText
+-- >           , "autoFocus" @= True
+-- >           , onBlur $ \_ _ curState -> ([tiaOnSave args curState | not $ null curState], Just "")
+-- >           , onChange $ \evt _ -> ([], Just $ target evt "value")
+-- >           , onKeyDown $ \_ evt curState ->
+-- >                if keyCode evt == 13 && not (null curState) -- 13 is enter
+-- >                    then ([tiaOnSave args curState], Just "")
+-- >                    else ([], Nothing)
+-- >           ]
+-- >
+-- >todoTextInput_ :: TextInputArgs -> ReactElementM eventHandler ()
+-- >todoTextInput_ args = view todoTextInput args mempty
 defineStatefulView :: (Typeable state, Typeable props)
                => String -- ^ A name for this view
                -> state -- ^ The initial state
@@ -319,10 +393,8 @@ parseExport a = do
 --- Element creation for views
 ----------------------------------------------------------------------------------------------------
 
--- | Create an element from a view.  I suggest you make a combinator for each of your views.  For
--- example,
---
--- TODO
+-- | Create an element from a view.  I suggest you make a combinator for each of your views, similar
+-- to the examples above such as @todoItem_@.
 view :: Typeable props
      => ReactView props -- ^ the view
      -> props -- ^ the properties to pass into the instance of this view
@@ -335,9 +407,7 @@ view rc props (ReactElementM child) =
 -- | Create an element from a view, and also pass in a key property for the instance.  Key
 -- properties speed up the <https://facebook.github.io/react/docs/reconciliation.html reconciliation>
 -- of the virtual DOM with the DOM.  The key does not need to be globally unqiue, it only needs to
--- be unique within the siblings of an element.
---
--- TODO
+-- be unique within the siblings of an element.  React allows only strings and numbers as keys.
 viewWithKey :: (Typeable props, ToJSRef key)
             => ReactView props -- ^ the view
             -> key -- ^ A value unique within the siblings of this element
@@ -381,9 +451,6 @@ viewWithKey rc key props (ReactElementM child) =
 -- >                              ]
 -- >               , onSelectChange $ \newValue -> [AnAction newValue]
 -- >               ]
---
--- Of course, in a real program the value and options would be built from the properties and/or
--- state of the view.
 foreignClass :: JSRef cl -- ^ The javascript reference to the class
              -> [PropertyOrHandler eventHandler] -- ^ properties and handlers to pass when creating an instance of this class.
              -> ReactElementM eventHandler a -- ^ The child element or elements

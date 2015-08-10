@@ -29,10 +29,10 @@ library
                    React.Flux.DOM
                    React.Flux.PropertiesAndEvents
                    React.Flux.Internal
-                   React.Flux.Export
 
   other-modules: React.Flux.Views
                  React.Flux.Store
+                 React.Flux.Export
 
   default-extensions: CPP
                       EmptyDataDecls

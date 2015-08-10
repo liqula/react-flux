@@ -154,7 +154,6 @@ data Event = Event
 target :: FromJSRef val => Event -> String -> val
 target e s = eventTargetProp (evtTarget e) s
 
--- | Utility function to parse an 'Event' from the handler argument.
 parseEvent :: HandlerArg -> Event
 parseEvent arg@(HandlerArg o) = Event
     { evtType = o .: "type"
@@ -170,6 +169,10 @@ parseEvent arg@(HandlerArg o) = Event
     }
 
 -- | Create an event handler from a name and a handler function.
+--
+-- This can also be used to pass in arbitrary callbacks to foreign javascript React classes.
+-- Indeed, what 'on' does is create a callback and then add a property with key the string passed to
+-- 'on' and value the callback.
 on :: String -> (HandlerArg -> handler) -> PropertyOrHandler handler
 on = EventHandler
 

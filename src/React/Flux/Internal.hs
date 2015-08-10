@@ -68,10 +68,6 @@ instance Functor PropertyOrHandler where
 -- tree of elements) and then reconciles it with the actual DOM elements in the browser.  The
 -- 'ReactElement' is a monoid, so dispite its name can represent more than one element.  Multiple
 -- elements are rendered into the browser DOM as siblings.
---
--- A 'ReactElement' is parametrized by the type @eventHandler@, which is the type of the event
--- handlers that can be attached to DOM elements.  Event handlers are created by combinators in
--- "React.Flux.PropertiesAndEvents".
 data ReactElement eventHandler
     = ForeignElement
         { fName :: Either String (ReactViewRef Object)

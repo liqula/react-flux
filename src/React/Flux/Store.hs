@@ -36,7 +36,37 @@ newtype ReactStoreRef storeData = ReactStoreRef (JSRef ())
 -- You can have multiple stores; it should be the case that all of the state required to render the
 -- page is contained in the stores.
 --
--- TODO: copy from example
+-- >data Todo = Todo {
+-- >    todoText :: String
+-- >  , todoComplete :: Bool
+-- >  , todoIsEditing :: Bool
+-- >} deriving (Show, Typeable)
+-- >
+-- >newtype TodoState = TodoState {
+-- >    todoList :: [(Int, Todo)]
+-- >} deriving (Show, Typeable)
+-- >
+-- >data TodoAction = TodoCreate String
+-- >                | TodoDelete Int
+-- >                | TodoEdit Int
+-- >                | UpdateText Int String
+-- >                | ToggleAllComplete
+-- >                | TodoSetComplete Int Bool
+-- >                | ClearCompletedTodos
+-- >  deriving (Show, Typeable, Generic, NFData)
+-- >
+-- >instance StoreData TodoState where
+-- >    type StoreAction TodoState = TodoAction
+-- >    transform action (TodoState todos) = ...
+-- >
+-- >todoStore :: ReactStore TodoState
+-- >todoStore = mkStore $ TodoState
+-- >    [ (0, Todo "Learn react" True False)
+-- >    , (1, Todo "Learn react-flux" False False)
+-- >    ]
+-- >
+-- >todoA :: TodoAction -> SomeStoreAction
+-- >todoA = SomeStoreAction todoStore
 data ReactStore storeData = ReactStore {
     -- | A reference to the foreign javascript part of the store.
     storeRef :: ReactStoreRef storeData
@@ -54,19 +84,23 @@ class Typeable storeData => StoreData storeData where
     -- | The actions that this store accepts
     type StoreAction storeData
 
-    -- | Transform the store data according to the action.  Note that if this
-    -- throws an exception, the transform will be aborted and the old store data will be kept
-    -- unchanged.  The exception will then be thrown from 'dispatch'.
+    -- | Transform the store data according to the action.  This is the only place in your app where
+    -- @IO@ should occur.  The transform function should complete quickly, since the UI will not be
+    -- re-rendered until the transform is complete.  Therefore, if you need to perform some longer
+    -- action, you should fork a thread from inside 'transform'.  The thread can then 'dispatch'
+    -- another action with the result of its computation.  This is very common to communicate with
+    -- the backend using AJAX.
+    --
+    -- Note that if the transform throws an exception, the transform will be aborted and the old
+    -- store data will be kept unchanged.  The exception will then be thrown from 'dispatch'.
+    --
+    -- For the best performance, care should be taken in only modifying the part of the store data
+    -- that changed (see below for more information on performance).
     transform :: StoreAction storeData -> storeData -> IO storeData
 
 -- | An existential type for some store action.  It is used for event handlers in views, so it is
--- helpful to create utility functions creating 'SomeStoreAction' for your stores.
---
--- The 'NFData' instance is used for a small optimization in event handlers.  React.js keeps event
--- objects (the object passed to the handlers) in a pool and re-uses them for successive events.
--- We parse this event object lazily so that only properties actually accessed are parsed, and then
--- use 'NFData' instance to force the evaluation of the store action(s) resulting from the event.
--- We can then compute the action before the event object returns to the React pool.
+-- helpful to create utility functions creating 'SomeStoreAction' for your stores.  The 'NFData'
+-- instance is important for performance, for details see below.
 data SomeStoreAction = forall storeData. (StoreData storeData, NFData (StoreAction storeData))
     => SomeStoreAction (ReactStore storeData) (StoreAction storeData)
 

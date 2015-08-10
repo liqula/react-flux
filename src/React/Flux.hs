@@ -28,6 +28,9 @@ module React.Flux (
 
   -- * Main
   , reactRender
+
+  -- * Performance
+  -- $performance
 ) where
 
 import Data.Typeable (Typeable)
@@ -68,3 +71,12 @@ foreign import javascript unsafe
 reactRender _ _ _ = return ()
 
 #endif
+
+-- $performance 
+--
+--
+-- The 'NFData' instance is used for a small optimization in event handlers.  React.js keeps event
+-- objects (the object passed to the handlers) in a pool and re-uses them for successive events.
+-- We parse this event object lazily so that only properties actually accessed are parsed, and then
+-- use 'NFData' instance to force the evaluation of the store action(s) resulting from the event.
+-- We can then compute the action before the event object returns to the React pool.

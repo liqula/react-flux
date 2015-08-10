@@ -21,7 +21,7 @@
 -- second, the list of properties and handlers is omitted. The 'Term' class allows GHC to
 -- automatically select the appropriate type.
 --
--- Properties are built using '@='.  Be aware that in React, there are some
+-- Be aware that in React, there are some
 -- <https://facebook.github.io/react/docs/dom-differences.html differences> between the browser DOM
 -- objects/properties and the properties and attributes you pass to React, as well as React only
 -- supports  <https://facebook.github.io/react/docs/tags-and-attributes.html certian attributes>.
@@ -31,7 +31,23 @@
 -- only supports <https://facebook.github.io/react/docs/tags-and-attributes.html certian elements>
 -- and they should all be covered by this module.
 --
--- TODO
+-- For example,
+--
+-- >ul_ $ do li_ (b_ "Hello")
+-- >         li_ "World"
+-- >         li_ $
+-- >             ul_ (li_ "Nested" <> li_ "List")
+--
+-- would build something like
+--
+-- ><ul>
+-- >  <li><b>Hello</b><li>
+-- >  <li>World</li>
+-- >  <li><ul>
+-- >    <li>Nested</li>
+-- >    <li>List</li>
+-- >  </ul></li>
+-- ></ul>
 module React.Flux.DOM where
 
 import React.Flux.Internal
