@@ -25,7 +25,7 @@ todoTextInput = defineStatefulView "todo text input" "" $ \curText args ->
                 if keyCode evt == 13 && not (null curState) -- 13 is enter
                     then ([tiaOnSave args curState], Just "")
                     else ([], Nothing)
-           ] mempty
+           ]
 
 todoTextInput_ :: TextInputArgs -> ReactElementM eventHandler ()
 todoTextInput_ args = view todoTextInput args mempty

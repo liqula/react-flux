@@ -36,7 +36,7 @@ mainSection_ st = section_ ["id" $= "main"] $ do
            , "type" $= "checkbox"
            , "checked" $= if all (todoComplete . snd) $ todoList st then "checked" else ""
            , onChange $ \_ -> [todoA ToggleAllComplete]
-           ] mempty
+           ]
 
     label_ [ "htmlFor" $= "toggle-all"] "Mark all as complete"
     ul_ [ "id" $= "todo-list" ] $ mapM_ todoItem_ $ todoList st
@@ -52,7 +52,7 @@ todoItem = defineView "todo item" $ \(todoIdx, todo) ->
                    , "type" $= "checkbox"
                    , "checked" @= todoComplete todo
                    , onChange $ \_ -> [todoA $ TodoSetComplete todoIdx $ not $ todoComplete todo]
-                   ] mempty
+                   ]
 
             label_ [ onDoubleClick $ \_ _ -> [todoA $ TodoEdit todoIdx] ] $
                 text $ todoText todo

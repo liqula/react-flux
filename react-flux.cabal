@@ -23,7 +23,7 @@ library
   hs-source-dirs:      src
   ghc-options: -Wall
   default-language: Haskell2010
-  js-sources: jsbits/class.js jsbits/store.js jsbits/export.js
+  js-sources: jsbits/view.js jsbits/store.js jsbits/export.js
 
   exposed-modules: React.Flux
                    React.Flux.DOM
