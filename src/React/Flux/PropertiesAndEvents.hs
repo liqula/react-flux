@@ -267,6 +267,10 @@ data KeyboardEvent = KeyboardEvent
   , keyWhich :: Int
   }
 
+instance Show KeyboardEvent where
+    show (KeyboardEvent k1 k2 k3 _ k4 k5 k6 k7 k8 k9 k10 k11) =
+        show (k1, k2, k3, k4, k5, k6, k7, k8, k9, k10, k11)
+
 #ifdef __GHCJS__
 foreign import javascript unsafe
     "$1.getModifierState($2)"
@@ -356,6 +360,10 @@ data MouseEvent = MouseEvent
   , mouseScreenY :: Int
   , mouseShiftKey :: Bool
   }
+
+instance Show MouseEvent where
+    show (MouseEvent m1 m2 m3 m4 m5 m6 _ m7 m8 m9 m10 m11 m12 m13)
+        = show (m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13)
 
 parseMouseEvent :: HandlerArg -> MouseEvent
 parseMouseEvent (HandlerArg o) = MouseEvent
@@ -471,6 +479,10 @@ data TouchEvent = TouchEvent {
   , touches :: [Touch]
   }
 
+instance Show TouchEvent where
+    show (TouchEvent t1 t2 t3 _ t4 t5 t6 t7)
+        = show (t1, t2, t3, t4, t5, t6, t7)
+
 parseTouchList :: JSRef a -> JSString -> [Touch]
 parseTouchList obj key = unsafePerformIO $ do
     let arr = js_getProp obj key
@@ -487,7 +499,7 @@ parseTouchEvent (HandlerArg o) = TouchEvent
     , touchGetModifierState = getModifierState o
     , touchMetaKey = o .: "metaKey"
     , touchShiftKey = o .: "shiftKey"
-    , touchTargets = parseTouchList o "targets"
+    , touchTargets = parseTouchList o "targetTouches"
     , touches = parseTouchList o "touches"
     }
 
