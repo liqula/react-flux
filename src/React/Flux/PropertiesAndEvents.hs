@@ -67,8 +67,6 @@ module React.Flux.PropertiesAndEvents (
   -- * Wheel
   , WheelEvent(..)
   , onWheel
-
-  -- * Creating your own handlers
 ) where
 
 import Control.Concurrent.MVar (newMVar)
