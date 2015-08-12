@@ -26,7 +26,7 @@ import Control.Monad.Identity (Identity(..))
 #ifdef __GHCJS__
 import GHCJS.Types (JSRef, castRef, JSString, JSArray, JSObject, JSFun)
 import qualified GHCJS.Foreign as Foreign
-import GHCJS.Marshal (toJSRef_aeson, ToJSRef(..))
+import GHCJS.Marshal (toJSRef_aeson, ToJSRef(..), fromJSRef)
 import React.Flux.Export
 #else
 type JSRef a = ()
@@ -57,11 +57,15 @@ data PropertyOrHandler handler =
       { evtHandlerName :: String
       , evtHandler :: HandlerArg -> handler
       }
+ | CallbackProperty
+      { callbackName :: String
+      , callbackFn :: Value -> handler
+      }
 
 instance Functor PropertyOrHandler where
     fmap _ (Property p) = Property p
     fmap f (EventHandler name h) = EventHandler name (f . h)
-
+    fmap f (CallbackProperty name g) = CallbackProperty name (f . g)
 
 -- | A React element is a node or list of nodes in a virtual tree.  Elements are the output of the
 -- rendering functions of classes.  React takes the output of the rendering function (which is a
@@ -212,7 +216,12 @@ addPropOrHandlerToObj obj (EventHandler str handler) = do
     -- this will be released by the render function of the class (jsbits/class.js)
     cb <- lift $ Foreign.syncCallback1 Foreign.AlwaysRetain True $ \evtRef ->
         handler $ HandlerArg evtRef
-
+    tell [cb]
+    lift $ Foreign.setProp (Foreign.toJSString str) cb obj
+addPropOrHandlerToObj obj (CallbackProperty str handler) = do
+    cb <- lift $ Foreign.syncCallback1 Foreign.AlwaysRetain True $ \argref -> do
+        v <- fromJSRef $ castRef argref
+        handler $ maybe (error "Unable to decode callback value") id v
     tell [cb]
     lift $ Foreign.setProp (Foreign.toJSString str) cb obj
 

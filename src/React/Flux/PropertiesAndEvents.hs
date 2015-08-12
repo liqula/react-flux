@@ -4,6 +4,9 @@ module React.Flux.PropertiesAndEvents (
     PropertyOrHandler
   , (@=)
   , ($=)
+  , callback
+
+  -- * Events
   , Event(..)
   , EventTarget(..)
   , eventTargetProp
@@ -66,14 +69,6 @@ module React.Flux.PropertiesAndEvents (
   , onWheel
 
   -- * Creating your own handlers
-  , on
-  , HandlerArg(..)
-  , parseEvent
-  , parseKeyboardEvent
-  , parseFocusEvent
-  , parseMouseEvent
-  , parseTouchEvent
-  , parseWheelEvent
 ) where
 
 import Control.Concurrent.MVar (newMVar)
@@ -101,6 +96,10 @@ n @= a = Property (n, A.toJSON a)
 -- is enabled
 ($=) :: T.Text -> T.Text -> PropertyOrHandler handler
 n $= a = Property (n, A.toJSON a)
+
+-- | Create a callback property.
+callback :: String -> (A.Value -> handler) -> PropertyOrHandler handler
+callback = CallbackProperty
 
 ----------------------------------------------------------------------------------------------------
 --- Generic Event
