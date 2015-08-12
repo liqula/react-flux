@@ -72,7 +72,7 @@ todoItem = defineView "todo item" $ \(todoIdx, todo) ->
                 }
 
 todoItem_ :: (Int, Todo) -> ReactElementM eventHandler ()
-todoItem_ (idx, todo) = viewWithKey todoItem idx (idx, todo) mempty
+todoItem_ todo = viewWithKey todoItem (fst todo) todo mempty
 
 todoFooter :: ReactView TodoState
 todoFooter = defineView "footer" $ \(TodoState todos) ->

@@ -38,8 +38,7 @@ type Callback a = JSFun a
 --
 -- * Controller View, created by 'defineControllerView'.  A controller view provides the glue code
 -- between a store and the view, and as such is a pure function taking as input the store data and
--- the properties and producing a tree of elements.  In addition, any event handlers attached to
--- elements can only produce actions.  No internal state is allowed.
+-- the properties and producing a tree of elements.  No internal state is allowed.
 --
 -- * View.  A view is pure function from props to a tree of elements which does not maintain any
 -- internal state.  It can eiter be modeled by
@@ -180,7 +179,7 @@ defineControllerView _ _ _ = ReactView (ReactViewRef ())
 -- >                }
 -- >
 -- >todoItem_ :: (Int, Todo) -> ReactElementM eventHandler ()
--- >todoItem_ (idx, todo) = viewWithKey todoItem idx (idx, todo) mempty
+-- >todoItem_ todo = viewWithKey todoItem (fst todo) todo mempty
 defineView :: Typeable props
        => String -- ^ A name for this view
        -> (props -> ReactElementM ViewEventHandler ()) -- ^ The rendering function
@@ -221,7 +220,7 @@ type StatefulViewEventHandler state = state -> ([SomeStoreAction], Maybe state)
 -- The rendering function is a pure function of the state and the properties from the parent.  The
 -- view will be re-rendered whenever the state or properties change.  The only way to
 -- transform the internal state of the view is via an event handler, which can optionally produce
--- new state.
+-- new state.  Any more complicated state should be moved out into a (possibly new) store.
 --
 -- >data TextInputArgs = TextInputArgs {
 -- >      tiaId :: Maybe String

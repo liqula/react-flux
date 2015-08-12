@@ -27,14 +27,12 @@ type Export a = ()
 newtype ReactStoreRef storeData = ReactStoreRef (JSRef ())
 
 -- | A store contains application state, receives actions from the dispatcher, and notifies
--- component views to re-render themselves.
+-- component views to re-render themselves.  You can have multiple stores; it should be the case
+-- that all of the state required to render the page is contained in the stores.
 --
 -- A store keeps a global reference to a value of type @storeData@, which must be an instance of
 -- 'StoreData'.  When the store receives an action from 'dispatch', it first transforms the data and
 -- then notifies all component views to re-render themselves.
--- 
--- You can have multiple stores; it should be the case that all of the state required to render the
--- page is contained in the stores.
 --
 -- >data Todo = Todo {
 -- >    todoText :: String
@@ -99,8 +97,8 @@ class Typeable storeData => StoreData storeData where
     transform :: StoreAction storeData -> storeData -> IO storeData
 
 -- | An existential type for some store action.  It is used for event handlers in views, so it is
--- helpful to create utility functions creating 'SomeStoreAction' for your stores.  The 'NFData'
--- instance is important for performance, for details see below.
+-- helpful to create utility functions creating 'SomeStoreAction' for your stores, similar to
+-- @todoA@ above.  The 'NFData' instance is important for performance, for details see below.
 data SomeStoreAction = forall storeData. (StoreData storeData, NFData (StoreAction storeData))
     => SomeStoreAction (ReactStore storeData) (StoreAction storeData)
 
