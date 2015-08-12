@@ -220,11 +220,11 @@ instance NFData FakeEventStoreAction where
     rnf (StopPropagation (HandlerArg ref)) = unsafePerformIO (js_stopProp ref) `deepseq` ()
 
 foreign import javascript unsafe
-    "$1.preventDefault();"
+    "$1['preventDefault']();"
     js_preventDefault :: JSRef () -> IO ()
 
 foreign import javascript unsafe
-    "$1.stopPropagation();"
+    "$1['stopPropagation']();"
     js_stopProp :: JSRef () -> IO ()
 
 #else
@@ -273,7 +273,7 @@ instance Show KeyboardEvent where
 
 #ifdef __GHCJS__
 foreign import javascript unsafe
-    "$1.getModifierState($2)"
+    "$1['getModifierState']($2)"
     js_GetModifierState :: JSRef () -> JSString -> JSBool
 
 getModifierState :: JSRef () -> String -> Bool
@@ -442,7 +442,7 @@ onMouseUp = mkHandler "onMouseUp" parseMouseEvent
 --------------------------------------------------------------------------------
 
 foreign import javascript unsafe
-    "React.initializeTouchEvents(true)"
+    "React['initializeTouchEvents'](true)"
     initializeTouchEvents :: IO ()
 
 data Touch = Touch {

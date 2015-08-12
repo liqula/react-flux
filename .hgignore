@@ -4,3 +4,5 @@ syntax:glob
 dist/
 .cabal-sandbox
 cabal.sandbox.config
+todo.js
+todo.min.js

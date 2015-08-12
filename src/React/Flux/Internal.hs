@@ -182,23 +182,23 @@ mkReactElement runHandler eM = runWriterT $ do
             js_ReactCreateElementName "div" emptyObj arr
 
 foreign import javascript unsafe
-    "React.createElement($1)"
+    "React['createElement']($1)"
     js_ReactCreateElementNoChildren :: JSString -> IO ReactElementRef
 
 foreign import javascript unsafe
-    "React.createElement($1, $2, $3)"
+    "React['createElement']($1, $2, $3)"
     js_ReactCreateElementName :: JSString -> JSObject b -> JSArray c -> IO ReactElementRef
 
 foreign import javascript unsafe
-    "React.createElement($1, $2, $3)"
+    "React['createElement']($1, $2, $3)"
     js_ReactCreateForeignElement :: ReactViewRef a -> JSObject b -> JSArray c -> IO ReactElementRef
 
 foreign import javascript unsafe
-    "React.createElement($1, {hs:$2}, $3)"
+    "React['createElement']($1, {hs:$2}, $3)"
     js_ReactCreateClass :: ReactViewRef a -> Export props -> JSArray b -> IO ReactElementRef
 
 foreign import javascript unsafe
-    "React.createElement($1, {key: $2, hs:$3}, $4)"
+    "React['createElement']($1, {key: $2, hs:$3}, $4)"
     js_ReactCreateKeyedElement :: ReactViewRef a -> JSRef key -> Export props -> JSArray b -> IO ReactElementRef
 
 js_ReactCreateContent :: String -> ReactElementRef

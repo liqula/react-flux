@@ -63,7 +63,7 @@ reactRender htmlId rc props = do
     js_ReactRender e (toJSString htmlId)
 
 foreign import javascript unsafe
-    "React.render($1, document.getElementById($2))"
+    "React['render']($1, document.getElementById($2))"
     js_ReactRender :: ReactElementRef -> JSString -> IO ()
 
 #else
