@@ -69,6 +69,7 @@ executable todo
    build-depends: base
                 , react-flux
                 , deepseq
+                , ghcjs-base
 
 executable allevents
    if !flag(tests)

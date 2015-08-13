@@ -14,6 +14,13 @@ module React.Flux (
   , defineStatefulView
   , ViewEventHandler
   , StatefulViewEventHandler
+  -- *** Lifecycle
+  , lifecycleView
+  , LifecycleViewConfig(..)
+  , lifecycleConfig
+  , LPropsAndState(..)
+  , LDOM(..)
+  , LSetStateFn
 
   -- * Elements
   , ReactElement

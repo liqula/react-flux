@@ -6,6 +6,12 @@ module React.Flux.Views (
   , ViewEventHandler
   , defineStatefulView
   , StatefulViewEventHandler
+  , LPropsAndState(..)
+  , LDOM(..)
+  , LSetStateFn
+  , LifecycleViewConfig(..)
+  , lifecycleConfig
+  , lifecycleView
   , view
   , viewWithKey
   , foreignClass
@@ -19,10 +25,11 @@ import System.IO.Unsafe (unsafePerformIO)
 import React.Flux.Store
 import React.Flux.Internal
 import React.Flux.Export
+import React.Flux.DOM (div_)
 
 #ifdef __GHCJS__
 import GHCJS.Types (JSRef, castRef, JSFun, JSString)
-import GHCJS.Foreign (syncCallback1, toJSString, ForeignRetention(..))
+import GHCJS.Foreign (syncCallback1, syncCallback2, toJSString, ForeignRetention(..), jsNull)
 import GHCJS.Marshal (ToJSRef(..))
 #endif
 
@@ -288,6 +295,122 @@ defineStatefulView _ _ _ = ReactView (ReactViewRef ())
 {-# NOINLINE defineStatefulView #-}
 
 ---------------------------------------------------------------------------------------------------
+--- Class
+---------------------------------------------------------------------------------------------------
+
+type HTMLElement = JSRef ()
+
+data LPropsAndState props state = LPropsAndState
+  { lGetProps :: IO props
+  , lGetState :: IO state
+  }
+
+data LDOM = LDOM
+  { lThis :: IO HTMLElement
+  , lRef :: String -> IO HTMLElement
+  }
+
+type LSetStateFn state = state -> IO ()
+
+data LifecycleViewConfig props state = LifecycleViewConfig
+  { lRender :: state -> props -> ReactElementM (StatefulViewEventHandler state) ()
+  , lComponentWillMount :: Maybe (LPropsAndState props state -> LSetStateFn state -> IO ())
+  , lComponentDidMount :: Maybe (LPropsAndState props state -> LDOM -> LSetStateFn state -> IO ())
+  , lComponentWillReceiveProps :: Maybe (LPropsAndState props state -> LDOM -> LSetStateFn state -> props -> IO ())
+  , lComponentWillUpdate :: Maybe (LPropsAndState props state -> LDOM -> props -> state -> IO ())
+  , lComponentDidUpdate :: Maybe (LPropsAndState props state -> LDOM -> LSetStateFn state -> props -> state -> IO ())
+  , lComponentWillUnmount :: Maybe (LPropsAndState props state -> LDOM -> IO ())
+  }
+
+lifecycleConfig :: LifecycleViewConfig props state
+lifecycleConfig = LifecycleViewConfig
+    { lRender = \_ _ -> div_ mempty
+    , lComponentWillMount = Nothing
+    , lComponentDidMount = Nothing
+    , lComponentWillReceiveProps = Nothing
+    , lComponentWillUpdate = Nothing
+    , lComponentDidUpdate = Nothing
+    , lComponentWillUnmount = Nothing
+    }
+
+lifecycleView :: (Typeable props, Typeable state)
+              => String -> state -> LifecycleViewConfig props state -> ReactView props
+
+#ifdef __GHCJS__
+
+lifecycleView name initialState cfg = unsafePerformIO $ do
+    initialRef <- export initialState
+
+    let render state props = return $ lRender cfg state props
+    renderCb <- mkRenderCallback parseExport runStateViewHandler render
+
+    let ps this = LPropsAndState { lGetProps = js_LgetProps this >>= parseExport
+                                 , lGetState = js_LgetState this >>= parseExport
+                                 }
+
+        dom this = LDOM { lThis = js_ReactFindDOMNode this
+                        , lRef = \r -> js_LgetRef this $ toJSString r
+                        }
+
+        setStateFn this s = export s >>= js_LupdateState this
+
+    willMountCb <- mkLCallback (lComponentWillMount cfg) $ \f -> syncCallback1 AlwaysRetain False $ \this ->
+        f (ps this) (setStateFn this)
+
+    didMountCb <- mkLCallback (lComponentDidMount cfg) $ \f -> syncCallback1 AlwaysRetain False $ \this ->
+        f (ps this) (dom this) (setStateFn this)
+
+    willRecvPropsCb <- mkLCallback (lComponentWillReceiveProps cfg) $ \f -> syncCallback2 AlwaysRetain False $ \this newPropsE -> do
+        newProps <- parseExport $ Export newPropsE
+        f (ps this) (dom this) (setStateFn this) newProps
+
+    willUpdateCb <- mkLCallback (lComponentWillUpdate cfg) $ \f -> syncCallback2 AlwaysRetain False $ \this arg -> do
+        nextProps <- js_LgetProps arg >>= parseExport
+        nextState <- js_LgetState arg >>= parseExport
+        f (ps this) (dom this) nextProps nextState
+
+    didUpdateCb <- mkLCallback (lComponentDidUpdate cfg) $ \f -> syncCallback2 AlwaysRetain False $ \this arg -> do
+        oldProps <- js_LgetProps arg >>= parseExport
+        oldState <- js_LgetState arg >>= parseExport
+        f (ps this) (dom this) (setStateFn this) oldProps oldState
+
+    willUnmountCb <- mkLCallback (lComponentWillUnmount cfg) $ \f -> syncCallback1 AlwaysRetain False $ \this ->
+        f (ps this) (dom this)
+
+    ReactView <$> js_makeLifecycleView (toJSString name) initialRef
+                    renderCb willMountCb didMountCb willRecvPropsCb willUpdateCb didUpdateCb willUnmountCb
+
+mkLCallback :: Maybe f -> (f -> IO (JSRef a)) -> IO (JSRef a)
+mkLCallback Nothing _ = return jsNull
+mkLCallback (Just f) c = c f 
+
+foreign import javascript unsafe
+    "React['findDOMNode']($1)"
+    js_ReactFindDOMNode :: JSRef a -> IO (JSRef b)
+
+foreign import javascript unsafe
+    "$1['props'].hs"
+    js_LgetProps :: JSRef a -> IO (Export props)
+
+foreign import javascript unsafe
+    "$1['state'].hs"
+    js_LgetState :: JSRef a -> IO (Export state)
+
+foreign import javascript unsafe
+    "React['findDOMNode']($1['refs'][$2])"
+    js_LgetRef :: JSRef a -> JSString -> IO (JSRef b)
+
+foreign import javascript unsafe
+    "$1.updateState($2)"
+    js_LupdateState :: JSRef a -> Export state -> IO ()
+
+#else
+
+lifecycleView _ _ _ = ReactView ()
+
+#endif
+
+---------------------------------------------------------------------------------------------------
 --- Various GHCJS only utilities
 ---------------------------------------------------------------------------------------------------
 
@@ -358,6 +481,11 @@ foreign import javascript unsafe
                           -> Export state
                           -> Callback (JSRef () -> IO ())
                           -> IO (ReactViewRef props)
+
+foreign import javascript unsafe
+    "hsreact$mk_lifecycle_view($1, $2, $3, $4, $5, $6, $7, $8, $9)"
+    js_makeLifecycleView :: JSString -> Export state -> Callback (JSRef () -> IO ())
+                         -> JSRef a -> JSRef b -> JSRef c -> JSRef d -> JSRef e -> JSRef f -> IO (ReactViewRef props)
 
 mkRenderCallback :: Typeable props
                  => (Export state -> IO state) -- ^ parse state
