@@ -1,169 +1,108 @@
 /* jshint sub:true */
-function hsreact$mk_ctrl_view(name, store, renderCb) {
-    return React['createClass']({
-        'displayName': name,
-        'getInitialState': function() {
-            return store.sdata;
-        },
-        _onViewChange: function(x) { // allows binding to this
-            this['setState'](x);
-        },
-        'shouldComponentUpdate': function(newProps, newState) {
-            return this['props'].hs.root != newProps.hs.root || this['state'].root != newState.root;
-        },
-        'componentDidMount': function() {
-            store.views.push(this._onViewChange);
-        },
-        'componentWillUnmount': function() {
-            var idx = store.views.indexOf(this._onViewChange);
-            if (idx >= 0) { store.views.splice(idx, 1); }
-            this._currentCallbacks.map(h$release);
-            h$release(this['props'].hs);
-        },
-        'componentWillReceiveProps': function() {
-            h$release(this['props'].hs);
-        },
-        'render': function() {
-            var arg = {
-                state: this['state'],
-                props: this['props'].hs,
-                newCallbacks: [],
-                elem:null
-            };
-            renderCb(arg);
-            this._currentCallbacks.map(h$release);
-            this._currentCallbacks = arg.newCallbacks;
-            return arg.elem;
-        },
-        _currentCallbacks: []
-    });
-}
 
-function hsreact$mk_view(name, renderCb) {
-    return React['createClass']({
-        'displayName': name,
-        'componentWillUnmount': function() {
-            this._currentCallbacks.map(h$release);
-            h$release(this['props'].hs);
-        },
-        'shouldComponentUpdate': function(newProps, newState) {
-            return this['props'].hs.root != newProps.hs.root;
-        },
-        'componentWillReceiveProps': function() {
-            h$release(this['props'].hs);
-        },
-        'render': function() {
-            var arg = {
-                props: this['props'].hs,
-                newCallbacks: [],
-                elem:null
-            };
-            renderCb(arg);
-            this._currentCallbacks.map(h$release);
-            this._currentCallbacks = arg.newCallbacks;
-            return arg.elem;
-        },
-        _currentCallbacks: []
-    });
-}
-
-function hsreact$mk_stateful_view(name, initialState, renderCb) {
-    return React['createClass']({
-        'displayName': name,
-        'getInitialState': function() {
-            return { hs: initialState };
-        },
-        'shouldComponentUpdate': function(newProps, newState) {
-            return this['props'].hs.root != newProps.hs.root || this['state'].hs.root != newState.hs.root;
-        },
-        'componentWillUnmount': function() {
-            this._currentCallbacks.map(h$release);
-            h$release(this['props'].hs);
-            h$release(this['state'].hs);
-        },
-        'componentWillReceiveProps': function() {
-            h$release(this['props'].hs);
-        },
-        'render': function() {
-            var that = this;
-            var arg = {
-                state: this['state'].hs,
-                props: this['props'].hs,
-                newCallbacks: [],
-                elem:null,
-                alterState: {
-                    getState: function() { return that['state'].hs; },
-                    setState: function(s) {
-                        h$release(that['state'].hs);
-                        that['setState']({hs: s});
-                    }
-                }
-            };
-            renderCb(arg);
-            this._currentCallbacks.map(h$release);
-            this._currentCallbacks = arg.newCallbacks;
-            return arg.elem;
-        },
-        _currentCallbacks: []
-    });
-}
-
-function hsreact$mk_lifecycle_view(name, initialState, renderCb,
-            willMountCb, didMountCb, willRecvPropsCb, willUpdateCb, didUpdateCb, willUnmountCb) {
+function hsreact$mk_class(name, renderCb, checkState, releaseState) {
     var cl = {
         'displayName': name,
-        'getInitialState': function() {
-            return { hs: initialState };
+        'componentWillReceiveProps': function() {
+            h$release(this['props'].hs);
         },
-        updateState: function(newState) {
+        _updateAndReleaseState: function(s) {
             h$release(this['state'].hs);
-            this['setState']({hs: newState});
+            this['setState']({hs: s});
         },
-        'shouldComponentUpdate': function(newProps, newState) {
-            return this['props'].hs.root != newProps.hs.root || this['state'].hs.root != newState.hs.root;
-        },
-        'componentWillReceiveProps': function(newProps) {
-            try {
-                if (willRecvPropsCb) {
-                    willRecvPropsCb(this, newProps.hs);
-                }
-            } finally {
-                h$release(this['props'].hs);
-            }
+        _updateState: function(s) {
+            this['setState']({hs: s});
         },
         'componentWillUnmount': function() {
-            try {
-                if (willUnmountCb) {
-                    willUnmountCb(this);
-                }
-            } finally {
-                this._currentCallbacks.map(h$release);
-                h$release(this['props'].hs);
+            this._currentCallbacks.map(h$release);
+            h$release(this['props'].hs);
+            if (releaseState) {
                 h$release(this['state'].hs);
             }
         },
         'render': function() {
-            var that = this;
             var arg = {
-                state: this['state'].hs,
-                props: this['props'].hs,
                 newCallbacks: [],
-                elem:null,
-                alterState: {
-                    getState: function() { return that['state'].hs; },
-                    setState: function(s) {
-                        h$release(that['state'].hs);
-                        that['setState']({hs: s});
-                    }
-                }
+                elem:null
             };
-            renderCb(arg);
+            renderCb(this, arg);
             this._currentCallbacks.map(h$release);
             this._currentCallbacks = arg.newCallbacks;
             return arg.elem;
         },
         _currentCallbacks: []
     };
+    if (checkState) {
+        cl['shouldComponentUpdate'] = function(newProps, newState) {
+            return this['props'].hs.root != newProps.hs.root || this['state'].hs.root != newState.hs.root;
+        };
+    } else {
+        cl['shouldComponentUpdate'] = function(newProps, newState) {
+            return this['props'].hs.root != newProps.hs.root;
+        };
+    }
+    
+    return cl;
+}
+
+function hsreact$mk_ctrl_view(name, store, renderCb) {
+    var cl = hsreact$mk_class(name, renderCb, true, false);
+    cl['getInitialState'] = function() {
+        return {hs: store.sdata};
+    };
+    cl['componentDidMount'] = function() {
+        store.views.push(this._updateState);
+    };
+    cl['componentWillUnmount'] = function() {
+        var idx = store.views.indexOf(this._updateState);
+        if (idx >= 0) { store.views.splice(idx, 1); }
+        this._currentCallbacks.map(h$release);
+        h$release(this['props'].hs);
+    };
+    return React['createClass'](cl);
+}
+
+function hsreact$mk_view(name, renderCb) {
+    return React['createClass'](hsreact$mk_class(name, renderCb, false, false));
+}
+
+function hsreact$mk_stateful_view(name, initialState, renderCb) {
+    var cl = hsreact$mk_class(name, renderCb, true, true);
+    cl['getInitialState'] = function() {
+        return { hs: initialState };
+    };
+    return React['createClass'](cl);
+}
+
+function hsreact$mk_lifecycle_view(name, initialState, renderCb,
+            willMountCb, didMountCb, willRecvPropsCb, willUpdateCb, didUpdateCb, willUnmountCb) {
+    var cl = hsreact$mk_class(name, renderCb, true, true);
+
+    cl['getInitialState'] = function() {
+        return { hs: initialState };
+    };
+
+    if (willMountCb) {
+        cl['componentWillMount'] = function() {
+            willMountCb(this);
+        };
+    }
+
+    if (didMountCb) {
+        cl['componentDidMount'] = function() {
+            didMountCb(this);
+        };
+    }
+
+    if (willRecvPropsCb) {
+        cl['componentWillReceiveProps'] = function(newProps) {
+            try {
+                willRecvPropsCb(this, newProps.hs);
+            } finally {
+                h$release(this['props'].hs);
+            }
+        };
+    }
 
     if (willUpdateCb) {
         cl['componentWillUpdate'] = function(nextProps, nextState) {
@@ -177,15 +116,15 @@ function hsreact$mk_lifecycle_view(name, initialState, renderCb,
         };
     }
 
-    if (willMountCb) {
-        cl['componentWillMount'] = function() {
-            willMountCb(this);
-        };
-    }
-
-    if (didMountCb) {
-        cl['componentDidMount'] = function() {
-            didMountCb(this);
+    if (willUnmountCb) {
+        cl['componentWillUnmount'] = function() {
+            try {
+                willUnmountCb(this);
+            } finally {
+                this._currentCallbacks.map(h$release);
+                h$release(this['props'].hs);
+                h$release(this['state'].hs);
+            }
         };
     }
 

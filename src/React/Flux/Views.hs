@@ -111,11 +111,11 @@ defineControllerView :: (StoreData storeData, Typeable props)
 
 defineControllerView name (ReactStore store _) buildNode = unsafePerformIO $ do
     let render sd props = return $ buildNode sd props
-    renderCb <- mkRenderCallback parseExport runViewHandler render
+    renderCb <- mkRenderCallback (js_ReactGetState >=> parseExport) runViewHandler render
     ReactView <$> js_createControllerView (toJSString name) store renderCb
 
 -- | Transform a controller view handler to a raw handler.
-runViewHandler :: RenderCbArgs state props -> ViewEventHandler -> IO ()
+runViewHandler :: ReactThis state props -> ViewEventHandler -> IO ()
 runViewHandler _ handler = handler `deepseq` mapM_ dispatchSomeAction handler
 
 #else
@@ -264,15 +264,14 @@ defineStatefulView :: (Typeable state, Typeable props)
 defineStatefulView name initial buildNode = unsafePerformIO $ do
     initialRef <- export initial
     let render state props = return $ buildNode state props
-    renderCb <- mkRenderCallback parseExport runStateViewHandler render
+    renderCb <- mkRenderCallback (js_ReactGetState >=> parseExport) runStateViewHandler render
     ReactView <$> js_createStatefulView (toJSString name) initialRef renderCb
 
 -- | Transform a stateful view event handler to a raw event handler
 runStateViewHandler :: Typeable state
-                    => RenderCbArgs state props -> StatefulViewEventHandler state -> IO ()
-runStateViewHandler args handler = do
-    alterState <- js_RenderCbRetrieveAlterStateFns args
-    st <- parseExport =<< js_GetState alterState
+                    => ReactThis state props -> StatefulViewEventHandler state -> IO ()
+runStateViewHandler this handler = do
+    st <- js_ReactGetState this >>= parseExport
 
     let (actions, mNewState) = handler st
 
@@ -280,7 +279,7 @@ runStateViewHandler args handler = do
         Nothing -> return ()
         Just newState -> do
             newStateRef <- export newState
-            js_SetState alterState newStateRef
+            js_ReactUpdateAndReleaseState this newStateRef
 
     -- nothing above here should block, so the handler callback should still be running syncronous,
     -- so the deepseq of actions should still pick up the proper event object.
@@ -342,67 +341,65 @@ lifecycleView name initialState cfg = unsafePerformIO $ do
     initialRef <- export initialState
 
     let render state props = return $ lRender cfg state props
-    renderCb <- mkRenderCallback parseExport runStateViewHandler render
+    renderCb <- mkRenderCallback (js_ReactGetState >=> parseExport) runStateViewHandler render
 
-    let ps this = LPropsAndState { lGetProps = js_LgetProps this >>= parseExport
-                                 , lGetState = js_LgetState this >>= parseExport
-                                 }
-
-        dom this = LDOM { lThis = js_ReactFindDOMNode this
-                        , lRef = \r -> js_LgetRef this $ toJSString r
+    let dom this = LDOM { lThis = js_ReactFindDOMNode this
+                        , lRef = \r -> js_ReactGetRef this $ toJSString r
                         }
 
-        setStateFn this s = export s >>= js_LupdateState this
+        setStateFn this s = export s >>= js_ReactUpdateAndReleaseState this
 
-    willMountCb <- mkLCallback (lComponentWillMount cfg) $ \f -> syncCallback1 AlwaysRetain False $ \this ->
-        f (ps this) (setStateFn this)
+    willMountCb <- mkLCallback1 (lComponentWillMount cfg) $ \f this ->
+        f (setStateFn this)
 
-    didMountCb <- mkLCallback (lComponentDidMount cfg) $ \f -> syncCallback1 AlwaysRetain False $ \this ->
-        f (ps this) (dom this) (setStateFn this)
+    didMountCb <- mkLCallback1 (lComponentDidMount cfg) $ \f this ->
+        f (dom this) (setStateFn this)
 
-    willRecvPropsCb <- mkLCallback (lComponentWillReceiveProps cfg) $ \f -> syncCallback2 AlwaysRetain False $ \this newPropsE -> do
-        newProps <- parseExport $ Export newPropsE
-        f (ps this) (dom this) (setStateFn this) newProps
+    willRecvPropsCb <- mkLCallback2 (lComponentWillReceiveProps cfg) $ \f this newPropsE -> do
+        newProps <- parseExport $ Export $ castRef newPropsE
+        f (dom this) (setStateFn this) newProps
 
-    willUpdateCb <- mkLCallback (lComponentWillUpdate cfg) $ \f -> syncCallback2 AlwaysRetain False $ \this arg -> do
-        nextProps <- js_LgetProps arg >>= parseExport
-        nextState <- js_LgetState arg >>= parseExport
-        f (ps this) (dom this) nextProps nextState
+    willUpdateCb <- mkLCallback2 (lComponentWillUpdate cfg) $ \f this argRef -> do
+        let arg = ReactThis argRef
+        nextProps <- js_ReactGetProps arg >>= parseExport
+        nextState <- js_ReactGetState arg >>= parseExport
+        f (dom this) nextProps nextState
 
-    didUpdateCb <- mkLCallback (lComponentDidUpdate cfg) $ \f -> syncCallback2 AlwaysRetain False $ \this arg -> do
-        oldProps <- js_LgetProps arg >>= parseExport
-        oldState <- js_LgetState arg >>= parseExport
-        f (ps this) (dom this) (setStateFn this) oldProps oldState
+    didUpdateCb <- mkLCallback2 (lComponentDidUpdate cfg) $ \f this argRef -> do
+        let arg = ReactThis argRef
+        oldProps <- js_ReactGetProps arg >>= parseExport
+        oldState <- js_ReactGetState arg >>= parseExport
+        f (dom this) (setStateFn this) oldProps oldState
 
-    willUnmountCb <- mkLCallback (lComponentWillUnmount cfg) $ \f -> syncCallback1 AlwaysRetain False $ \this ->
-        f (ps this) (dom this)
+    willUnmountCb <- mkLCallback1 (lComponentWillUnmount cfg) $ \f this ->
+        f (dom this)
 
     ReactView <$> js_makeLifecycleView (toJSString name) initialRef
                     renderCb willMountCb didMountCb willRecvPropsCb willUpdateCb didUpdateCb willUnmountCb
 
-mkLCallback :: Maybe f -> (f -> IO (JSRef a)) -> IO (JSRef a)
-mkLCallback Nothing _ = return jsNull
-mkLCallback (Just f) c = c f 
+mkLCallback1 :: (Typeable props, Typeable state)
+             => Maybe (LPropsAndState props state -> f)
+             -> (f -> ReactThis state props -> IO ())
+             -> IO (Callback (JSRef () -> IO ()))
+mkLCallback1 Nothing _ = return jsNull
+mkLCallback1 (Just f) c = syncCallback1 AlwaysRetain False $ \thisRef -> do
+    let this = ReactThis thisRef
+        ps = LPropsAndState { lGetProps = js_ReactGetProps this >>= parseExport
+                            , lGetState = js_ReactGetState this >>= parseExport
+                            }
+    c (f ps) this
 
-foreign import javascript unsafe
-    "React['findDOMNode']($1)"
-    js_ReactFindDOMNode :: JSRef a -> IO (JSRef b)
-
-foreign import javascript unsafe
-    "$1['props'].hs"
-    js_LgetProps :: JSRef a -> IO (Export props)
-
-foreign import javascript unsafe
-    "$1['state'].hs"
-    js_LgetState :: JSRef a -> IO (Export state)
-
-foreign import javascript unsafe
-    "React['findDOMNode']($1['refs'][$2])"
-    js_LgetRef :: JSRef a -> JSString -> IO (JSRef b)
-
-foreign import javascript unsafe
-    "$1.updateState($2)"
-    js_LupdateState :: JSRef a -> Export state -> IO ()
+mkLCallback2 :: (Typeable props, Typeable state)
+             => Maybe (LPropsAndState props state -> f)
+             -> (f -> ReactThis state props -> JSRef a -> IO ())
+             -> IO (Callback (JSRef () -> JSRef a -> IO ()))
+mkLCallback2 Nothing _ = return jsNull
+mkLCallback2 (Just f) c = syncCallback2 AlwaysRetain False $ \thisRef argRef -> do
+    let this = ReactThis thisRef
+        ps = LPropsAndState { lGetProps = js_ReactGetProps this >>= parseExport
+                            , lGetState = js_ReactGetState this >>= parseExport
+                            }
+    c (f ps) this argRef
 
 #else
 
@@ -416,61 +413,46 @@ lifecycleView _ _ _ = ReactView ()
 
 #ifdef __GHCJS__
 
--- | The view render callback is a haskell function given to the javascript object
--- that is called every time the class is to be rendered.  The argument to this callback is
--- javascript object used both for input and output.  The properties of this object are:
---
--- * state :: Export state
--- * props :: Export props
--- * newCallbacks :: [Callback].  This array is set by Haskell, and contains all the event
---       callbacks created as part of the rendering.  These callbacks will be stored and
---       after the next render, these callbacks will be freed.
--- * elem  This is set by Haskell and contains the value that should be returned by the render
---         function back to React.
---
---  In addition, for stateful views (not views or controller-views), there is one additional property @alterState@
---  which is used inside the event handlers.  @alterState@ has two properties, @setState@ and
---  @getState@.
-newtype RenderCbArgs state props = RenderCbArgs (JSRef ())
+newtype ReactThis state props = ReactThis (JSRef ())
 
 foreign import javascript unsafe
-    "$1.state"
-    js_RenderCbRetrieveState :: RenderCbArgs state props -> IO (Export state)
+    "$1['state'].hs"
+    js_ReactGetState :: ReactThis state props -> IO (Export state)
 
 foreign import javascript unsafe
-    "$1.props"
-    js_RenderCbRetrieveProps :: RenderCbArgs state props -> IO (Export props)
+    "$1['props'].hs"
+    js_ReactGetProps :: ReactThis state props -> IO (Export props)
+
+foreign import javascript unsafe
+    "$1._updateAndReleaseState($2)"
+    js_ReactUpdateAndReleaseState :: ReactThis state props -> Export state -> IO ()
+
+foreign import javascript unsafe
+    "React['findDOMNode']($1)"
+    js_ReactFindDOMNode :: ReactThis state props -> IO (JSRef a)
+
+foreign import javascript unsafe
+    "React['findDOMNode']($1['refs'][$2])"
+    js_ReactGetRef :: ReactThis state props -> JSString -> IO (JSRef a)
+
+newtype RenderCbArg = RenderCbArg (JSRef ())
 
 foreign import javascript unsafe
     "$1.newCallbacks = $2; $1.elem = $3;"
-    js_RenderCbSetResults :: RenderCbArgs state props -> JSRef [Callback (JSRef () -> IO ())] -> ReactElementRef -> IO ()
-
-newtype AlterStateFns state = AlterStateFns (JSRef ())
-
-foreign import javascript unsafe
-    "$1.alterState"
-    js_RenderCbRetrieveAlterStateFns :: RenderCbArgs state props -> IO (AlterStateFns state)
-
-foreign import javascript unsafe
-    "$1.setState($2)"
-    js_SetState :: AlterStateFns state -> Export state -> IO ()
-
-foreign import javascript unsafe
-    "$1.getState()"
-    js_GetState :: AlterStateFns state -> IO (Export state)
+    js_RenderCbSetResults :: RenderCbArg -> JSRef [Callback (JSRef () -> IO ())] -> ReactElementRef -> IO ()
 
 foreign import javascript unsafe
     "hsreact$mk_ctrl_view($1, $2, $3)"
     js_createControllerView :: JSString
                             -> ReactStoreRef storeData
-                            -> Callback (JSRef () -> IO ())
+                            -> Callback (JSRef () -> JSRef () -> IO ())
                             -> IO (ReactViewRef props)
 
 -- | Create a view with no state.
 foreign import javascript unsafe
     "hsreact$mk_view($1, $2)"
     js_createView :: JSString
-                  -> Callback (JSRef () -> IO ())
+                  -> Callback (JSRef () -> JSRef () -> IO ())
                   -> IO (ReactViewRef props)
 
 -- | Create a view which tracks its own state.  Similar releasing needs to happen for callbacks and
@@ -479,34 +461,30 @@ foreign import javascript unsafe
     "hsreact$mk_stateful_view($1, $2, $3)"
     js_createStatefulView :: JSString
                           -> Export state
-                          -> Callback (JSRef () -> IO ())
+                          -> Callback (JSRef () -> JSRef () -> IO ())
                           -> IO (ReactViewRef props)
 
 foreign import javascript unsafe
     "hsreact$mk_lifecycle_view($1, $2, $3, $4, $5, $6, $7, $8, $9)"
-    js_makeLifecycleView :: JSString -> Export state -> Callback (JSRef () -> IO ())
+    js_makeLifecycleView :: JSString -> Export state -> Callback (JSRef () -> JSRef () -> IO ())
                          -> JSRef a -> JSRef b -> JSRef c -> JSRef d -> JSRef e -> JSRef f -> IO (ReactViewRef props)
 
 mkRenderCallback :: Typeable props
-                 => (Export state -> IO state) -- ^ parse state
-                 -> (RenderCbArgs state props -> eventHandler -> IO ()) -- ^ execute event args
+                 => (ReactThis state props -> IO state) -- ^ parse state
+                 -> (ReactThis state props -> eventHandler -> IO ()) -- ^ execute event args
                  -> (state -> props -> IO (ReactElementM eventHandler ())) -- ^ renderer
-                 -> IO (Callback (JSRef () -> IO ()))
-mkRenderCallback parseState runHandler render = syncCallback1 AlwaysRetain False $ \argRef -> do
-    let args = RenderCbArgs argRef
-    stateE <- js_RenderCbRetrieveState args
-    state <- parseState stateE
-
-    propsE <- js_RenderCbRetrieveProps args
-    mprops <- derefExport propsE
-    props <- maybe (error "Unable to load props") return mprops
-
+                 -> IO (Callback (JSRef () -> JSRef () -> IO ()))
+mkRenderCallback parseState runHandler render = syncCallback2 AlwaysRetain False $ \thisRef argRef -> do
+    let this = ReactThis thisRef
+        arg = RenderCbArg argRef
+    state <- parseState this
+    props <- js_ReactGetProps this >>= parseExport
     node <- render state props
 
-    (element, evtCallbacks) <- mkReactElement (runHandler args) node
+    (element, evtCallbacks) <- mkReactElement (runHandler this) node
 
     evtCallbacksRef <- toJSRef evtCallbacks
-    js_RenderCbSetResults args evtCallbacksRef element
+    js_RenderCbSetResults arg evtCallbacksRef element
 
 parseExport :: Typeable a => Export a -> IO a
 parseExport a = do
