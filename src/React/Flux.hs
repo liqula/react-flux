@@ -29,6 +29,7 @@ module React.Flux (
   , elemShow
   , view
   , viewWithKey
+  , childrenOfView
   , foreignClass
   , module React.Flux.DOM
   , module React.Flux.PropertiesAndEvents
@@ -66,7 +67,7 @@ reactRender :: Typeable props
 #ifdef __GHCJS__
 
 reactRender htmlId rc props = do
-    (e, _) <- mkReactElement id $ view rc props mempty
+    (e, _) <- mkReactElement id (return []) $ view rc props mempty
     js_ReactRender e (toJSString htmlId)
 
 foreign import javascript unsafe

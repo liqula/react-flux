@@ -12,6 +12,7 @@ module React.Flux.Internal(
   , text
   , elemShow
   , el
+  , childrenOfView
   , elementToM
   , mkReactElement
 ) where
@@ -85,6 +86,7 @@ data ReactElement eventHandler
         , ceProps :: props
         , ceChild :: ReactElement eventHandler
         }
+    | ChildrenOfView
     | Content String
     | Append (ReactElement eventHandler) (ReactElement eventHandler)
     | EmptyElement
@@ -96,6 +98,7 @@ instance Monoid (ReactElement eventHandler) where
 instance Functor ReactElement where
     fmap f (ForeignElement n p c) = ForeignElement n (map (fmap f) p) (fmap f c)
     fmap f (ViewElement n k p c) = ViewElement n k p (fmap f c)
+    fmap _ ChildrenOfView = ChildrenOfView
     fmap f (Append a b) = Append (fmap f a) (fmap f b)
     fmap _ (Content s) = Content s
     fmap _ EmptyElement = EmptyElement
@@ -123,8 +126,6 @@ instance Functor ReactElement where
 -- ></ul>
 --
 -- The "React.Flux.DOM" module contains a large number of combinators for creating HTML elements.
--- 'React.Flux.view', 'React.Flux.viewWithKey', and 'React.Flux.foreignClass' allow creating
--- React elements from classes.
 newtype ReactElementM eventHandler a = ReactElementM { runReactElementM :: Writer (ReactElement eventHandler) a }
     deriving (Functor, Applicative, Monad, Foldable)
 
@@ -161,6 +162,12 @@ el name attrs (ReactElementM child) =
     let (a, childEl) = runWriter child
      in elementToM a $ ForeignElement (Left name) attrs childEl
 
+-- | Transclude the children passed into 'React.Flux.view' or 'React.Flux.viewWithKey' into the
+-- current rendering.  Use this where you would use @this.props.children@ in a javascript React
+-- class.
+childrenOfView :: ReactElementM eventHandler ()
+childrenOfView = elementToM () ChildrenOfView
+
 ----------------------------------------------------------------------------------------------------
 -- mkReactElement has two versions
 ----------------------------------------------------------------------------------------------------
@@ -169,14 +176,15 @@ el name attrs (ReactElementM child) =
 -- to nodes within the element.  These callbacks will need to be released with 'releaseCallback'
 -- once the class is re-rendered.
 mkReactElement :: (eventHandler -> IO ())
+               -> IO [ReactElementRef] -- ^ this.props.children
                -> ReactElementM eventHandler ()
                -> IO (ReactElementRef, [Callback (JSRef () -> IO ())])
 
 #ifdef __GHCJS__
 
-mkReactElement runHandler eM = runWriterT $ do
+mkReactElement runHandler getPropsChildren eM = runWriterT $ do
     let e = execWriter $ runReactElementM eM
-    refs <- createElement $ fmap runHandler e
+    refs <- createElement getPropsChildren $ fmap runHandler e
     case refs of
         [] -> lift $ js_ReactCreateElementNoChildren "div"
         [x] -> return x
@@ -225,21 +233,22 @@ addPropOrHandlerToObj obj (CallbackProperty str handler) = do
     tell [cb]
     lift $ Foreign.setProp (Foreign.toJSString str) cb obj
 
-createElement :: ReactElement (IO ()) -> WriterT [Callback (JSRef () -> IO ())] IO [ReactElementRef]
-createElement EmptyElement = return []
-createElement (Append x y) = (++) <$> createElement x <*> createElement y
-createElement (Content s) = return [js_ReactCreateContent s]
-createElement (f@(ForeignElement{})) = do
+createElement :: IO [ReactElementRef] -> ReactElement (IO ()) -> WriterT [Callback (JSRef () -> IO ())] IO [ReactElementRef]
+createElement _ EmptyElement = return []
+createElement c (Append x y) = (++) <$> createElement c x <*> createElement c y
+createElement _ (Content s) = return [js_ReactCreateContent s]
+createElement c ChildrenOfView = lift c
+createElement c (f@(ForeignElement{})) = do
     obj <- lift $ Foreign.newObj
     mapM_ (addPropOrHandlerToObj obj) $ fProps f
-    childNodes <- createElement $ fChild f
+    childNodes <- createElement c $ fChild f
     childArr <- lift $ Foreign.toArray $ map reactElementRef childNodes
     e <- lift $ case fName f of
         Left s -> js_ReactCreateElementName (Foreign.toJSString s) obj childArr
         Right ref -> js_ReactCreateForeignElement ref obj childArr
     return [e]
-createElement (ViewElement { ceClass = rc, ceProps = props, ceKey = mkey, ceChild = child }) = do
-    childNodes <- createElement child
+createElement c (ViewElement { ceClass = rc, ceProps = props, ceKey = mkey, ceChild = child }) = do
+    childNodes <- createElement c child
     propsE <- lift $ export props -- this will be released inside the lifetime events for the class (jsbits/class.js)
     arr <- lift $ Foreign.toArray $ map reactElementRef childNodes
     e <- lift $ case mkey of
@@ -251,6 +260,6 @@ createElement (ViewElement { ceClass = rc, ceProps = props, ceKey = mkey, ceChil
 
 #else
 
-mkReactElement _ _ = return ((), [])
+mkReactElement _ _ _ = return ((), [])
 
 #endif

@@ -120,6 +120,7 @@ testLifecycle = lifecycleView "testlifecycle" (12 :: Int) lifecycleConfig
         span_ ["ref" $= "refSt", "id" $= "hello"] (elemShow s)
         span_ ["ref" $= "refProps", "id" $= "world"] $ text $ "Current props: " ++ p
         button_ [ onClick $ \_ _ st -> ([], Just $ st + 1) ] "Incr"
+        div_ childrenOfView
 
     , lComponentWillMount = Just $ \pAndS setStateFn -> trace "will mount" $ do
         logPandS pAndS
@@ -150,4 +151,4 @@ testLifecycle = lifecycleView "testlifecycle" (12 :: Int) lifecycleConfig
     }
 
 testLifecycle_ :: String -> ReactElementM eventHandler ()
-testLifecycle_ s = view testLifecycle s mempty
+testLifecycle_ s = view testLifecycle s $ span_ "I am a child!!!"

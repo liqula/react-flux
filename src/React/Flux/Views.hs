@@ -28,8 +28,8 @@ import React.Flux.Export
 import React.Flux.DOM (div_)
 
 #ifdef __GHCJS__
-import GHCJS.Types (JSRef, castRef, JSFun, JSString)
-import GHCJS.Foreign (syncCallback1, syncCallback2, toJSString, ForeignRetention(..), jsNull)
+import GHCJS.Types (JSRef, castRef, JSFun, JSString, JSArray)
+import GHCJS.Foreign (syncCallback1, syncCallback2, toJSString, ForeignRetention(..), jsNull, fromArray)
 import GHCJS.Marshal (ToJSRef(..))
 #endif
 
@@ -424,6 +424,10 @@ foreign import javascript unsafe
     js_ReactGetProps :: ReactThis state props -> IO (Export props)
 
 foreign import javascript unsafe
+    "$1['props']['children']"
+    js_ReactGetChildren :: ReactThis state props -> IO (JSArray ())
+
+foreign import javascript unsafe
     "$1._updateAndReleaseState($2)"
     js_ReactUpdateAndReleaseState :: ReactThis state props -> Export state -> IO ()
 
@@ -481,7 +485,11 @@ mkRenderCallback parseState runHandler render = syncCallback2 AlwaysRetain False
     props <- js_ReactGetProps this >>= parseExport
     node <- render state props
 
-    (element, evtCallbacks) <- mkReactElement (runHandler this) node
+    let getPropsChildren = do childRef <- js_ReactGetChildren this
+                              childArr <- fromArray childRef
+                              return $ map ReactElementRef childArr
+
+    (element, evtCallbacks) <- mkReactElement (runHandler this) getPropsChildren node
 
     evtCallbacksRef <- toJSRef evtCallbacks
     js_RenderCbSetResults arg evtCallbacksRef element
