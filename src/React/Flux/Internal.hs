@@ -13,7 +13,7 @@ module React.Flux.Internal(
   , text
   , elemShow
   , el
-  , childrenOfView
+  , childrenPassedToView
   , elementToM
   , mkReactElement
 ) where
@@ -97,7 +97,7 @@ data ReactElement eventHandler
         , ceProps :: props
         , ceChild :: ReactElement eventHandler
         }
-    | ChildrenOfView
+    | ChildrenPassedToView
     | Content String
     | Append (ReactElement eventHandler) (ReactElement eventHandler)
     | EmptyElement
@@ -109,7 +109,7 @@ instance Monoid (ReactElement eventHandler) where
 instance Functor ReactElement where
     fmap f (ForeignElement n p c) = ForeignElement n (map (fmap f) p) (fmap f c)
     fmap f (ViewElement n k p c) = ViewElement n k p (fmap f c)
-    fmap _ ChildrenOfView = ChildrenOfView
+    fmap _ ChildrenPassedToView = ChildrenPassedToView
     fmap f (Append a b) = Append (fmap f a) (fmap f b)
     fmap _ (Content s) = Content s
     fmap _ EmptyElement = EmptyElement
@@ -176,8 +176,8 @@ el name attrs (ReactElementM child) =
 -- | Transclude the children passed into 'React.Flux.view' or 'React.Flux.viewWithKey' into the
 -- current rendering.  Use this where you would use @this.props.children@ in a javascript React
 -- class.
-childrenOfView :: ReactElementM eventHandler ()
-childrenOfView = elementToM () ChildrenOfView
+childrenPassedToView :: ReactElementM eventHandler ()
+childrenPassedToView = elementToM () ChildrenPassedToView
 
 ----------------------------------------------------------------------------------------------------
 -- mkReactElement has two versions
@@ -248,7 +248,7 @@ createElement :: IO [ReactElementRef] -> ReactElement (IO ()) -> WriterT [Callba
 createElement _ EmptyElement = return []
 createElement c (Append x y) = (++) <$> createElement c x <*> createElement c y
 createElement _ (Content s) = return [js_ReactCreateContent s]
-createElement c ChildrenOfView = lift c
+createElement c ChildrenPassedToView = lift c
 createElement c (f@(ForeignElement{})) = do
     obj <- lift $ Foreign.newObj
     mapM_ (addPropOrHandlerToObj obj) $ fProps f

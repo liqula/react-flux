@@ -23,7 +23,7 @@ module React.Flux (
   , view
   , viewWithKey
   , ReactViewKey
-  , childrenOfView
+  , childrenPassedToView
   , foreignClass
   , module React.Flux.DOM
   , module React.Flux.PropertiesAndEvents
