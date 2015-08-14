@@ -4,4 +4,4 @@ import React.Flux
 import TodoViews
 
 main :: IO ()
-main = reactRender "todoApp" todoApp ()
+main = reactRender "todoapp" todoApp ()
