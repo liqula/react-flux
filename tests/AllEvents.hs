@@ -66,6 +66,8 @@ app = defineView "app" $ \() ->
             p_ $ elemShow i
 
 
+--- test stopPropagation, preventDefault
+
 
 logPandS :: LPropsAndState String Int -> IO ()
 logPandS ps = do
