@@ -4,6 +4,7 @@
 -- complicated interaction with third-party javascript rendering code.
 module React.Flux.Internal(
     ReactViewRef(..)
+  , ReactViewKey(..)
   , ReactElementRef(..)
   , HandlerArg(..)
   , PropertyOrHandler(..)
@@ -68,6 +69,16 @@ instance Functor PropertyOrHandler where
     fmap f (EventHandler name h) = EventHandler name (f . h)
     fmap f (CallbackProperty name g) = CallbackProperty name (f . g)
 
+-- | Keys in React can either be strings or integers
+class ReactViewKey key where
+    toKeyRef :: key -> IO (JSRef ())
+
+instance ReactViewKey String where
+    toKeyRef = return . castRef . Foreign.toJSString
+
+instance ReactViewKey Int where
+    toKeyRef i = castRef <$> toJSRef i
+
 -- | A React element is a node or list of nodes in a virtual tree.  Elements are the output of the
 -- rendering functions of classes.  React takes the output of the rendering function (which is a
 -- tree of elements) and then reconciles it with the actual DOM elements in the browser.  The
@@ -79,7 +90,7 @@ data ReactElement eventHandler
         , fProps :: [PropertyOrHandler eventHandler]
         , fChild :: ReactElement eventHandler
         }
-    | forall props key. (Typeable props, ToJSRef key) => ViewElement
+    | forall props key. (Typeable props, ReactViewKey key) => ViewElement
         { ceClass :: ReactViewRef props
         , ceKey :: Maybe key
         -- TODO: ref?  ref support would need to tie into the Class too.
@@ -253,7 +264,7 @@ createElement c (ViewElement { ceClass = rc, ceProps = props, ceKey = mkey, ceCh
     arr <- lift $ Foreign.toArray $ map reactElementRef childNodes
     e <- lift $ case mkey of
         Just key -> do
-            keyRef <- toJSRef key
+            keyRef <- toKeyRef key
             js_ReactCreateKeyedElement rc keyRef propsE arr
         Nothing -> js_ReactCreateClass rc propsE arr
     return [e]

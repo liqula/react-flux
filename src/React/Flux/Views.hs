@@ -506,6 +506,7 @@ parseExport a = do
 --- Element creation for views
 ----------------------------------------------------------------------------------------------------
 
+
 -- | Create an element from a view.  I suggest you make a combinator for each of your views, similar
 -- to the examples above such as @todoItem_@.
 view :: Typeable props
@@ -515,13 +516,13 @@ view :: Typeable props
      -> ReactElementM eventHandler a
 view rc props (ReactElementM child) =
     let (a, childEl) = runWriter child
-     in elementToM a $ ViewElement (reactView rc) (Nothing :: Maybe (JSRef ())) props childEl
+     in elementToM a $ ViewElement (reactView rc) (Nothing :: Maybe Int) props childEl
 
 -- | Create an element from a view, and also pass in a key property for the instance.  Key
 -- properties speed up the <https://facebook.github.io/react/docs/reconciliation.html reconciliation>
 -- of the virtual DOM with the DOM.  The key does not need to be globally unqiue, it only needs to
--- be unique within the siblings of an element.  React allows only strings and numbers as keys.
-viewWithKey :: (Typeable props, ToJSRef key)
+-- be unique within the siblings of an element.
+viewWithKey :: (Typeable props, ReactViewKey key)
             => ReactView props -- ^ the view
             -> key -- ^ A value unique within the siblings of this element
             -> props -- ^ The properties to pass to the view instance

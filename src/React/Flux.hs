@@ -29,6 +29,7 @@ module React.Flux (
   , elemShow
   , view
   , viewWithKey
+  , ReactViewKey
   , childrenOfView
   , foreignClass
   , module React.Flux.DOM
