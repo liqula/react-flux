@@ -332,6 +332,22 @@ lifecycleConfig = LifecycleViewConfig
     , lComponentWillUnmount = Nothing
     }
 
+-- | A lifecycle view is a view which interacts with the browser DOM using React's lifetime
+-- callbacks.  A lifecycle view should be your last resort; React obtains a large performance boost
+-- from working with the virtual DOM instead of the actual DOM.  Additionally, the way GHCJS
+-- callbacks work causes potential problems with the lifecycle callbacks: GHCJS callbacks can block
+-- and if that occurs they either abort with an error or continue asyncronously.  Continuing
+-- asyncronously cannot work because by their nature these lifecycle events are time-dependent, and
+-- by the time a Haskell thread resumes the element could have disappeared.  Therefore, the
+-- lifecycle callbacks will abort with an error if one of them blocks.  But the way GHCJS works, it
+-- is hard to control the possiblity of blocking since a lazily computed value that you just happen
+-- to demand might block on a blackhole.  Therefore, this lifecycle view should only be used for
+-- simple things, such as scrolling to an element when it is mounted.  This isn't a big restriction
+-- in my experience, since most of the time you just use the views and the rare time you need a
+-- lifecycle event, it is to do something simple.
+--
+-- As an alternative for more complicated lifecycle management, you can consider writing the class
+-- in javascript/typescript/etc. and then using 'foreignClass' to call it from Haskell.
 lifecycleView :: (Typeable props, Typeable state)
               => String -> state -> LifecycleViewConfig props state -> ReactView props
 
