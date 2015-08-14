@@ -4,6 +4,7 @@ module TodoViews where
 import Control.Monad (when)
 import Data.List (intercalate)
 import React.Flux
+import React.Flux.Lifecycle
 
 import Debug.Trace (trace)
 import GHCJS.Types (JSRef)

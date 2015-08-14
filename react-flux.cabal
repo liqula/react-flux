@@ -32,6 +32,7 @@ library
   exposed-modules: React.Flux
                    React.Flux.DOM
                    React.Flux.PropertiesAndEvents
+                   React.Flux.Lifecycle
                    React.Flux.Internal
 
   other-modules: React.Flux.Views
