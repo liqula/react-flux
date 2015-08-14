@@ -10,10 +10,10 @@ module React.Flux.Internal(
   , PropertyOrHandler(..)
   , ReactElement(..)
   , ReactElementM(..)
-  , text
-  , elemShow
+  , elemText_
+  , elemShow_
   , el
-  , childrenPassedToView
+  , childrenPassedToView_
   , elementToM
   , mkReactElement
 ) where
@@ -155,14 +155,15 @@ instance (a ~ ()) => IsString (ReactElementM eventHandler a) where
     fromString s = elementToM () $ Content s
 
 -- | Create a text element from a string.  This is an alias for 'fromString'.  The text content is
--- escaped to be HTML safe.
-text :: String -> ReactElementM eventHandler ()
-text s = elementToM () $ Content s
+-- escaped to be HTML safe.  If you need to insert HTML, instead use the @dangerouslySetInnerHTML@
+-- property.
+elemText_ :: String -> ReactElementM eventHandler ()
+elemText_ s = elementToM () $ Content s
 
 -- | Create an element containing text which is the result of 'show'ing the argument.
 -- Note that the resulting string is then escaped to be HTML safe.
-elemShow :: Show a => a -> ReactElementM eventHandler ()
-elemShow s = elementToM () $ Content $ show s
+elemShow_ :: Show a => a -> ReactElementM eventHandler ()
+elemShow_ s = elementToM () $ Content $ show s
 
 -- | Create a React element.
 el :: String -- ^ The element name (the first argument to @React.createElement@).
@@ -176,8 +177,8 @@ el name attrs (ReactElementM child) =
 -- | Transclude the children passed into 'React.Flux.view' or 'React.Flux.viewWithKey' into the
 -- current rendering.  Use this where you would use @this.props.children@ in a javascript React
 -- class.
-childrenPassedToView :: ReactElementM eventHandler ()
-childrenPassedToView = elementToM () ChildrenPassedToView
+childrenPassedToView_ :: ReactElementM eventHandler ()
+childrenPassedToView_ = elementToM () ChildrenPassedToView
 
 ----------------------------------------------------------------------------------------------------
 -- mkReactElement has two versions

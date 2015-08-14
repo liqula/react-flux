@@ -68,7 +68,7 @@ todoItem = defineView "todo item" $ \(todoIdx, todo) ->
                    ]
 
             label_ [ onDoubleClick $ \_ _ -> [todoA $ TodoEdit todoIdx] ] $
-                text $ todoText todo
+                elemText_ $ todoText todo
 
             button_ [ "className" $= "destroy"
                     , onClick $ \_ _ -> [todoA $ TodoDelete todoIdx]
@@ -96,14 +96,14 @@ todoFooter = defineView "footer" $ \(TodoState todos) ->
      in footer_ [ "id" $= "footer"] $ do
 
             span_ [ "id" $= "todo-count" ] $ do
-                strong_ $ elemShow itemsLeft
-                text $ if itemsLeft == 1 then " item left" else " items left"
+                strong_ $ elemShow_ itemsLeft
+                elemText_ $ if itemsLeft == 1 then " item left" else " items left"
 
             when (completed > 0) $ do
                 button_ [ "id" $= "clear-completed"
                         , onClick $ \_ _ -> [todoA ClearCompletedTodos]
                         ] $
-                    text $ "Clear completed (" ++ show completed ++ ")"
+                    elemText_ $ "Clear completed (" ++ show completed ++ ")"
 
 -- | A render combinator for the footer
 todoFooter_ :: TodoState -> ReactElementM eventHandler ()

@@ -18,12 +18,12 @@ module React.Flux (
   -- * Elements
   , ReactElement
   , ReactElementM(..)
-  , text
-  , elemShow
+  , elemText_
+  , elemShow_
   , view
   , viewWithKey
   , ReactViewKey
-  , childrenPassedToView
+  , childrenPassedToView_
   , foreignClass
   , module React.Flux.DOM
   , module React.Flux.PropertiesAndEvents
