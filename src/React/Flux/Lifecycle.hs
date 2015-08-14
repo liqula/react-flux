@@ -1,21 +1,32 @@
--- | React has lifecycle callbacks that allows the class to interact with the browser DOM.  React
--- obtains a large performance boost from working with the virtual DOM instead of the browser DOM,
--- so the use of these lifecycle callbacks should be minimized or not used at all (in fact, the
--- example TODO app does not use them at all).  Additionally, the way GHCJS callbacks work causes
--- potential problems with the lifecycle callbacks: GHCJS callbacks can block and if that occurs
--- they either abort with an error or continue asyncronously.  Continuing asyncronously cannot work
--- because by their nature these lifecycle events are time-dependent, and by the time a Haskell
--- thread resumes the element could have disappeared.  Therefore, the lifecycle callbacks will abort
--- with an error if one of them blocks.  But because of the way GHCJS works, it is hard to control
--- the possiblity of blocking since a lazily computed value that you just happen to demand might
--- block on a blackhole.  Therefore, this lifecycle view should only be used for simple things, such
--- as scrolling to an element when it is mounted.  This isn't a big restriction in my experience,
--- since most of the time you just use views and the rare time you need a lifecycle event, it is to
--- do something simple.
+-- | React has <https://facebook.github.io/react/docs/working-with-the-browser.html lifecycle callbacks and refs>
+-- that allows the class to interact with the browser DOM.  React obtains a
+-- large performance boost from working with the virtual DOM instead of the browser DOM, so the use
+-- of these lifecycle callbacks should be minimized or not used at all (in fact, the example TODO
+-- app does not use them at all).  Quoting the
+-- <https://facebook.github.io/react/docs/more-about-refs.html React documentation>, "If you have
+-- not programmed several apps with React, your first inclination is usually going to be to try to
+-- use refs to "make things happen" in your app. If this is the case, take a moment and think more
+-- critically about where state should be owned in the component hierarchy. Often, it becomes clear
+-- that the proper place to "own" that state is at a higher level in the hierarchy. Placing the
+-- state there often eliminates any desire to use refs to "make things happen" – instead, the data
+-- flow will usually accomplish your goal."
+--
+-- Additionally, the way GHCJS callbacks work causes potential problems with the lifecycle
+-- callbacks: GHCJS callbacks can block and if that occurs they either abort with an error or
+-- continue asyncronously.  Continuing asyncronously cannot work because by their nature these
+-- lifecycle events are time-dependent, and by the time a Haskell thread resumes the element could
+-- have disappeared.  Therefore, the lifecycle callbacks will abort with an error if one of them
+-- blocks.  But because of the way GHCJS works, it is hard to control the possiblity of blocking
+-- since a lazily computed value that you just happen to demand might block on a blackhole.
+-- Therefore, this lifecycle view should only be used for simple things, such as scrolling to an
+-- element when it is mounted.  This isn't a big restriction in my experience, since most of the
+-- time you just use views and the rare time you need a lifecycle event, it is to do something
+-- simple.
 --
 -- As an alternative to using this module and its resulting callback blocking complications, you can
--- consider writing the class in javascript/typescript/etc. and then using 'foreignClass' to call it
+-- consider writing the class in javascript\/typescript\/etc. and then using 'foreignClass' to call it
 -- from Haskell.
+
 module React.Flux.Lifecycle (
     defineLifecycleView
   , lifecycleConfig
@@ -48,7 +59,8 @@ data LPropsAndState props state = LPropsAndState
   }
 
 -- | Obtain the browser DOM element for either the component as a whole with 'lThis' or for various
--- nodes with a given @ref@ property with 'lRef'.
+-- nodes with a given <https://facebook.github.io/react/docs/more-about-refs.html ref> property with
+-- 'lRef'.
 data LDOM = LDOM
   { lThis :: IO HTMLElement
   , lRef :: String -> IO HTMLElement

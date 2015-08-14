@@ -155,7 +155,8 @@ instance (a ~ ()) => IsString (ReactElementM eventHandler a) where
     fromString s = elementToM () $ Content s
 
 -- | Create a text element from a string.  This is an alias for 'fromString'.  The text content is
--- escaped to be HTML safe.  If you need to insert HTML, instead use the @dangerouslySetInnerHTML@
+-- escaped to be HTML safe.  If you need to insert HTML, instead use the
+-- <https://facebook.github.io/react/tips/dangerously-set-inner-html.html dangerouslySetInnerHTML>
 -- property.
 elemText_ :: String -> ReactElementM eventHandler ()
 elemText_ s = elementToM () $ Content s

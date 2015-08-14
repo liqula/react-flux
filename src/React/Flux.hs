@@ -76,11 +76,13 @@ reactRender _ _ _ = return ()
 
 -- $performance 
 --
--- React obtains high performance from two techniques: the virtual DOM/reconciliation and event
--- handlers registered on the document.
+-- React obtains high <https://facebook.github.io/react/docs/advanced-performance.html performance> from two techniques: the
+-- <https://facebook.github.io/react/docs/reconciliation.html virtual DOM/reconciliation> and 
+-- <https://facebook.github.io/react/docs/events.html event handlers> registered on the document.
 --
 -- To support fast reconciliation, React uses key properties (set by 'viewWithKey') and a
--- @shouldComponentUpdate@ lifetime class method.  The React documentation < ... TODO ... > talks
+-- @shouldComponentUpdate@ lifetime class method.  The React documentation on
+-- <https://facebook.github.io/react/docs/advanced-performance.html performance and immutable-js> talks
 -- about using persistent data structures, which is exactly what Haskell does.  Therefore, we
 -- implement a @shouldComponentUpdate@ method which compares if the javascript object representing
 -- the Haskell values for the @props@, @state@, and/or @storeData@ have changed.  Thus if you do not

@@ -18,33 +18,15 @@ import GHCJS.Marshal (ToJSRef(..))
 
 type Callback a = JSFun a
 
--- | A view is conceptually a function from @props@ to a tree of elements.
--- The function receives a value of type @props@ from its parent in the virtual DOM.
--- Additionally, the rendering function can depend on some internal state or store data.  Based on the @props@ and
--- the internal state, the rendering function produces a virtual tree of elements which React then
--- reconciles with the browser DOM.
+-- | A view is conceptually a rendering function from @props@ to a tree of elements.  The function
+-- receives a value of type @props@ from its parent in the virtual DOM.  Additionally, the rendering
+-- function can depend on some internal state or store data.  Based on the @props@ and the internal
+-- state, the rendering function produces a virtual tree of elements which React then reconciles
+-- with the browser DOM.
 --
--- This module supports 3 kinds of views.
---
--- * Controller View, created by 'defineControllerView'.  A controller view provides the glue code
--- between a store and the view, and as such is a pure function taking as input the store data and
--- the properties and producing a tree of elements.  No internal state is allowed.
---
--- * View.  A view is pure function from props to a tree of elements which does not maintain any
--- internal state.  It can eiter be modeled by
--- just a Haskell function without a 'ReactView', or as a 'ReactView' created by 'defineView'.  Using
--- the machinery of a 'ReactView' is helpful because it allows React to more easily reconcile the
--- virtual DOM with the DOM and leads to faster rendering (as long as you use 'viewWithKey'
--- when creating an instance of the view).
---
--- * Stateful View, created by 'defineStatefulView'.  A stateful view keeps track of
--- some internal state.  It
--- consists of a pure function taking as input the properties and current state and producing a tree
--- of elements.  Event handlers registered on elements can transform the state and produce actions,
--- but cannot perform any other @IO@.
---
--- All of the views provided by this module are pure, in the sense that the rendering function and
--- event handlers cannot perform any IO.  All IO occurs inside the 'transform' function of a store.
+-- This module supports 3 kinds of views.  All of the views provided by this module are pure, in the
+-- sense that the rendering function and event handlers cannot perform any IO.  All IO occurs inside
+-- the 'transform' function of a store.
 newtype ReactView props = ReactView { reactView :: ReactViewRef props }
 
 ---------------------------------------------------------------------------------------------------
@@ -113,13 +95,12 @@ defineControllerView _ _ _ = ReactView (ReactViewRef ())
 --- Two versions of defineView
 ---------------------------------------------------------------------------------------------------
 
--- | A view is a re-usable component of the page which does not track any state itself.
--- Each instance of a view accepts properties of type @props@ from its parent and re-renders itself
--- whenever the properties change.
+-- | A view is a re-usable component of the page which accepts properties of type @props@ from its
+-- parent and re-renders itself whenever the properties change.
 --
 -- One option to implement views is to just use a Haskell function taking the @props@ as input and
 -- producing a 'ReactElementM'.  For small views, such a Haskell function is ideal.
--- Using a view provides more than just a Haskell function when used with a key property with
+-- Using a 'ReactView' provides more than just a Haskell function when used with a key property with
 -- 'viewWithKey'.  The key property allows React to more easily reconcile the virtual DOM with the
 -- browser DOM.
 --
@@ -152,7 +133,7 @@ defineControllerView _ _ _ = ReactView (ReactViewRef ())
 -- >                   ]
 -- >
 -- >            label_ [ onDoubleClick $ \_ _ -> [todoA $ TodoEdit todoIdx] ] $
--- >                text $ todoText todo
+-- >                elemText_ $ todoText todo
 -- >
 -- >            button_ [ "className" $= "destroy"
 -- >                    , onClick $ \_ _ -> [todoA $ TodoDelete todoIdx]
@@ -222,17 +203,20 @@ type StatefulViewEventHandler state = state -> ([SomeStoreAction], Maybe state)
 -- >
 -- >todoTextInput :: ReactView TextInputArgs
 -- >todoTextInput = defineStatefulView "todo text input" "" $ \curText args ->
--- >    input_ [ "className" @= tiaClass args
--- >           , "placeholder" @= tiaPlaceholder args
--- >           , "value" @= curText
--- >           , "autoFocus" @= True
--- >           , onBlur $ \_ _ curState -> ([tiaOnSave args curState | not $ null curState], Just "")
--- >           , onChange $ \evt _ -> ([], Just $ target evt "value")
--- >           , onKeyDown $ \_ evt curState ->
--- >                if keyCode evt == 13 && not (null curState) -- 13 is enter
--- >                    then ([tiaOnSave args curState], Just "")
--- >                    else ([], Nothing)
--- >           ]
+-- >    input_ $
+-- >        maybe [] (\i -> ["id" @= i]) (tiaId args)
+-- >        ++
+-- >        [ "className" @= tiaClass args
+-- >        , "placeholder" @= tiaPlaceholder args
+-- >        , "value" @= curText
+-- >        , "autoFocus" @= True
+-- >        , onChange $ \evt _ -> ([], Just $ target evt "value")
+-- >        , onBlur $ \_ _ curState -> ([tiaOnSave args curState | not $ null curState], Just "")
+-- >        , onKeyDown $ \_ evt curState ->
+-- >             if keyCode evt == 13 && not (null curState) -- 13 is enter
+-- >                 then ([tiaOnSave args curState], Just "")
+-- >                 else ([], Nothing)
+-- >        ]
 -- >
 -- >todoTextInput_ :: TextInputArgs -> ReactElementM eventHandler ()
 -- >todoTextInput_ args = view todoTextInput args mempty

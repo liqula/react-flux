@@ -28,7 +28,7 @@ todoTextInput = defineStatefulView "todo text input" "" $ \curText args ->
         ++
         [ "className" @= tiaClass args
         , "placeholder" @= tiaPlaceholder args
-        , "value" @= curText
+        , "value" @= curText -- using value here creates a controlled component: https://facebook.github.io/react/docs/forms.html
         , "autoFocus" @= True
 
         -- Update the current state with the current text in the textbox, sending no actions

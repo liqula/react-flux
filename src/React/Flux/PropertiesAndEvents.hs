@@ -95,7 +95,9 @@ n @= a = Property (n, A.toJSON a)
 ($=) :: T.Text -> T.Text -> PropertyOrHandler handler
 n $= a = Property (n, A.toJSON a)
 
--- | Create a callback property.
+-- | Create a callback property.  This is primarily intended for foreign React classes which expect
+-- callbacks to be passed to them as properties.  For events on DOM elements, you should instead use
+-- the handlers below.
 callback :: String -> (A.Value -> handler) -> PropertyOrHandler handler
 callback = CallbackProperty
 
