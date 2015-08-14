@@ -115,7 +115,7 @@ logDOM dom = do
     lRef dom "refProps" >>= js_logElem
 
 testLifecycle :: ReactView String
-testLifecycle = lifecycleView "testlifecycle" (12 :: Int) lifecycleConfig
+testLifecycle = defineLifecycleView "testlifecycle" (12 :: Int) lifecycleConfig
     { lRender = \s p -> do
         span_ "Current state: "
         span_ ["ref" $= "refSt", "id" $= "hello"] (elemShow s)

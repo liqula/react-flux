@@ -17,7 +17,7 @@
 -- consider writing the class in javascript/typescript/etc. and then using 'foreignClass' to call it
 -- from Haskell.
 module React.Flux.Lifecycle (
-    lifecycleView
+    defineLifecycleView
   , lifecycleConfig
   , LifecycleViewConfig(..)
   , LPropsAndState(..)
@@ -41,18 +41,25 @@ import GHCJS.Foreign (syncCallback1, syncCallback2, toJSString, ForeignRetention
 
 type HTMLElement = JSRef ()
 
+-- | Actions to access the current properties and state.
 data LPropsAndState props state = LPropsAndState
   { lGetProps :: IO props
   , lGetState :: IO state
   }
 
+-- | Obtain the browser DOM element for either the component as a whole with 'lThis' or for various
+-- nodes with a given @ref@ property with 'lRef'.
 data LDOM = LDOM
   { lThis :: IO HTMLElement
   , lRef :: String -> IO HTMLElement
   }
 
+-- | Set the state of the class.
 type LSetStateFn state = state -> IO ()
 
+-- | The class rendering function, together with optional callbacks for the various lifecycle
+-- events.  As mentioned above, care must be taken in each callback to write only IO that will not
+-- block.
 data LifecycleViewConfig props state = LifecycleViewConfig
   { lRender :: state -> props -> ReactElementM (StatefulViewEventHandler state) ()
   , lComponentWillMount :: Maybe (LPropsAndState props state -> LSetStateFn state -> IO ())
@@ -63,6 +70,8 @@ data LifecycleViewConfig props state = LifecycleViewConfig
   , lComponentWillUnmount :: Maybe (LPropsAndState props state -> LDOM -> IO ())
   }
 
+-- | A default configuration, which does not specify any lifecycle events.  You should start with
+-- this and override the functions you need.
 lifecycleConfig :: LifecycleViewConfig props state
 lifecycleConfig = LifecycleViewConfig
     { lRender = \_ _ -> div_ mempty
@@ -74,12 +83,19 @@ lifecycleConfig = LifecycleViewConfig
     , lComponentWillUnmount = Nothing
     }
 
-lifecycleView :: (Typeable props, Typeable state)
+-- | Create a lifecycle view from the given configuration.
+--
+-- >myView :: ReactView String
+-- >myVew = defineLifecycleView "my view" (10 :: Int) lifecycleConfig
+-- >            { lRender = \state props -> ...
+-- >            , lComponentWillMount = \propsAndState setStateFn -> ...
+-- >            }
+defineLifecycleView :: (Typeable props, Typeable state)
               => String -> state -> LifecycleViewConfig props state -> ReactView props
 
 #ifdef __GHCJS__
 
-lifecycleView name initialState cfg = unsafePerformIO $ do
+defineLifecycleView name initialState cfg = unsafePerformIO $ do
     initialRef <- export initialState
 
     let render state props = return $ lRender cfg state props
