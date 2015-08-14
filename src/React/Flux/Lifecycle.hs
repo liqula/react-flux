@@ -1,4 +1,4 @@
--- | React have lifecycle callbacks that allows the class to interact with the browser DOM.  React
+-- | React has lifecycle callbacks that allows the class to interact with the browser DOM.  React
 -- obtains a large performance boost from working with the virtual DOM instead of the browser DOM,
 -- so the use of these lifecycle callbacks should be minimized or not used at all (in fact, the
 -- example TODO app does not use them at all).  Additionally, the way GHCJS callbacks work causes
