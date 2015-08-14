@@ -59,6 +59,3 @@ todoStore = mkStore $ TodoState
     [ (0, Todo "Learn react" True False)
     , (1, Todo "Learn react-flux" False False)
     ]
-
-todoA :: TodoAction -> SomeStoreAction
-todoA = SomeStoreAction todoStore

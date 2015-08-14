@@ -7,9 +7,10 @@ module React.Flux.Store (
   , mkStore
   , dispatch
   , dispatchSomeAction
+  , getStoreData
 ) where
 
-import Control.Concurrent.MVar (MVar, newMVar, modifyMVar_)
+import Control.Concurrent.MVar (MVar, newMVar, modifyMVar_, readMVar)
 import Control.DeepSeq
 import Data.Typeable (Typeable)
 import System.IO.Unsafe (unsafePerformIO)
@@ -62,9 +63,6 @@ newtype ReactStoreRef storeData = ReactStoreRef (JSRef ())
 -- >    [ (0, Todo "Learn react" True False)
 -- >    , (1, Todo "Learn react-flux" False False)
 -- >    ]
--- >
--- >todoA :: TodoAction -> SomeStoreAction
--- >todoA = SomeStoreAction todoStore
 data ReactStore storeData = ReactStore {
     -- | A reference to the foreign javascript part of the store.
     storeRef :: ReactStoreRef storeData
@@ -73,9 +71,16 @@ data ReactStore storeData = ReactStore {
     -- current store data.  When applying an action, the MVar is kept empty for the entire operation
     -- of transforming to the new data and sending the new data to all component views.  This
     -- effectively operates as a lock allowing only one thread to modify the store at any one time.
-    -- This lock is safe because only the 'dispatch' function ever accesses this MVar.
+    -- This lock is safe because only the 'dispatch' function ever writes this MVar.
   , storeData :: MVar storeData
 }
+
+-- | Obtain the store data from a store.  Note that the store data is stored in an MVar, so
+-- 'getStoreData' can block since it uses 'readMVar'.  The 'MVar' is empty exactly when the store is
+-- being transformed, so there is a possiblity of blocking if two stores try and access each other's
+-- data during transformation.
+getStoreData :: ReactStore storeData -> IO storeData
+getStoreData (ReactStore _ mvar) = readMVar mvar
 
 -- | The data in a store must be an instance of this typeclass.
 class Typeable storeData => StoreData storeData where
@@ -97,8 +102,8 @@ class Typeable storeData => StoreData storeData where
     transform :: StoreAction storeData -> storeData -> IO storeData
 
 -- | An existential type for some store action.  It is used for event handlers in views, so it is
--- helpful to create utility functions creating 'SomeStoreAction' for your stores, similar to
--- @todoA@ above.  The 'NFData' instance is important for performance, for details see below.
+-- helpful to create dispatcher functions creating lists of 'SomeStoreAction'.  The 'NFData'
+-- instance is important for performance, for details see below.
 data SomeStoreAction = forall storeData. (StoreData storeData, NFData (StoreAction storeData))
     => SomeStoreAction (ReactStore storeData) (StoreAction storeData)
 

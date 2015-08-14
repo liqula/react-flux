@@ -1,11 +1,53 @@
+-- | A binding to <https://facebook.github.io/react/index.html React> based on the
+-- <https://facebook.github.io/flux/docs/overview.html Flux> design.
+-- React's reusable and composable components, its declarative rendering, and the Flux one-way flow
+-- of data fit nicely with GHCJS and Haskell, allowing you to build large applications with data
+-- that changes over time with ease.
+--
+-- __Prerequisites__: This module assumes you are familiar with the basics of React and Flux.  From the
+-- <https://facebook.github.io/react/docs/tutorial.html React documentation>, you should read
+-- at least "Tutorial", "Displaying Data", "Multiple Components", and "Forms".  Note
+-- that instead of JSX we use a Writer monad, but it functions very similarly so the examples in the
+-- React documentation are very similar to how you will write code using this module.  The other
+-- React documentation you can skim, the Haddocks below link to specific sections of the React
+-- documentation when needed.  Finally, you should read the
+-- <https://facebook.github.io/flux/docs/overview.html Flux overview>, in particular the central
+-- idea of one-way flow of data from actions to stores to views which produce actions.
+--
+-- __Organization and Deployment__: The source package contains a
+-- <https://bitbucket.org/wuzzeb/react-flux/src/tip/example TODO application> example.  Briefly, the
+-- design is to have modules containing the stores and view definitions, and inside @main@ call
+-- @reactRender@.  Care has been taken to make sure closure with ADVANCED_OPTIMIZATIONS correctly
+-- minimizes a react-flux application.  No externs are needed, instead all you need to do is provide
+-- provide or protect the @React@ variable.  The TODO example does this as follows:
+--
+-- >(function(global, React) {
+-- >contents of all.js
+-- >})(this, window['React']);
+--
+-- __Testing__:  I use the following approach to test my react-flux application.  First, I use unit
+-- testing to test the dispatcher and store 'transform' functions.  Since the dispatcher and the store transform
+-- are just data manipulation, existing Haskell tools like hspec, QuickCheck, SmallCheck, etc. work
+-- well.  I don't do any unit testing of the views: any complicated logic in event handlers should
+-- be moved into the dispatcher and tested there and the rendering function is difficult to test in
+-- isolation.  Instead, I test the rendering via end-2-end tests using
+-- <https://hackage.haskell.org/package/hspec-webdriver hspec-webdriver>.  This tests the React
+-- frontend against the real backend and hspec-webdriver has many utilities for easily checking that
+-- the DOM is what you expect.  I have found this much easier than trying to unit test each view
+-- individually, and you can still obtain the same coverage for equal effort.
+--
 module React.Flux (
-  -- * Stores and dispatch
+  -- * Dispatcher
+  -- $dispatcher
+
+  -- * Stores
     ReactStore
   , StoreData(..)
   , SomeStoreAction(..)
   , mkStore
   , dispatch
   , dispatchSomeAction
+  , getStoreData
 
   -- * Views
   , ReactView
@@ -118,3 +160,20 @@ reactRender _ _ _ = return ()
 -- required data out of the event object and into an action in order to properly implement 'NFData'.
 -- Of course, the easiest way to implement 'NFData' is to derive it with Generic and DeriveAnyClass,
 -- as @TodoAction@ does above.
+
+-- $dispatcher
+-- A dispatcher is the central hub that manages all data flow in a Flux application.  It has no
+-- logic of its own and all it does is distribute actions to stores.  There is no special support
+-- for a Dispatcher in this module, since it can be easily implemented directly using Haskell
+-- functions.  The event handlers registered during rendering are expected to produce a list of 'SomeStoreAction'.
+-- The dispatcher therefore consists of Haskell functions which produce these lists of
+-- 'SomeStoreAction'.  Note that this list of actions is used instead of @waitFor@ to sequence
+-- actions to stores: when dispatching, we wait for the 'transform' of each action to complete
+-- before moving to the next action.
+--
+-- In the todo example application there is only a single store, so the dispatcher just
+-- passes along the action to the store.  In a larger application, the dispatcher could have its
+-- own actions and produce specific actions for each store.
+--
+-- >dispatchTodo :: TodoAction -> [SomeStoreAction]
+-- >dispatchTodo a = [SomeStoreAction todoStore a]

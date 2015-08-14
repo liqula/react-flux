@@ -187,6 +187,9 @@ defineView _ _ = ReactView (ReactViewRef ())
 type StatefulViewEventHandler state = state -> ([SomeStoreAction], Maybe state)
 
 -- | A stateful view is a re-usable component of the page which keeps track of internal state.
+-- Try to keep as many views as possible stateless.  The React documentation on
+-- <https://facebook.github.io/react/docs/interactivity-and-dynamic-uis.html inteactivity and dynamic UIs>
+-- has some discussion of what should and should not go into the state.
 --
 -- The rendering function is a pure function of the state and the properties from the parent.  The
 -- view will be re-rendered whenever the state or properties change.  The only way to

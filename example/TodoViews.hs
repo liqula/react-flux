@@ -6,6 +6,7 @@ import Control.Monad (when)
 import Data.List (intercalate)
 import React.Flux
 
+import TodoDispatcher
 import TodoStore
 import TodoComponents
 
@@ -27,7 +28,7 @@ todoHeader = defineView "header" $ \() ->
           { tiaId = Just "new-todo"
           , tiaClass = "new-todo"
           , tiaPlaceholder = "What needs to be done?"
-          , tiaOnSave = todoA . TodoCreate
+          , tiaOnSave = dispatchTodo . TodoCreate
           , tiaValue = Nothing
           }
 
@@ -43,7 +44,7 @@ mainSection_ st = section_ ["id" $= "main"] $ do
     input_ [ "id" $= "toggle-all"
            , "type" $= "checkbox"
            , "checked" $= if all (todoComplete . snd) $ todoList st then "checked" else ""
-           , onChange $ \_ -> [todoA ToggleAllComplete]
+           , onChange $ \_ -> dispatchTodo ToggleAllComplete
            ]
 
     label_ [ "htmlFor" $= "toggle-all"] "Mark all as complete"
@@ -64,14 +65,14 @@ todoItem = defineView "todo item" $ \(todoIdx, todo) ->
             input_ [ "className" $= "toggle"
                    , "type" $= "checkbox"
                    , "checked" @= todoComplete todo
-                   , onChange $ \_ -> [todoA $ TodoSetComplete todoIdx $ not $ todoComplete todo]
+                   , onChange $ \_ -> dispatchTodo $ TodoSetComplete todoIdx $ not $ todoComplete todo
                    ]
 
-            label_ [ onDoubleClick $ \_ _ -> [todoA $ TodoEdit todoIdx] ] $
+            label_ [ onDoubleClick $ \_ _ -> dispatchTodo $ TodoEdit todoIdx] $
                 elemText_ $ todoText todo
 
             button_ [ "className" $= "destroy"
-                    , onClick $ \_ _ -> [todoA $ TodoDelete todoIdx]
+                    , onClick $ \_ _ -> dispatchTodo $ TodoDelete todoIdx
                     ] mempty
 
         when (todoIsEditing todo) $
@@ -79,7 +80,7 @@ todoItem = defineView "todo item" $ \(todoIdx, todo) ->
                 { tiaId = Nothing
                 , tiaClass = "edit"
                 , tiaPlaceholder = ""
-                , tiaOnSave = todoA . UpdateText todoIdx
+                , tiaOnSave = dispatchTodo . UpdateText todoIdx
                 , tiaValue = Just $ todoText todo
                 }
 
@@ -101,7 +102,7 @@ todoFooter = defineView "footer" $ \(TodoState todos) ->
 
             when (completed > 0) $ do
                 button_ [ "id" $= "clear-completed"
-                        , onClick $ \_ _ -> [todoA ClearCompletedTodos]
+                        , onClick $ \_ _ -> dispatchTodo ClearCompletedTodos
                         ] $
                     elemText_ $ "Clear completed (" ++ show completed ++ ")"
 

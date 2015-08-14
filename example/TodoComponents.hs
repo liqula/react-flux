@@ -14,7 +14,7 @@ data TextInputArgs = TextInputArgs {
       tiaId :: Maybe String
     , tiaClass :: String
     , tiaPlaceholder :: String
-    , tiaOnSave :: String -> SomeStoreAction
+    , tiaOnSave :: String -> [SomeStoreAction]
     , tiaValue :: Maybe String
 } deriving (Typeable)
 
@@ -35,10 +35,10 @@ todoTextInput = defineStatefulView "todo text input" "" $ \curText args ->
         , onChange $ \evt _ -> ([], Just $ target evt "value")
 
         -- Produce the save action and reset the current state to the empty string
-        , onBlur $ \_ _ curState -> ([tiaOnSave args curState | not $ null curState], Just "")
+        , onBlur $ \_ _ curState -> (if not (null curState) then tiaOnSave args curState else [], Just "")
         , onKeyDown $ \_ evt curState ->
              if keyCode evt == 13 && not (null curState) -- 13 is enter
-                 then ([tiaOnSave args curState], Just "")
+                 then (tiaOnSave args curState, Just "")
                  else ([], Nothing)
         ]
 
