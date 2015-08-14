@@ -30,18 +30,24 @@ instance StoreData TodoState where
     transform action (TodoState todos) = do
         putStrLn $ "Action: " ++ show action
         putStrLn $ "Initial todos: " ++ show todos
-        newTodos <- return $  case action of
+
+        newTodos <- return $ case action of
             (TodoCreate txt) -> (maximum (map fst todos) + 1, Todo txt False False) : todos
             (TodoDelete i) -> filter ((/=i) . fst) todos
-            (TodoEdit i) -> [ (idx, Todo txt complete (idx == i)) | (idx, Todo txt complete _) <- todos ]
-            (UpdateText newIdx newTxt) -> [ (idx, Todo (if idx == newIdx then newTxt else txt) complete False)
-                                          | (idx, Todo txt complete _) <- todos
-                                          ]
+            (TodoEdit i) -> let f (idx, todo) | idx == i = (idx, todo { todoIsEditing = True })
+                                f p = p
+                             in map f todos
+            (UpdateText newIdx newTxt) ->
+                let f (idx, todo) | idx == newIdx = (idx, todo { todoText = newTxt, todoIsEditing = False })
+                    f p = p
+                 in map f todos
             ToggleAllComplete -> [ (idx, Todo txt True False) | (idx, Todo txt _ _) <- todos ]
-            TodoSetComplete newIdx newComplete -> [ (idx, Todo txt (if idx == newIdx then newComplete else complete) False)
-                                                  | (idx, Todo txt complete _) <- todos
-                                                  ]
+            TodoSetComplete newIdx newComplete ->
+                let f (idx, todo) | idx == newIdx = (idx, todo { todoComplete = newComplete })
+                    f p = p
+                 in map f todos
             ClearCompletedTodos -> filter (not . todoComplete . snd) todos
+
         putStrLn $ "New todos: " ++ show newTodos
         return $ TodoState newTodos
 
