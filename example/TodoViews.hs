@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+-- | The views for the TODO app
 module TodoViews where
 
 import Control.Monad (when)
@@ -8,6 +9,8 @@ import React.Flux
 import TodoStore
 import TodoComponents
 
+-- | The controller view and also the top level of the TODO app.  This controller view registers
+-- with the store and will be re-rendered whenever the store changes.
 todoApp :: ReactView ()
 todoApp = defineControllerView "todo app" todoStore $ \todoState () ->
     div_ $ do
@@ -15,6 +18,7 @@ todoApp = defineControllerView "todo app" todoStore $ \todoState () ->
         mainSection_ todoState
         todoFooter_ todoState
 
+-- | The TODO header as a React view with no properties.
 todoHeader :: ReactView ()
 todoHeader = defineView "header" $ \() ->
     header_ ["id" $= "header"] $ do
@@ -27,9 +31,13 @@ todoHeader = defineView "header" $ \() ->
           , tiaValue = Nothing
           }
 
+-- | A combinator for the header suitable for use inside the 'todoApp' rendering function.
 todoHeader_ :: ReactElementM eventHandler ()
 todoHeader_ = view todoHeader () mempty
 
+-- | A view that does not use a ReactView and is instead just a Haskell function.
+-- Note how we use an underscore to signal that this is directly a combinator that can be used
+-- inside the rendering function.
 mainSection_ :: TodoState -> ReactElementM ViewEventHandler ()
 mainSection_ st = section_ ["id" $= "main"] $ do
     input_ [ "id" $= "toggle-all"
@@ -41,6 +49,11 @@ mainSection_ st = section_ ["id" $= "main"] $ do
     label_ [ "htmlFor" $= "toggle-all"] "Mark all as complete"
     ul_ [ "id" $= "todo-list" ] $ mapM_ todoItem_ $ todoList st
 
+-- | A view for each todo item.  We specifically use a ReactView here to take advantage of the
+-- ability for React to only re-render the todo items that have changed.  Care is taken in the
+-- transform function of the store to not change the Haskell object for the pair (Int, Todo), and
+-- in this case React will not re-render the todo item.  For more details, see the "Performance"
+-- section of the React.Flux documentation.
 todoItem :: ReactView (Int, Todo)
 todoItem = defineView "todo item" $ \(todoIdx, todo) ->
     li_ [ "className" @= (intercalate "," ([ "completed" | todoComplete todo] ++ [ "editing" | todoIsEditing todo ]) :: String)
@@ -70,9 +83,12 @@ todoItem = defineView "todo item" $ \(todoIdx, todo) ->
                 , tiaValue = Just $ todoText todo
                 }
 
+-- | A combinator for a todo item to use inside rendering functions
 todoItem_ :: (Int, Todo) -> ReactElementM eventHandler ()
 todoItem_ todo = viewWithKey todoItem (fst todo) todo mempty
 
+-- | A view for the footer, taking the entire state as the properties.  This could alternatively
+-- been modeled as a controller-view, attaching directly to the store.
 todoFooter :: ReactView TodoState
 todoFooter = defineView "footer" $ \(TodoState todos) ->
     let completed = length (filter (todoComplete . snd) todos)
@@ -89,5 +105,6 @@ todoFooter = defineView "footer" $ \(TodoState todos) ->
                         ] $
                     text $ "Clear completed (" ++ show completed ++ ")"
 
+-- | A render combinator for the footer
 todoFooter_ :: TodoState -> ReactElementM eventHandler ()
 todoFooter_ s = view todoFooter s mempty

@@ -31,6 +31,9 @@ instance StoreData TodoState where
         putStrLn $ "Action: " ++ show action
         putStrLn $ "Initial todos: " ++ show todos
 
+        -- Care is taken here to leave the Haskell object for the pair (Int, Todo) unchanged if the todo
+        -- itself is unchanged.  This allows React to avoid re-rendering the todo when it does not change.
+        -- For more, see the "Performance" section of the React.Flux haddocks.
         newTodos <- return $ case action of
             (TodoCreate txt) -> (maximum (map fst todos) + 1, Todo txt False False) : todos
             (TodoDelete i) -> filter ((/=i) . fst) todos
