@@ -6,7 +6,7 @@
 --
 -- __Prerequisites__: This module assumes you are familiar with the basics of React and Flux.  From the
 -- <https://facebook.github.io/react/docs/tutorial.html React documentation>, you should read
--- at least "Tutorial", "Displaying Data", "Multiple Components", and "Forms".  Note
+-- at least \"Tutorial\", \"Displaying Data\", \"Multiple Components\", and \"Forms\".  Note
 -- that instead of JSX we use a Writer monad, but it functions very similarly so the examples in the
 -- React documentation are very similar to how you will write code using this module.  The other
 -- React documentation you can skim, the Haddocks below link to specific sections of the React
