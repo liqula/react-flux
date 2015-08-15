@@ -2,8 +2,11 @@
 module Main where
 
 import React.Flux
+import React.Flux.Lifecycle
 import Debug.Trace
 import Control.Monad
+
+import GHCJS.Types (JSRef)
 
 -- TODO: 
 -- * stopPropagation, preventDefault
@@ -95,9 +98,9 @@ testLifecycle = defineLifecycleView "testlifecycle" (12 :: Int) lifecycleConfig
     { lRender = \s p -> do
         span_ "Current state: "
         span_ ["ref" $= "refSt", "id" $= "hello"] (elemShow s)
-        span_ ["ref" $= "refProps", "id" $= "world"] $ text $ "Current props: " ++ p
+        span_ ["ref" $= "refProps", "id" $= "world"] $ elemText $ "Current props: " ++ p
         button_ [ onClick $ \_ _ st -> ([], Just $ st + 1) ] "Incr"
-        div_ childrenOfView
+        div_ childrenPassedToView
 
     , lComponentWillMount = Just $ \pAndS setStateFn -> trace "will mount" $ do
         logPandS pAndS
@@ -129,8 +132,6 @@ testLifecycle = defineLifecycleView "testlifecycle" (12 :: Int) lifecycleConfig
 
 testLifecycle_ :: String -> ReactElementM eventHandler ()
 testLifecycle_ s = view testLifecycle s $ span_ "I am a child!!!"
-
-
 
 main :: IO ()
 main = do

@@ -61,12 +61,12 @@ module React.Flux (
   -- * Elements
   , ReactElement
   , ReactElementM(..)
-  , elemText_
-  , elemShow_
+  , elemText
+  , elemShow
   , view
   , viewWithKey
   , ReactViewKey
-  , childrenPassedToView_
+  , childrenPassedToView
   , foreignClass
   , module React.Flux.DOM
   , module React.Flux.PropertiesAndEvents
