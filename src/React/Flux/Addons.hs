@@ -20,10 +20,11 @@ module React.Flux.Addons (
 import Data.Typeable (Typeable)
 
 import React.Flux.Internal
+
+#ifdef __GHCJS__
 import React.Flux.Views
 import React.Flux.PropertiesAndEvents
 
-#ifdef __GHCJS__
 import GHCJS.Types (JSRef)
 #endif
 

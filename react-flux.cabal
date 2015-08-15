@@ -58,6 +58,9 @@ library
                , aeson >= 0.8
                , text >= 1.2
 
+  if impl(ghcjs)
+      build-depends: ghcjs-base
+
 executable todo
    if !flag(example)
         Buildable: False
