@@ -5,6 +5,12 @@ import React.Flux
 import Debug.Trace
 import Control.Monad
 
+-- TODO: 
+-- * stopPropagation, preventDefault
+-- * Addons
+-- * lifecycle with and without specified callbacks
+-- * callback property
+
 logM :: (String -> Bool) -> String
 logM f = "modifier: " ++ show (f "")
 
@@ -66,7 +72,6 @@ app = defineView "app" $ \() ->
             p_ $ elemShow i
 
 
---- test stopPropagation, preventDefault
 
 
 logPandS :: LPropsAndState String Int -> IO ()
