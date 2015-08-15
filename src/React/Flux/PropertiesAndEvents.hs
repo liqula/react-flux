@@ -69,6 +69,7 @@ module React.Flux.PropertiesAndEvents (
   , onWheel
 ) where
 
+import Control.Monad (forM)
 import Control.Concurrent.MVar (newMVar)
 import Control.DeepSeq
 import System.IO.Unsafe (unsafePerformIO)
@@ -79,7 +80,6 @@ import React.Flux.Internal
 import React.Flux.Store
 
 #ifdef __GHCJS__
-import Control.Monad (forM)
 import Data.Maybe (fromMaybe)
 
 import GHCJS.Types (JSRef, nullRef, JSString, JSBool)
@@ -88,6 +88,7 @@ import GHCJS.Marshal (FromJSRef(..))
 #else
 type JSRef a = ()
 type JSString = String
+type JSArray = ()
 class FromJSRef a
 nullRef :: ()
 nullRef = ()
@@ -119,31 +120,9 @@ newtype EventTarget = EventTarget (JSRef ())
 instance Show (EventTarget) where
     show _ = "EventTarget"
 
-#ifdef __GHCJS__
-foreign import javascript unsafe
-    "$1[$2]"
-    js_getProp :: JSRef a -> JSString -> JSRef b
-
--- | Access a property from an object.  Since event objects are immutable, we can use
--- unsafePerformIO without worry.
-(.:) :: FromJSRef b => JSRef a -> JSString -> b
-obj .: key = fromMaybe (error "Unable to decode event target") $ unsafePerformIO $
-    fromJSRef $ js_getProp obj key
-#else
-js_getProp :: a -> String -> c
-js_getProp _ _ = undefined
-
-(.:) :: a -> String -> c
-_ .: _ = undefined
-#endif
-
 -- | Access a property in an event target
 eventTargetProp :: FromJSRef val => EventTarget -> String -> val
-#ifdef __GHCJS__
 eventTargetProp (EventTarget ref) key = ref .: toJSString key
-#else
-eventTargetProp _ _ = undefined
-#endif
 
 -- | Every event in React is a synthetic event, a cross-browser wrapper around the native event.
 data Event = Event
@@ -288,18 +267,6 @@ data KeyboardEvent = KeyboardEvent
 instance Show KeyboardEvent where
     show (KeyboardEvent k1 k2 k3 _ k4 k5 k6 k7 k8 k9 k10 k11) =
         show (k1, k2, k3, k4, k5, k6, k7, k8, k9, k10, k11)
-
-#ifdef __GHCJS__
-foreign import javascript unsafe
-    "$1['getModifierState']($2)"
-    js_GetModifierState :: JSRef () -> JSString -> JSBool
-
-getModifierState :: JSRef () -> String -> Bool
-getModifierState ref = fromJSBool . js_GetModifierState ref . toJSString
-#else
-getModifierState :: JSRef () -> String -> Bool
-getModifierState _ _ = False
-#endif
 
 parseKeyboardEvent :: HandlerArg -> KeyboardEvent
 parseKeyboardEvent (HandlerArg o) = KeyboardEvent
@@ -494,15 +461,6 @@ instance Show TouchEvent where
     show (TouchEvent t1 t2 t3 _ t4 t5 t6 t7)
         = show (t1, t2, t3, t4, t5, t6, t7)
 
-parseTouchList :: JSRef a -> JSString -> [Touch]
-#ifdef __GHCJS__
-parseTouchList obj key = unsafePerformIO $ do
-    let arr = js_getProp obj key
-    len <- lengthArray arr
-    forM [0..len-1] $ \idx -> do
-        jsref <- indexArray idx arr
-        return $ parseTouch jsref
-
 parseTouch :: JSRef a -> Touch
 parseTouch o = Touch
     { touchIdentifier = o .: "identifier"
@@ -515,10 +473,13 @@ parseTouch o = Touch
     , touchPageY = o .: "pageY"
     }
 
-#else
-parseTouchList _ _ = undefined
-#endif
-
+parseTouchList :: JSRef a -> JSString -> [Touch]
+parseTouchList obj key = unsafePerformIO $ do
+    let arr = js_getProp obj key
+    len <- lengthArray arr
+    forM [0..len-1] $ \idx -> do
+        jsref <- indexArray idx arr
+        return $ parseTouch jsref
 parseTouchEvent :: HandlerArg -> TouchEvent
 parseTouchEvent (HandlerArg o) = TouchEvent
     { touchAltKey = o .: "altKey"
@@ -581,3 +542,48 @@ parseWheelEvent (HandlerArg o) = WheelEvent
 
 onWheel :: (Event -> WheelEvent -> handler) -> PropertyOrHandler handler
 onWheel = mkHandler "onWheel" parseWheelEvent
+
+--------------------------------------------------------------------------------
+--- JS Utils
+--------------------------------------------------------------------------------
+
+#ifdef __GHCJS__
+
+foreign import javascript unsafe
+    "$1[$2]"
+    js_getProp :: JSRef a -> JSString -> JSRef b
+
+-- | Access a property from an object.  Since event objects are immutable, we can use
+-- unsafePerformIO without worry.
+(.:) :: FromJSRef b => JSRef a -> JSString -> b
+obj .: key = fromMaybe (error "Unable to decode event target") $ unsafePerformIO $
+    fromJSRef $ js_getProp obj key
+
+foreign import javascript unsafe
+    "$1['getModifierState']($2)"
+    js_GetModifierState :: JSRef () -> JSString -> JSBool
+
+getModifierState :: JSRef () -> String -> Bool
+getModifierState ref = fromJSBool . js_GetModifierState ref . toJSString
+
+#else
+
+js_getProp :: a -> String -> JSRef b
+js_getProp _ _ = ()
+
+(.:) :: JSRef () -> String -> b
+_ .: _ = undefined
+
+toJSString :: String -> JSString
+toJSString = id
+
+getModifierState :: JSRef () -> String -> Bool
+getModifierState _ _ = False
+
+lengthArray :: JSArray -> IO Int
+lengthArray _ = return 0
+
+indexArray :: Int -> JSArray -> IO (JSRef ())
+indexArray _ _ = return ()
+
+#endif

@@ -179,3 +179,4 @@ defineLifecycleView _ _ _ = ReactView $ ReactViewRef ()
 
 #endif
 
+{-# NOINLINE defineLifecycleView #-}

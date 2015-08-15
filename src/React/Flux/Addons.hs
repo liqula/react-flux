@@ -25,11 +25,6 @@ import React.Flux.PropertiesAndEvents
 
 #ifdef __GHCJS__
 import GHCJS.Types (JSRef)
-
-foreign import javascript unsafe
-    "React['addons']['CSSTransitionGroup']"
-    js_CSSTransitionGroup :: JSRef ()
-
 #endif
 
 -- | The properties for the CSS Transition Group.
@@ -61,6 +56,11 @@ cssTransitionGroup p children = foreignClass js_CSSTransitionGroup props childre
                 , "transitionEnter" @= transitionEnter p
                 , "transitionLeave" @= transitionLeave p
                 ]
+
+foreign import javascript unsafe
+    "React['addons']['CSSTransitionGroup']"
+    js_CSSTransitionGroup :: JSRef ()
+
 #else
 cssTransitionGroup _ x = x
 #endif
