@@ -71,8 +71,6 @@ module React.Flux.PropertiesAndEvents (
 
 import Control.Concurrent.MVar (newMVar)
 import Control.DeepSeq
-import Control.Monad (forM)
-import Data.Maybe (fromMaybe)
 import System.IO.Unsafe (unsafePerformIO)
 import qualified Data.Text as T
 import qualified Data.Aeson as A
@@ -81,9 +79,18 @@ import React.Flux.Internal
 import React.Flux.Store
 
 #ifdef __GHCJS__
+import Control.Monad (forM)
+import Data.Maybe (fromMaybe)
+
 import GHCJS.Types (JSRef, nullRef, JSString, JSBool)
 import GHCJS.Foreign (toJSString, lengthArray, indexArray, fromJSBool)
 import GHCJS.Marshal (FromJSRef(..))
+#else
+type JSRef a = ()
+type JSString = String
+class FromJSRef a
+nullRef :: ()
+nullRef = ()
 #endif
 
 -- | Create a property.
@@ -112,6 +119,7 @@ newtype EventTarget = EventTarget (JSRef ())
 instance Show (EventTarget) where
     show _ = "EventTarget"
 
+#ifdef __GHCJS__
 foreign import javascript unsafe
     "$1[$2]"
     js_getProp :: JSRef a -> JSString -> JSRef b
@@ -121,10 +129,21 @@ foreign import javascript unsafe
 (.:) :: FromJSRef b => JSRef a -> JSString -> b
 obj .: key = fromMaybe (error "Unable to decode event target") $ unsafePerformIO $
     fromJSRef $ js_getProp obj key
+#else
+js_getProp :: a -> String -> c
+js_getProp _ _ = undefined
+
+(.:) :: a -> String -> c
+_ .: _ = undefined
+#endif
 
 -- | Access a property in an event target
 eventTargetProp :: FromJSRef val => EventTarget -> String -> val
+#ifdef __GHCJS__
 eventTargetProp (EventTarget ref) key = ref .: toJSString key
+#else
+eventTargetProp _ _ = undefined
+#endif
 
 -- | Every event in React is a synthetic event, a cross-browser wrapper around the native event.
 data Event = Event
@@ -440,9 +459,14 @@ onMouseUp = mkHandler "onMouseUp" parseMouseEvent
 -- Touch
 --------------------------------------------------------------------------------
 
+#ifdef __GHCJS__
 foreign import javascript unsafe
     "React['initializeTouchEvents'](true)"
     initializeTouchEvents :: IO ()
+#else
+initializeTouchEvents :: IO ()
+initializeTouchEvents = return ()
+#endif
 
 data Touch = Touch {
     touchIdentifier :: Int
@@ -454,18 +478,6 @@ data Touch = Touch {
   , touchPageX :: Int
   , touchPageY :: Int
 } deriving (Show)
-
-parseTouch :: JSRef a -> Touch
-parseTouch o = Touch
-    { touchIdentifier = o .: "identifier"
-    , touchTarget = EventTarget $ js_getProp o "target"
-    , touchScreenX = o .: "screenX"
-    , touchScreenY = o .: "screenY"
-    , touchClientX = o .: "clientX"
-    , touchClientY = o .: "clientY"
-    , touchPageX = o .: "pageX"
-    , touchPageY = o .: "pageY"
-    }
 
 data TouchEvent = TouchEvent {
     touchAltKey :: Bool
@@ -483,12 +495,29 @@ instance Show TouchEvent where
         = show (t1, t2, t3, t4, t5, t6, t7)
 
 parseTouchList :: JSRef a -> JSString -> [Touch]
+#ifdef __GHCJS__
 parseTouchList obj key = unsafePerformIO $ do
     let arr = js_getProp obj key
     len <- lengthArray arr
     forM [0..len-1] $ \idx -> do
         jsref <- indexArray idx arr
         return $ parseTouch jsref
+
+parseTouch :: JSRef a -> Touch
+parseTouch o = Touch
+    { touchIdentifier = o .: "identifier"
+    , touchTarget = EventTarget $ js_getProp o "target"
+    , touchScreenX = o .: "screenX"
+    , touchScreenY = o .: "screenY"
+    , touchClientX = o .: "clientX"
+    , touchClientY = o .: "clientY"
+    , touchPageX = o .: "pageX"
+    , touchPageY = o .: "pageY"
+    }
+
+#else
+parseTouchList _ _ = undefined
+#endif
 
 parseTouchEvent :: HandlerArg -> TouchEvent
 parseTouchEvent (HandlerArg o) = TouchEvent

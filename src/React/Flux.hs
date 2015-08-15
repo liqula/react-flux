@@ -28,7 +28,8 @@
 -- __Testing__:  I use the following approach to test my react-flux application.  First, I use unit
 -- testing to test the dispatcher and store 'transform' functions.  Since the dispatcher and the store transform
 -- are just data manipulation, existing Haskell tools like hspec, QuickCheck, SmallCheck, etc. work
--- well.  I don't do any unit testing of the views: any complicated logic in event handlers should
+-- well.  Note that stores and 'dispatch' work in GHC and GHCJS, so this unit testing can be done
+-- either in GHC or GHCJS. I don't do any unit testing of the views: any complicated logic in event handlers should
 -- be moved into the dispatcher and tested there and the rendering function is difficult to test in
 -- isolation.  Instead, I test the rendering via end-2-end tests using
 -- <https://hackage.haskell.org/package/hspec-webdriver hspec-webdriver>.  This tests the React
@@ -85,8 +86,10 @@ import React.Flux.Internal
 import React.Flux.PropertiesAndEvents
 import React.Flux.Store
 
+#ifdef __GHCJS__
 import GHCJS.Types (JSString)
 import GHCJS.Foreign (toJSString)
+#endif
 
 ----------------------------------------------------------------------------------------------------
 -- reactRender has two versions

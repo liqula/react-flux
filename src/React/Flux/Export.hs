@@ -1,14 +1,13 @@
 -- | Replace this with Export from improved-base branch of ghcjs-base once
 -- the improved-base branch becomes the default
-module React.Flux.Export(
-    Export(..)
-  , export
-  , derefExport
-) where
+module React.Flux.Export where
+
+#ifdef __GHCJS__
 
 import Data.Typeable (Typeable)
-import GHCJS.Types
 import Unsafe.Coerce
+
+import GHCJS.Types
 
 newtype Export a = Export (JSRef ())
 
@@ -25,3 +24,5 @@ foreign import javascript unsafe
 
 derefExport :: Typeable a => Export a -> IO (Maybe a)
 derefExport e = (Just . unsafeCoerce) <$> js_deref e
+
+#endif

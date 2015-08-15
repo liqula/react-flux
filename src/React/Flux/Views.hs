@@ -1,22 +1,25 @@
 -- | Internal module containing the view definitions
 module React.Flux.Views where
 
-import Control.DeepSeq
 import Control.Monad.Writer
 import Data.Typeable (Typeable)
-import System.IO.Unsafe (unsafePerformIO)
 
 import React.Flux.Store
 import React.Flux.Internal
-import React.Flux.Export
 
 #ifdef __GHCJS__
+import Control.DeepSeq
+import System.IO.Unsafe (unsafePerformIO)
+import React.Flux.Export
+
 import GHCJS.Types (JSRef, castRef, JSFun, JSString, JSArray)
 import GHCJS.Foreign (syncCallback2, toJSString, ForeignRetention(..), fromArray)
 import GHCJS.Marshal (ToJSRef(..))
+type Callback a = JSFun a
+#else
+type JSRef a = ()
 #endif
 
-type Callback a = JSFun a
 
 -- | A view is conceptually a rendering function from @props@ to a tree of elements.  The function
 -- receives a value of type @props@ from its parent in the virtual DOM.  Additionally, the rendering
@@ -429,6 +432,13 @@ foreignClass :: JSRef cl -- ^ The javascript reference to the class
              -> [PropertyOrHandler eventHandler] -- ^ properties and handlers to pass when creating an instance of this class.
              -> ReactElementM eventHandler a -- ^ The child element or elements
              -> ReactElementM eventHandler a
+
+#if __GHCJS__
+
 foreignClass name attrs (ReactElementM child) =
     let (a, childEl) = runWriter child
      in elementToM a $ ForeignElement (Right $ ReactViewRef $ castRef name) attrs childEl
+
+#else
+foreignClass _ _ x = x
+#endif

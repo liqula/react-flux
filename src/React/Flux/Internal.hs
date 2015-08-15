@@ -32,7 +32,7 @@ import GHCJS.Marshal (toJSRef_aeson, ToJSRef(..), fromJSRef)
 import React.Flux.Export
 #else
 type JSRef a = ()
-type Export a = JSRef a
+type JSFun a = JSRef a
 #endif
 
 type Callback a = JSFun a
@@ -73,11 +73,19 @@ instance Functor PropertyOrHandler where
 class ReactViewKey key where
     toKeyRef :: key -> IO (JSRef ())
 
+#if __GHCJS__
 instance ReactViewKey String where
     toKeyRef = return . castRef . Foreign.toJSString
 
 instance ReactViewKey Int where
     toKeyRef i = castRef <$> toJSRef i
+#else
+instance ReactViewKey String where
+    toKeyRef = const $ return ()
+
+instance ReactViewKey Int where
+    toKeyRef = const $ return ()
+#endif
 
 -- | A React element is a node or list of nodes in a virtual tree.  Elements are the output of the
 -- rendering functions of classes.  React takes the output of the rendering function (which is a
@@ -273,6 +281,6 @@ createElement c (ViewElement { ceClass = rc, ceProps = props, ceKey = mkey, ceCh
 
 #else
 
-mkReactElement _ _ _ = return ((), [])
+mkReactElement _ _ _ = return (ReactElementRef (), [])
 
 #endif

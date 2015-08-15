@@ -36,16 +36,18 @@ module React.Flux.Lifecycle (
   , LSetStateFn
 ) where
 
-import Control.Monad.Writer
 import Data.Typeable (Typeable)
-import System.IO.Unsafe (unsafePerformIO)
 
 import React.Flux.Internal
-import React.Flux.Export
 import React.Flux.Views
 import React.Flux.DOM (div_)
 
 #ifdef __GHCJS__
+import Control.Monad.Writer
+import System.IO.Unsafe (unsafePerformIO)
+
+import React.Flux.Export
+
 import GHCJS.Types (JSRef, castRef)
 import GHCJS.Foreign (syncCallback1, syncCallback2, toJSString, ForeignRetention(..), jsNull)
 #endif
@@ -173,7 +175,7 @@ mkLCallback2 (Just f) c = syncCallback2 AlwaysRetain False $ \thisRef argRef -> 
 
 #else
 
-lifecycleView _ _ _ = ReactView ()
+defineLifecycleView _ _ _ = ReactView $ ReactViewRef ()
 
 #endif
 

@@ -18,10 +18,8 @@ import System.IO.Unsafe (unsafePerformIO)
 #ifdef __GHCJS__
 import GHCJS.Types (JSRef, isNull)
 import React.Flux.Export (Export, export)
---import GHCJS.Foreign.Export (Export, export)
 #else
 type JSRef a = ()
-type Export a = ()
 #endif
 
 -- | This type is used to represent the foreign javascript object part of the store.
@@ -33,7 +31,8 @@ newtype ReactStoreRef storeData = ReactStoreRef (JSRef ())
 --
 -- A store keeps a global reference to a value of type @storeData@, which must be an instance of
 -- 'StoreData'.  When the store receives an action from 'dispatch', it first transforms the data and
--- then notifies all component views to re-render themselves.
+-- then notifies all component views to re-render themselves.  (When compiled with GHC instead of
+-- GHCJS, the store is just a wrapper around an MVar.)
 --
 -- >data Todo = Todo {
 -- >    todoText :: String
@@ -139,7 +138,7 @@ foreign import javascript unsafe
 
 mkStore initial = unsafePerformIO $ do
     storeMVar <- newMVar initial
-    return $ ReactStore () storeMVar
+    return $ ReactStore (ReactStoreRef ()) storeMVar
 
 #endif
 
@@ -150,7 +149,8 @@ mkStore initial = unsafePerformIO $ do
 ----------------------------------------------------------------------------------------------------
 
 -- | Dispatch an action to a store.  This first causes the store data to transform according to the
--- action and then notifies all component views that the store data has changed.
+-- action and then notifies all component views that the store data has changed.  (When compiled
+-- with GHC instead of GHCJS, dispatch just transforms the store data.)
 --
 -- This function uses an MVar to make sure only a single thread is updating the store and
 -- re-rendering the view at a single time.  Thus this function can block.
