@@ -1,5 +1,6 @@
--- | This module contains the definitions for the
--- <https://facebook.github.io/react/docs/events.html React Event System>
+-- | This module contains the definitions for creating properties to pass to elements, as well as
+-- the definitions for the
+-- <https://facebook.github.io/react/docs/events.html React Event System>.
 module React.Flux.PropertiesAndEvents (
     PropertyOrHandler
   , (@=)
@@ -239,7 +240,8 @@ instance NFData FakeEventStoreAction where
 preventDefault :: Event -> SomeStoreAction
 preventDefault = SomeStoreAction fakeEventStore . PreventDefault . evtHandlerArg
 
--- | Stop propagating this event up the DOM tree.
+-- | Stop propagating this event, either down the DOM tree during the capture phase or up the DOM
+-- tree during the bubbling phase.
 stopPropagation :: Event -> SomeStoreAction
 stopPropagation = SomeStoreAction fakeEventStore . StopPropagation . evtHandlerArg
 

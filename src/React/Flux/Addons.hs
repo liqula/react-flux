@@ -8,7 +8,7 @@ module React.Flux.Addons (
   , CSSTransitionProps(..)
   , defaultTransitionProps
 
-  --- * Perf
+  -- * Perf
   , perfStart
   , perfStop
   , perfPrintInclusive
@@ -72,6 +72,7 @@ cssTransitionGroup _ x = x
 
 #ifdef __GHCJS__
 
+-- | See <https://facebook.github.io/react/docs/perf.html> for documentation.
 foreign import javascript unsafe
     "React['addons']['Perf']['start']()"
     perfStart :: IO ()
@@ -97,6 +98,7 @@ foreign import javascript unsafe
     perfPrintDOM :: IO ()
 
 #else
+-- | See <https://facebook.github.io/react/docs/perf.html> for documentation.
 perfStart, perfStop, perfPrintInclusive, perfPrintExclusive, perfPrintWasted, perfPrintDOM :: IO ()
 perfStart = return ()
 perfStop = return ()

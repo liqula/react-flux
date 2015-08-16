@@ -78,8 +78,13 @@ data LifecycleViewConfig props state = LifecycleViewConfig
   { lRender :: state -> props -> ReactElementM (StatefulViewEventHandler state) ()
   , lComponentWillMount :: Maybe (LPropsAndState props state -> LSetStateFn state -> IO ())
   , lComponentDidMount :: Maybe (LPropsAndState props state -> LDOM -> LSetStateFn state -> IO ())
+  -- | Receives the new props as an argument.
   , lComponentWillReceiveProps :: Maybe (LPropsAndState props state -> LDOM -> LSetStateFn state -> props -> IO ())
+  -- | Receives the new props and state as arguments.  The current props and state can be accessed using
+  -- 'LPropsAndState'.
   , lComponentWillUpdate :: Maybe (LPropsAndState props state -> LDOM -> props -> state -> IO ())
+  -- | Receives the old props and state as arguments.  The current props and state can be accessed
+  -- using 'LPropsAndState'
   , lComponentDidUpdate :: Maybe (LPropsAndState props state -> LDOM -> LSetStateFn state -> props -> state -> IO ())
   , lComponentWillUnmount :: Maybe (LPropsAndState props state -> LDOM -> IO ())
   }

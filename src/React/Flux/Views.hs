@@ -21,7 +21,7 @@ type JSRef a = ()
 #endif
 
 
--- | A view is conceptually a rendering function from @props@ to a tree of elements.  The function
+-- | A view is conceptually a rendering function from @props@ and some internal state to a tree of elements.  The function
 -- receives a value of type @props@ from its parent in the virtual DOM.  Additionally, the rendering
 -- function can depend on some internal state or store data.  Based on the @props@ and the internal
 -- state, the rendering function produces a virtual tree of elements which React then reconciles
@@ -41,27 +41,22 @@ newtype ReactView props = ReactView { reactView :: ReactViewRef props }
 type ViewEventHandler = [SomeStoreAction]
 
 -- | A controller view provides the glue between a 'ReactStore' and the DOM.
+-- The controller-view registers with the given store, and whenever the store is transformed the
+-- controller-view re-renders itself.  Each instance of a controller-view also accepts properties of
+-- type @props@ from its parent.  Whenever the parent re-renders itself, the new properties will be
+-- passed down to the controller-view causing it to re-render itself.
 --
--- The controller-view registers with the given store.  Whenever the store is transformed, the
--- controller-view re-renders itself.  It is recommended to have one controller-view for each
+-- Events registered on controller-views are expected to produce lists of 'SomeStoreAction'.  Since
+-- lists of 'SomeStoreAction' are the output of the dispatcher, each event handler should just be a
+-- call to a dispatcher function.  Once the event fires, the actions are executed causing the
+-- store(s) to transform which leads to the controller-view(s) re-rendering.  This one-way flow of
+-- data from actions to store to controller-views is central to the flux design.
+--
+-- It is recommended to have one controller-view for each
 -- significant section of the page.  Controller-views deeper in the page tree can cause complexity
 -- because data is now flowing into the page in multiple possibly conflicting places.  You must
 -- balance the gain of encapsulated components versus the complexity of multiple entry points for
 -- data into the page.  Note that multiple controller views can register with the same store.
---
--- Each instance of a controller-view also accepts properties of type @props@ from its parent.
--- Whenever the parent re-renders itself, the new properties will be passed down to the
--- controller-view causing it to re-render itself.
---
--- Events registered on controller-views just produce actions, which get dispatched to the
--- appropriate store which causes the store to transform itself, which eventually leads to the
--- controller-view re-rendering.  This one-way flow of data from actions to store to
--- controller-views is central to the flux design.
---
--- While the above re-rendering on any store data or property change is conceptually what occurs,
--- React uses a process of <https://facebook.github.io/react/docs/reconciliation.html reconciliation>
--- to speed up re-rendering.  The best way of taking advantage of reconciliation is to
--- use key properties with 'viewWithKey'.
 --
 -- >todoApp :: ReactView ()
 -- >todoApp = defineControllerView "todo app" todoStore $ \todoState () ->
@@ -70,7 +65,7 @@ type ViewEventHandler = [SomeStoreAction]
 -- >        mainSection_ todoState
 -- >        todoFooter_ todoState
 defineControllerView :: (StoreData storeData, Typeable props)
-                 => String -- ^ A name for this view
+                 => String -- ^ A name for this view, used only for debugging/console logging
                  -> ReactStore storeData -- ^ The store this controller view should attach to.
                  -> (storeData -> props -> ReactElementM ViewEventHandler ()) -- ^ The rendering function
                  -> ReactView props
@@ -84,7 +79,7 @@ defineControllerView name (ReactStore store _) buildNode = unsafePerformIO $ do
 
 -- | Transform a controller view handler to a raw handler.
 runViewHandler :: ReactThis state props -> ViewEventHandler -> IO ()
-runViewHandler _ handler = handler `deepseq` mapM_ dispatchSomeAction handler
+runViewHandler _ handler = handler `deepseq` mapM_ executeAction handler
 
 #else
 
@@ -116,7 +111,7 @@ defineControllerView _ _ _ = ReactView (ReactViewRef ())
 -- >    input_ [ "id" $= "toggle-all"
 -- >           , "type" $= "checkbox"
 -- >           , "checked" $= if all (todoComplete . snd) $ todoList st then "checked" else ""
--- >           , onChange $ \_ -> [todoA ToggleAllComplete]
+-- >           , onChange $ \_ -> dispatchTodo ToggleAllComplete
 -- >           ]
 -- >
 -- >    label_ [ "htmlFor" $= "toggle-all"] "Mark all as complete"
@@ -124,7 +119,7 @@ defineControllerView _ _ _ = ReactView (ReactViewRef ())
 -- >
 -- >todoItem :: ReactView (Int, Todo)
 -- >todoItem = defineView "todo item" $ \(todoIdx, todo) ->
--- >    li_ [ "className" @= (intercalate "," ([ "completed" | todoComplete todo] ++ [ "editing" | todoIsEditing todo ]) :: String)
+-- >    li_ [ "className" @= (unwords $ [ "completed" | todoComplete todo] ++ [ "editing" | todoIsEditing todo ])
 -- >        , "key" @= todoIdx
 -- >        ] $ do
 -- >        
@@ -132,30 +127,29 @@ defineControllerView _ _ _ = ReactView (ReactViewRef ())
 -- >            input_ [ "className" $= "toggle"
 -- >                   , "type" $= "checkbox"
 -- >                   , "checked" @= todoComplete todo
--- >                   , onChange $ \_ -> [todoA $ TodoSetComplete todoIdx $ not $ todoComplete todo]
+-- >                   , onChange $ \_ -> dispatchTodo $ TodoSetComplete todoIdx $ not $ todoComplete todo
 -- >                   ]
 -- >
--- >            label_ [ onDoubleClick $ \_ _ -> [todoA $ TodoEdit todoIdx] ] $
--- >                elemText_ $ todoText todo
+-- >            label_ [ onDoubleClick $ \_ _ -> dispatchTodo $ TodoEdit todoIdx] $
+-- >                elemText $ todoText todo
 -- >
 -- >            button_ [ "className" $= "destroy"
--- >                    , onClick $ \_ _ -> [todoA $ TodoDelete todoIdx]
--- >                    ]
--- >                    "Delete"
+-- >                    , onClick $ \_ _ -> dispatchTodo $ TodoDelete todoIdx
+-- >                    ] mempty
 -- >
 -- >        when (todoIsEditing todo) $
 -- >            todoTextInput_ TextInputArgs
 -- >                { tiaId = Nothing
 -- >                , tiaClass = "edit"
 -- >                , tiaPlaceholder = ""
--- >                , tiaOnSave = todoA . UpdateText todoIdx
+-- >                , tiaOnSave = dispatchTodo . UpdateText todoIdx
 -- >                , tiaValue = Just $ todoText todo
 -- >                }
 -- >
 -- >todoItem_ :: (Int, Todo) -> ReactElementM eventHandler ()
 -- >todoItem_ todo = viewWithKey todoItem (fst todo) todo mempty
 defineView :: Typeable props
-       => String -- ^ A name for this view
+       => String -- ^ A name for this view, used only for debugging/console logging
        -> (props -> ReactElementM ViewEventHandler ()) -- ^ The rendering function
        -> ReactView props
 
@@ -203,7 +197,7 @@ type StatefulViewEventHandler state = state -> ([SomeStoreAction], Maybe state)
 -- >      tiaId :: Maybe String
 -- >    , tiaClass :: String
 -- >    , tiaPlaceholder :: String
--- >    , tiaOnSave :: String -> SomeStoreAction
+-- >    , tiaOnSave :: String -> [SomeStoreAction]
 -- >    , tiaValue :: Maybe String
 -- >} deriving (Typeable)
 -- >
@@ -217,17 +211,20 @@ type StatefulViewEventHandler state = state -> ([SomeStoreAction], Maybe state)
 -- >        , "value" @= curText
 -- >        , "autoFocus" @= True
 -- >        , onChange $ \evt _ -> ([], Just $ target evt "value")
--- >        , onBlur $ \_ _ curState -> ([tiaOnSave args curState | not $ null curState], Just "")
+-- >        , onBlur $ \_ _ curState ->
+-- >             if not (null curState)
+-- >                 then (tiaOnSave args curState, Just "")
+-- >                 else ([], Nothing)
 -- >        , onKeyDown $ \_ evt curState ->
 -- >             if keyCode evt == 13 && not (null curState) -- 13 is enter
--- >                 then ([tiaOnSave args curState], Just "")
+-- >                 then (tiaOnSave args curState, Just "")
 -- >                 else ([], Nothing)
 -- >        ]
 -- >
 -- >todoTextInput_ :: TextInputArgs -> ReactElementM eventHandler ()
 -- >todoTextInput_ args = view todoTextInput args mempty
 defineStatefulView :: (Typeable state, Typeable props)
-               => String -- ^ A name for this view
+               => String -- ^ A name for this view, used only for debugging/console logging
                -> state -- ^ The initial state
                -> (state -> props -> ReactElementM (StatefulViewEventHandler state) ()) -- ^ The rendering function
                -> ReactView props
@@ -256,7 +253,7 @@ runStateViewHandler this handler = do
 
     -- nothing above here should block, so the handler callback should still be running syncronous,
     -- so the deepseq of actions should still pick up the proper event object.
-    actions `deepseq` mapM_ dispatchSomeAction actions
+    actions `deepseq` mapM_ executeAction actions
 
 #else
 
@@ -399,35 +396,32 @@ viewWithKey rc key props (ReactElementM child) =
 -- use <https://github.com/JedWatson/react-select react-select>, you could do so as follows:
 --
 -- >foreign import javascript unsafe
--- >    "require('react-select')"
--- >    js_GetReactSelectRef :: IO JSRef ()
+-- >    "window['Select']"
+-- >    js_ReactSelectClass :: JSRef ()
 -- >
--- >reactSelectRef :: JSRef ()
--- >reactSelectRef = unsafePerformIO $ js_GetReactSelectRef
--- >{-# NOINLINE reactSelectRef #-}
--- >
--- >select_ :: [PropertyOrHandler eventHandler] -> ReactElementM eventHandler a
--- >select_ props = foreignClass reactSelectRef props mempty
+-- >reactSelect_ :: [PropertyOrHandler eventHandler] -> ReactElementM eventHandler ()
+-- >reactSelect_ props = foreignClass js_ReactSelectClass props mempty
 -- >
 -- >onSelectChange :: FromJSON a
 -- >               => (a -> handler) -- ^ receives the new value and performs an action.
 -- >               -> PropertyOrHandler handler
--- >onSelectChange f = on "onChange" $ \handlerArg -> f $ parse handlerArg
+-- >onSelectChange f = callback "onChange" (f . parse)
 -- >    where
--- >        parse (HandlerArg _ v) =
+-- >        parse v =
 -- >            case fromJSON v of
 -- >                Error err -> error $ "Unable to parse new value for select onChange: " ++ err
 -- >                Success e -> e
 --
 -- This could then be used as part of a rendering function like so:
 --
--- >div_ $ select_ [ "name" @= "form-field-name"
--- >               , "value" @= "one"
--- >               , "options" @= [ object [ "value" .= "one", "label" .= "One" ]
--- >                              , object [ "value" .= "two", "label" .= "Two" ]
--- >                              ]
--- >               , onSelectChange $ \newValue -> [AnAction newValue]
--- >               ]
+-- >reactSelect_
+-- >    [ "name" $= "form-field-name"
+-- >    , "value" $= "one"
+-- >    , "options" @= [ object [ "value" .= "one", "label" .= "One" ]
+-- >                   , object [ "value" .= "two", "label" .= "Two" ]
+-- >                   ]
+-- >    , onSelectChange dispatchSomething
+-- >    ]
 foreignClass :: JSRef cl -- ^ The javascript reference to the class
              -> [PropertyOrHandler eventHandler] -- ^ properties and handlers to pass when creating an instance of this class.
              -> ReactElementM eventHandler a -- ^ The child element or elements

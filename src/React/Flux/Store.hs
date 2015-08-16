@@ -5,9 +5,9 @@ module React.Flux.Store (
   , StoreData(..)
   , SomeStoreAction(..)
   , mkStore
-  , dispatch
-  , dispatchSomeAction
   , getStoreData
+  , alterStore
+  , executeAction
 ) where
 
 import Control.Concurrent.MVar (MVar, newMVar, modifyMVar_, readMVar)
@@ -27,12 +27,14 @@ newtype ReactStoreRef storeData = ReactStoreRef (JSRef ())
 
 -- | A store contains application state, receives actions from the dispatcher, and notifies
 -- component views to re-render themselves.  You can have multiple stores; it should be the case
--- that all of the state required to render the page is contained in the stores.
+-- that all of the state required to render the page is contained in the stores.  A store keeps a
+-- global reference to a value of type @storeData@, which must be an instance of 'StoreData'.
 --
--- A store keeps a global reference to a value of type @storeData@, which must be an instance of
--- 'StoreData'.  When the store receives an action from 'dispatch', it first transforms the data and
--- then notifies all component views to re-render themselves.  (When compiled with GHC instead of
--- GHCJS, the store is just a wrapper around an MVar.)
+-- Stores also work when compiled with GHC instead of GHCJS.  When compiled with GHC, the store is
+-- just an MVar containing the store data and there are no controller views.  'alterStore' can still
+-- be used, but it just 'transform's the store and does not notify any controller-views since there
+-- are none.  Compiling with GHC instead of GHCJS can be helpful for unit testing, although GHCJS
+-- plus node can also be used for unit testing.
 --
 -- >data Todo = Todo {
 -- >    todoText :: String
@@ -70,13 +72,13 @@ data ReactStore storeData = ReactStore {
     -- current store data.  When applying an action, the MVar is kept empty for the entire operation
     -- of transforming to the new data and sending the new data to all component views.  This
     -- effectively operates as a lock allowing only one thread to modify the store at any one time.
-    -- This lock is safe because only the 'dispatch' function ever writes this MVar.
+    -- This lock is safe because only the 'alterStore' function ever writes this MVar.
   , storeData :: MVar storeData
 }
 
 -- | Obtain the store data from a store.  Note that the store data is stored in an MVar, so
 -- 'getStoreData' can block since it uses 'readMVar'.  The 'MVar' is empty exactly when the store is
--- being transformed, so there is a possiblity of blocking if two stores try and access each other's
+-- being transformed, so there is a possiblity of deadlock if two stores try and access each other's
 -- data during transformation.
 getStoreData :: ReactStore storeData -> IO storeData
 getStoreData (ReactStore _ mvar) = readMVar mvar
@@ -89,20 +91,19 @@ class Typeable storeData => StoreData storeData where
     -- | Transform the store data according to the action.  This is the only place in your app where
     -- @IO@ should occur.  The transform function should complete quickly, since the UI will not be
     -- re-rendered until the transform is complete.  Therefore, if you need to perform some longer
-    -- action, you should fork a thread from inside 'transform'.  The thread can then 'dispatch'
-    -- another action with the result of its computation.  This is very common to communicate with
+    -- action, you should fork a thread from inside 'transform'.  The thread can then call 'alterStore'
+    -- with another action with the result of its computation.  This is very common to communicate with
     -- the backend using AJAX.
     --
     -- Note that if the transform throws an exception, the transform will be aborted and the old
-    -- store data will be kept unchanged.  The exception will then be thrown from 'dispatch'.
+    -- store data will be kept unchanged.  The exception will then be thrown from 'alterStore'.
     --
     -- For the best performance, care should be taken in only modifying the part of the store data
     -- that changed (see below for more information on performance).
     transform :: StoreAction storeData -> storeData -> IO storeData
 
--- | An existential type for some store action.  It is used for event handlers in views, so it is
--- helpful to create dispatcher functions creating lists of 'SomeStoreAction'.  The 'NFData'
--- instance is important for performance, for details see below.
+-- | An existential type for some store action.  It is used as the output of the dispatcher.
+-- The 'NFData' instance is important for performance, for details see below.
 data SomeStoreAction = forall storeData. (StoreData storeData, NFData (StoreAction storeData))
     => SomeStoreAction (ReactStore storeData) (StoreAction storeData)
 
@@ -145,20 +146,20 @@ mkStore initial = unsafePerformIO $ do
 {-# NOINLINE mkStore #-}
 
 ----------------------------------------------------------------------------------------------------
--- dispatch has two versions
+-- alterStore has two versions
 ----------------------------------------------------------------------------------------------------
 
--- | Dispatch an action to a store.  This first causes the store data to transform according to the
--- action and then notifies all component views that the store data has changed.  (When compiled
--- with GHC instead of GHCJS, dispatch just transforms the store data.)
+-- | First, 'transform' the store data according to the given action.  Next, if compiled with GHCJS,
+-- notify all registered controller-views to re-render themselves.  (If compiled with GHC, the store
+-- data is just transformed since there are no controller-views.)
 --
--- This function uses an MVar to make sure only a single thread is updating the store and
--- re-rendering the view at a single time.  Thus this function can block.
-dispatch :: StoreData storeData => ReactStore storeData -> StoreAction storeData -> IO ()
+-- Only a single thread can be transforming the store at any one time, so this function will block
+-- on an 'MVar' waiting for a previous transform to complete if one is in process.
+alterStore :: StoreData storeData => ReactStore storeData -> StoreAction storeData -> IO ()
 
 #ifdef __GHCJS__
 
-dispatch store action = modifyMVar_ (storeData store) $ \oldData -> do
+alterStore store action = modifyMVar_ (storeData store) $ \oldData -> do
     newData <- transform action oldData
 
     -- There is a hack in PropertiesAndEvents that the fake event store for propagation and prevent
@@ -173,10 +174,10 @@ dispatch store action = modifyMVar_ (storeData store) $ \oldData -> do
 
 #else
 
-dispatch store action = modifyMVar_ (storeData store) (transform action)
+alterStore store action = modifyMVar_ (storeData store) (transform action)
 
 #endif
 
--- | Dispatch some store action.
-dispatchSomeAction :: SomeStoreAction -> IO ()
-dispatchSomeAction (SomeStoreAction store action) = dispatch store action
+-- | Call 'alterStore' on the store and action.
+executeAction :: SomeStoreAction -> IO ()
+executeAction (SomeStoreAction store action) = alterStore store action
