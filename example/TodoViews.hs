@@ -3,7 +3,6 @@
 module TodoViews where
 
 import Control.Monad (when)
-import Data.List (intercalate)
 import React.Flux
 
 import TodoDispatcher
@@ -57,7 +56,7 @@ mainSection_ st = section_ ["id" $= "main"] $ do
 -- section of the React.Flux documentation.
 todoItem :: ReactView (Int, Todo)
 todoItem = defineView "todo item" $ \(todoIdx, todo) ->
-    li_ [ "className" @= (intercalate " " ([ "completed" | todoComplete todo] ++ [ "editing" | todoIsEditing todo ]) :: String)
+    li_ [ "className" @= (unwords $ [ "completed" | todoComplete todo] ++ [ "editing" | todoIsEditing todo ])
         , "key" @= todoIdx
         ] $ do
         
