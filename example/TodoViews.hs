@@ -57,7 +57,7 @@ mainSection_ st = section_ ["id" $= "main"] $ do
 -- section of the React.Flux documentation.
 todoItem :: ReactView (Int, Todo)
 todoItem = defineView "todo item" $ \(todoIdx, todo) ->
-    li_ [ "className" @= (intercalate "," ([ "completed" | todoComplete todo] ++ [ "editing" | todoIsEditing todo ]) :: String)
+    li_ [ "className" @= (intercalate " " ([ "completed" | todoComplete todo] ++ [ "editing" | todoIsEditing todo ]) :: String)
         , "key" @= todoIdx
         ] $ do
         
