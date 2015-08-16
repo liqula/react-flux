@@ -12,3 +12,6 @@ executable react-flux-spec
                 , hspec
                 , webdriver
                 , hspec-webdriver
+                , directory
+                , transformers
+                , text
