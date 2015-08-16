@@ -4,18 +4,19 @@ module Main where
 import React.Flux
 import React.Flux.Lifecycle
 import Debug.Trace
-import Control.Monad
 
 import GHCJS.Types (JSRef)
 
 -- TODO: 
--- * stopPropagation, preventDefault
 -- * Addons
--- * lifecycle with and without specified callbacks
 -- * callback property
 
+--------------------------------------------------------------------------------
+--- Events
+--------------------------------------------------------------------------------
+
 logM :: (String -> Bool) -> String
-logM f = "modifier: " ++ show (f "")
+logM f = "alt modifier: " ++ show (f "Alt")
 
 logT :: EventTarget -> String
 logT t = eventTargetProp t "id"
@@ -23,8 +24,8 @@ logT t = eventTargetProp t "id"
 consoleLog :: [String] -> [SomeStoreAction]
 consoleLog s = trace (unlines s) []
 
-app :: ReactView ()
-app = defineView "app" $ \() ->
+eventsView :: ReactView ()
+eventsView = defineView "events" $ \() ->
     div_ $ do
         p_ $ input_ [ "type" $= "text"
                     , "id" $= "keyinput"
@@ -67,15 +68,30 @@ app = defineView "app" $ \() ->
                     ]
            "onTouchStart"
 
-        div_ [ onWheel $ \e w -> trace (show e ++ " ### wheel ### " ++ show w) []
-             , onScroll $ \e s -> trace (show e ++ " ### scroll ### " ++ show s) []
-             ] $ p_ "Hello, World"
+        p_ $ a_ [ "id" $= "some-link"
+                , "href" $= "http://www.haskell.org"
+                , onClick $ \e _ -> trace "Click some-link" [preventDefault e]
+                ]
+                "Testing preventDefault"
 
-        forM_ [0..(200 :: Int)] $ \i ->
-            p_ $ elemShow i
+        p_ $
+            div_ [ "id" $= "outer-div"
+                 , onClick $ \_ _ -> trace "Click on outer div" []
+                 , capturePhase $ onDoubleClick $ \e _ -> trace "Double click outer div" [stopPropagation e]
+                 ] $ do
+                
+                span_ [ "id" $= "inner-span"
+                      , onClick $ \e _ -> trace "Click inner span" [stopPropagation e]
+                      , onDoubleClick $ \_ _ -> trace "Double click inner span" []
+                      ]
+                      "Testing stopPropagation"
 
+eventsView_ :: ReactElementM eventHandler ()
+eventsView_ = view eventsView () mempty
 
-
+--------------------------------------------------------------------------------
+--- Lifecycle
+--------------------------------------------------------------------------------
 
 logPandS :: LPropsAndState String Int -> IO ()
 logPandS ps = do
@@ -95,7 +111,7 @@ logDOM dom = do
 
 testLifecycle :: ReactView String
 testLifecycle = defineLifecycleView "testlifecycle" (12 :: Int) lifecycleConfig
-    { lRender = \s p -> do
+    { lRender = \s p -> p_ $ do
         span_ "Current state: "
         span_ ["ref" $= "refSt", "id" $= "hello"] (elemShow s)
         span_ ["ref" $= "refProps", "id" $= "world"] $ elemText $ "Current props: " ++ p
@@ -131,7 +147,23 @@ testLifecycle = defineLifecycleView "testlifecycle" (12 :: Int) lifecycleConfig
     }
 
 testLifecycle_ :: String -> ReactElementM eventHandler ()
-testLifecycle_ s = view testLifecycle s $ span_ "I am a child!!!"
+testLifecycle_ s = view testLifecycle s $ span_ ["id" $= "child-passed-to-view"] "I am a child!!!"
+
+--------------------------------------------------------------------------------
+--- Main
+--------------------------------------------------------------------------------
+
+-- | Test a lifecycle view with all lifecycle methods nothing
+app :: ReactView ()
+app = defineLifecycleView "app" "Hello" lifecycleConfig
+    { lRender = \s () -> do
+        eventsView_
+        testLifecycle_ s
+        button_ [ "id" $= "add-app-str"
+                , onClick $ \_ _ s' -> ([], Just $ s' ++ "o")
+                ]
+                "Add o"
+    }
 
 main :: IO ()
 main = do

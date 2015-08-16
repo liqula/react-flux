@@ -13,6 +13,7 @@ module React.Flux.PropertiesAndEvents (
   , target
   , preventDefault
   , stopPropagation
+  , capturePhase
 
   -- * Keyboard
   , KeyboardEvent(..)
@@ -61,12 +62,15 @@ module React.Flux.PropertiesAndEvents (
   , onTouchStart
 
   -- * UI
-  , UIEvent(..)
   , onScroll
 
   -- * Wheel
   , WheelEvent(..)
   , onWheel
+
+  -- * Image
+  , onLoad
+  , onError
 ) where
 
 import Control.Monad (forM)
@@ -238,6 +242,12 @@ preventDefault = SomeStoreAction fakeEventStore . PreventDefault . evtHandlerArg
 -- | Stop propagating this event up the DOM tree.
 stopPropagation :: Event -> SomeStoreAction
 stopPropagation = SomeStoreAction fakeEventStore . StopPropagation . evtHandlerArg
+
+-- | By default, the handlers below are triggered during the bubbling phase.  Use this to switch
+-- them to trigger during the capture phase.
+capturePhase :: PropertyOrHandler handler -> PropertyOrHandler handler
+capturePhase (EventHandler n h) = EventHandler (n ++ "Capture") h
+capturePhase _ = error "You must use React.Flux.PropertiesAndEvents.capturePhase on an event handler"
 
 ---------------------------------------------------------------------------------------------------
 --- Clipboard
@@ -508,18 +518,8 @@ onTouchStart = mkHandler "onTouchStart" parseTouchEvent
 -- UI Events
 --------------------------------------------------------------------------------
 
-data UIEvent = UIEvent {
-    uiDetail :: Int
-  -- abstract view
-} deriving (Show)
-
-parseUIEvent :: HandlerArg -> UIEvent
-parseUIEvent (HandlerArg o) = UIEvent
-    { uiDetail = o .: "detail"
-    }
-
-onScroll :: (Event -> UIEvent -> handler) -> PropertyOrHandler handler
-onScroll = mkHandler "onScroll" parseUIEvent
+onScroll :: (Event -> handler) -> PropertyOrHandler handler
+onScroll f = on "onScroll" (f . parseEvent)
 
 --------------------------------------------------------------------------------
 -- Wheel
@@ -540,8 +540,21 @@ parseWheelEvent (HandlerArg o) = WheelEvent
     , wheelDeltaZ = o .: "deltaZ"
     }
 
-onWheel :: (Event -> WheelEvent -> handler) -> PropertyOrHandler handler
-onWheel = mkHandler "onWheel" parseWheelEvent
+onWheel :: (Event -> MouseEvent -> WheelEvent -> handler) -> PropertyOrHandler handler
+onWheel f = EventHandler
+    { evtHandlerName = "onWheel"
+    , evtHandler = \raw -> f (parseEvent raw) (parseMouseEvent raw) (parseWheelEvent raw)
+    }
+
+--------------------------------------------------------------------------------
+--- Image
+--------------------------------------------------------------------------------
+
+onLoad :: (Event -> handler) -> PropertyOrHandler handler
+onLoad f = on "onLoad" (f . parseEvent)
+
+onError :: (Event -> handler) -> PropertyOrHandler handler
+onError f = on "onError" (f . parseEvent)
 
 --------------------------------------------------------------------------------
 --- JS Utils
