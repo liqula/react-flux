@@ -3,6 +3,12 @@ This directory contains an example TODO application.  The design is copied prett
 the same actions, same views, and produces the same DOM, so the design overview from the flux
 repository covers this example application as well.
 
+When reading the code for the example application, you should start with `TodoStore.hs`.  Next, look
+at `TodoDispatcher.hs` and `TodoViews.hs`.  Finally, you can look at `TodoComponents.hs` and
+`Main.hs`.
+
+# Build
+
 To build, you must pass the `-fexample` flag to cabal.
 
 ~~~
@@ -25,6 +31,8 @@ make
 
 This produces a file `js-build/todo.min.js` which is only 500 kibibytes which when compressed with
 gzip is 124 kibibytes.
+
+# Testing
 
 Finally, you might be interested to look at
 [test/spec/TodoSpec.hs](https://bitbucket.org/wuzzeb/react-flux/src/tip/test/spec/TodoSpec.hs) as it
