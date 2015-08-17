@@ -18,6 +18,7 @@ extra-source-files:
     example/css/bg.png,
     example/Makefile,
     example/*.hs,
+    example/*.html,
     test/client/test-client.html,
     test/spec/react-flux-spec.cabal,
     test/spec/Spec.hs,

@@ -38,7 +38,7 @@
 -- This tests the React frontend against the real backend and hspec-webdriver has many utilities for
 -- easily checking that the DOM is what you expect.  I have found this much easier than trying to
 -- unit test each view individually, and you can still obtain the same coverage for equal effort.
--- The file [https://bitbucket.org/wuzzeb/react-flux/src/tip/test/spec/TodoSpec.hs test/spec/TodoSpec.hs]
+-- The file <https://bitbucket.org/wuzzeb/react-flux/src/tip/test/spec/TodoSpec.hs test\/spec\/TodoSpec.hs>
 -- in the source code contains a hspec-webdriver test for the TODO example application.
 
 module React.Flux (

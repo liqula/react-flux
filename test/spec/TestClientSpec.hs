@@ -153,6 +153,8 @@ spec = session " for the test client" $ using Chrome $ do
                 , "Current props and state: Helloo, 101"
                 ]
 
+    {-
     it "inspects the session" $ runWD $ do
         loadLog >>= \x -> liftIO $ putStrLn $ show x
         inspectSession
+    -}
