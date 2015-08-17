@@ -1,6 +1,6 @@
 name:                react-flux
 version:             0.1.0
-synopsis:            A binding to React based on the Flux application architecture
+synopsis:            A binding to React based on the Flux application architecture for GHCJS
 category:            Web
 homepage:            https://bitbucket.org/wuzzeb/react-flux
 license:             BSD3
@@ -9,7 +9,6 @@ author:              John Lenz <wuzzeb@gmail.com>
 maintainer:          John Lenz <wuzzeb@gmail.com>
 build-type:          Simple
 cabal-version:       >=1.10
--- description:         
 
 source-repository head
     type: mercurial

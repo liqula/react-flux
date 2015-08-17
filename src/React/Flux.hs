@@ -1,8 +1,8 @@
 -- | A binding to <https://facebook.github.io/react/index.html React> based on the
--- <https://facebook.github.io/flux/docs/overview.html Flux> design.  React's
--- composable components and the Flux one-way flow of data fit nicely
--- into Haskell, because the view, rendering, state transitions, and event handlers are all pure
--- functions.
+-- <https://facebook.github.io/flux/docs/overview.html Flux> design.  The flux design pushes state
+-- and complicated logic out of the view, allowing the rendering functions and event handlers to be
+-- pure Haskell functions.  When combined with React's composable components and the one-way flow of
+-- data, React, Flux, and GHCJS work very well together.
 --
 -- __Prerequisites__: This module assumes you are familiar with the basics of React and Flux.  From
 -- the <https://facebook.github.io/react/docs/tutorial.html React documentation>, you should read at
@@ -17,7 +17,7 @@
 -- __Organization__: Briefly, you should create one module to contain the dispatcher, one module for
 -- each store, and modules for the view definitions.  These are then imported into a Main module,
 -- which calls 'reactRender' and initializes any AJAX load calls to the backend. The source package
--- contains an example <https://bitbucket.org/wuzzeb/react-flux/src/tip/example TODO application>.
+-- contains an example <https://bitbucket.org/wuzzeb/react-flux/src/tip/example/ TODO application>.
 --
 -- __Deployment__: Care has been taken to make sure closure with ADVANCED_OPTIMIZATIONS correctly
 -- minimizes a react-flux application.  No externs are needed, instead all you need to do is provide
@@ -38,6 +38,8 @@
 -- This tests the React frontend against the real backend and hspec-webdriver has many utilities for
 -- easily checking that the DOM is what you expect.  I have found this much easier than trying to
 -- unit test each view individually, and you can still obtain the same coverage for equal effort.
+-- The file [https://bitbucket.org/wuzzeb/react-flux/src/tip/test/spec/TodoSpec.hs test/spec/TodoSpec.hs]
+-- in the source code contains a hspec-webdriver test for the TODO example application.
 
 module React.Flux (
   -- * Dispatcher
