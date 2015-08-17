@@ -64,3 +64,15 @@ Finally, start selenium-server-standalone and execute the test suite.  It must b
 ~~~
 .stack-work/dist/x86_64-linux/Cabal-1.22.4.0/build/react-flux-spec/react-flux-spec
 ~~~
+
+# Other Projects
+
+It differes significantly from the other two react bindings,
+[react-haskell](https://github.com/joelburget/react-haskell) and
+[ghcjs-react](https://github.com/fpco/ghcjs-react).  In particular, the major difference is how
+events are handled.  In the Flux design, the state is moved out out of the view and then handlers
+produce actions which transform the state.  Thus there is a one-way flow of data from the store into
+the view.  In contrast, react-haskell and ghcjs-react both have event signals propagaing up the
+react component tree, transforming state at each node.  In particular, react-haskell with its InSig
+and OutSig have the signals propagate up the tree and optionally transform state at each node and
+change the type of the signal.
