@@ -1,15 +1,46 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings, TypeFamilies #-}
 module Main where
 
+import Control.Monad
+import Data.Typeable (Typeable)
+import Data.Maybe
+import Debug.Trace
 import React.Flux
 import React.Flux.Lifecycle
-import Debug.Trace
 
-import GHCJS.Types (JSRef)
+import GHCJS.Types (JSRef, JSString)
+import GHCJS.Foreign (toJSString)
+import GHCJS.Marshal (fromJSRef)
 
 -- TODO: 
 -- * Addons
 -- * callback property
+
+foreign import javascript unsafe
+    "(function(x) { \
+    \    if (!window.test_client_output) window.test_client_output = []; \
+    \    window.test_client_output.push(x); \
+    \})($1)"
+    js_output :: JSString -> IO ()
+
+data OutputStoreData = OutputStoreData
+    deriving (Show, Typeable)
+
+instance StoreData OutputStoreData where
+    type StoreAction OutputStoreData = [String]
+    -- log both to the console and to js_output
+    transform ss OutputStoreData = do
+        mapM_ (js_output . toJSString) ss
+        trace (unlines ss) $ return OutputStoreData
+
+outputStore :: ReactStore OutputStoreData
+outputStore = mkStore OutputStoreData
+
+output :: [String] -> [SomeStoreAction]
+output s = [SomeStoreAction outputStore s]
+
+outputIO :: [String] -> IO ()
+outputIO ss = void $ transform ss OutputStoreData
 
 --------------------------------------------------------------------------------
 --- Events
@@ -21,16 +52,13 @@ logM f = "alt modifier: " ++ show (f "Alt")
 logT :: EventTarget -> String
 logT t = eventTargetProp t "id"
 
-consoleLog :: [String] -> [SomeStoreAction]
-consoleLog s = trace (unlines s) []
-
 eventsView :: ReactView ()
 eventsView = defineView "events" $ \() ->
     div_ $ do
         p_ $ input_ [ "type" $= "text"
                     , "id" $= "keyinput"
                     , "placeholder" $= "onKeyDown"
-                    , onKeyDown $ \e k -> consoleLog
+                    , onKeyDown $ \e k -> output
                         [ "keydown"
                         , show e
                         , show k
@@ -38,15 +66,15 @@ eventsView = defineView "events" $ \() ->
                         , logT (evtTarget e)
                         , logT (evtCurrentTarget e)
                         ]
-                    , onFocus $ \e f -> consoleLog
+                    , onFocus $ \e _ -> output
                         [ "focus"
                         , show e
-                        , logT $ focusRelatedTarget f
+                        --, logT $ focusRelatedTarget f
                         ]
                     ]
 
         p_ $ label_ [ "id" $= "clickinput"
-                    , onClick $ \e m -> consoleLog
+                    , onClick $ \e m -> output
                         [ "click"
                         , show e
                         , show m 
@@ -57,7 +85,7 @@ eventsView = defineView "events" $ \() ->
            "onClick"
 
         p_ $ label_ [ "id" $= "touchinput"
-                    , onTouchStart $ \e t -> consoleLog
+                    , onTouchStart $ \e t -> output
                         [ "touchstart"
                         , show e
                         , show t
@@ -70,19 +98,19 @@ eventsView = defineView "events" $ \() ->
 
         p_ $ a_ [ "id" $= "some-link"
                 , "href" $= "http://www.haskell.org"
-                , onClick $ \e _ -> trace "Click some-link" [preventDefault e]
+                , onClick $ \e _ -> output ["Click some-link"] ++ [preventDefault e]
                 ]
                 "Testing preventDefault"
 
         p_ $
             div_ [ "id" $= "outer-div"
-                 , onClick $ \_ _ -> trace "Click on outer div" []
-                 , capturePhase $ onDoubleClick $ \e _ -> trace "Double click outer div" [stopPropagation e]
+                 , onClick $ \_ _ -> output ["Click on outer div"]
+                 , capturePhase $ onDoubleClick $ \e _ -> output ["Double click outer div"] ++ [stopPropagation e]
                  ] $ do
                 
                 span_ [ "id" $= "inner-span"
-                      , onClick $ \e _ -> trace "Click inner span" [stopPropagation e]
-                      , onDoubleClick $ \_ _ -> trace "Double click inner span" []
+                      , onClick $ \e _ -> output ["Click inner span"] ++ [stopPropagation e]
+                      , onDoubleClick $ \_ _ -> output ["Double click inner span"]
                       ]
                       "Testing stopPropagation"
 
@@ -97,53 +125,62 @@ logPandS :: LPropsAndState String Int -> IO ()
 logPandS ps = do
     p <- lGetProps ps
     st <- lGetState ps
-    trace ("Current props and state: " ++ p ++ ", " ++ show st) $ return ()
+    outputIO ["Current props and state: " ++ p ++ ", " ++ show st]
 
-foreign import javascript
-    "console.log($1)"
-    js_logElem :: JSRef a -> IO ()
+foreign import javascript unsafe
+    "$1.id"
+    js_domGetId :: JSRef a -> IO (JSRef String)
 
 logDOM :: LDOM -> IO ()
 logDOM dom = do
-    lThis dom >>= js_logElem
-    lRef dom "refSt" >>= js_logElem
-    lRef dom "refProps" >>= js_logElem
+    this <- lThis dom >>= js_domGetId >>= fromJSRef
+    x <- lRef dom "refSt" >>= js_domGetId >>= fromJSRef
+    y <- lRef dom "refProps" >>= js_domGetId >>= fromJSRef
+    outputIO [ "this id = " ++ fromMaybe "Nothing" this
+             , "refStr id = " ++ fromMaybe "Nothing" x
+             , "refProps id = " ++ fromMaybe "Nothing" y
+             ]
+
 
 testLifecycle :: ReactView String
 testLifecycle = defineLifecycleView "testlifecycle" (12 :: Int) lifecycleConfig
-    { lRender = \s p -> p_ $ do
+    { lRender = \s p -> p_ ["id" $= "lifecycle-p"] $ do
         span_ "Current state: "
         span_ ["ref" $= "refSt", "id" $= "hello"] (elemShow s)
         span_ ["ref" $= "refProps", "id" $= "world"] $ elemText $ "Current props: " ++ p
-        button_ [ onClick $ \_ _ st -> ([], Just $ st + 1) ] "Incr"
+        button_ [ "id" $= "increment-state"
+                , onClick $ \_ _ st -> ([], Just $ st + 1)
+                ] "Incr"
         div_ childrenPassedToView
 
-    , lComponentWillMount = Just $ \pAndS setStateFn -> trace "will mount" $ do
+    , lComponentWillMount = Just $ \pAndS setStateFn -> do
+        outputIO ["will mount"]
         logPandS pAndS
         setStateFn 100
 
-    , lComponentDidMount = Just $ \pAndS dom _setStateFn -> trace "did mount" $ do
+    , lComponentDidMount = Just $ \pAndS dom _setStateFn -> do
+        outputIO ["did mount"]
         logPandS pAndS
         logDOM dom
 
-    , lComponentWillReceiveProps = Just $ \pAndS dom _setStateFn newProps -> trace "will recv props" $ do
+    , lComponentWillReceiveProps = Just $ \pAndS _dom _setStateFn newProps -> do
+        outputIO ["will recv props"]
         logPandS pAndS
-        logDOM dom
-        trace ("New props: " ++ newProps) $ return ()
+        outputIO ["New props: " ++ newProps]
 
-    , lComponentWillUpdate = Just $ \pAndS dom newProps newState -> trace "will update" $ do
+    , lComponentWillUpdate = Just $ \pAndS _dom newProps newState -> do
+        outputIO ["will update"]
         logPandS pAndS
-        logDOM dom
-        trace ("New props: " ++ newProps) $ trace ("New state: " ++ show newState) $ return ()
+        outputIO ["New props: " ++ newProps, "New state: " ++ show newState]
 
-    , lComponentDidUpdate = Just $ \pAndS dom _setStateFn oldProps oldState -> trace "did update" $ do
+    , lComponentDidUpdate = Just $ \pAndS _dom _setStateFn oldProps oldState -> do
+        outputIO ["did update"]
         logPandS pAndS
-        logDOM dom
-        trace ("Old props: " ++ oldProps) $ trace ("Old state: " ++ show oldState) $ return ()
+        outputIO ["Old props: " ++ oldProps, "Old state: " ++ show oldState]
 
-    , lComponentWillUnmount = Just $ \pAndS dom -> trace "will unmount" $ do
+    , lComponentWillUnmount = Just $ \pAndS _dom -> do
+        outputIO ["will unmount"]
         logPandS pAndS
-        logDOM dom
     }
 
 testLifecycle_ :: String -> ReactElementM eventHandler ()
@@ -158,11 +195,15 @@ app :: ReactView ()
 app = defineLifecycleView "app" "Hello" lifecycleConfig
     { lRender = \s () -> do
         eventsView_
-        testLifecycle_ s
+        when (s /= "") $
+            testLifecycle_ s
         button_ [ "id" $= "add-app-str"
                 , onClick $ \_ _ s' -> ([], Just $ s' ++ "o")
                 ]
                 "Add o"
+        button_ [ "id" $= "clear-app-str"
+                , onClick $ \_ _ _ -> ([], Just "")
+                ] "Clear"
     }
 
 main :: IO ()

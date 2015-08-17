@@ -7,7 +7,7 @@ executable react-flux-spec
    ghc-options: -Wall
    hs-source-dirs: .
    main-is: Spec.hs
-   other-modules: TodoSpec
+   other-modules: TodoSpec, TestClientSpec
    build-depends: base
                 , hspec
                 , webdriver
