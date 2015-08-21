@@ -1,11 +1,11 @@
 {-# LANGUAGE OverloadedStrings #-}
 module TodoSpec (spec) where
 
-import Control.Monad.IO.Class (liftIO)
-import Control.Monad
-import Test.Hspec.WebDriver
-import System.Directory (getCurrentDirectory)
-import qualified Data.Text as T
+import           Control.Monad
+import           Control.Monad.IO.Class (liftIO)
+import qualified Data.Text              as T
+import           System.Directory       (getCurrentDirectory)
+import           Test.Hspec.WebDriver
 
 expectTodos :: [(T.Text, Bool)] -> WD ()
 expectTodos todos = do
@@ -42,7 +42,7 @@ spec :: Spec
 spec = session " for todo example application" $ using Chrome $ do
     it "opens the page" $ runWD $ do
         dir <- liftIO $ getCurrentDirectory
-        openPage $ "file://" ++ dir ++ "/../../example/todo.html"
+        openPage $ "file://" ++ dir ++ "/../../example/todo-dev.html"
         expectTodos [("Learn react", True), ("Learn react-flux", False)]
 
     it "adds a new todo via blur" $ runWD $ do

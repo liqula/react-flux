@@ -1,12 +1,13 @@
-{-# LANGUAGE OverloadedStrings, ScopedTypeVariables #-}
+{-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 module TestClientSpec (spec) where
 
-import Control.Monad.IO.Class (liftIO)
-import Control.Monad
-import Data.List
-import Test.Hspec.WebDriver
-import System.Directory (getCurrentDirectory)
-import qualified Data.Text as T
+import           Control.Monad
+import           Control.Monad.IO.Class (liftIO)
+import           Data.List
+import qualified Data.Text              as T
+import           System.Directory       (getCurrentDirectory)
+import           Test.Hspec.WebDriver
 
 loadLog :: WD [String]
 loadLog = executeJS [] "var old = window.test_client_output; window.test_client_output = []; return old;"
@@ -81,7 +82,7 @@ spec = session " for the test client" $ using Chrome $ do
         [clickName, evt, mouseEvt, modState] <- loadLog
         clickName `shouldBe` "click"
         evt `shouldBeEvent` ("click", True, 3)
-        mouseEvt `shouldBe` "(False,0,0,37,54,False,False,37,54,EventTarget,37,54,False)"
+        mouseEvt `shouldBe` "(False,0,0,33,55,False,False,33,55,EventTarget,33,55,False)"
         modState `shouldBe` "alt modifier: False"
 
     {- touch events can't be tested at the moment, chrome doesn't support them
@@ -133,7 +134,7 @@ spec = session " for the test client" $ using Chrome $ do
                 [ "will recv props"
                 , "Current props and state: Hello, 101"
                 , "New props: Helloo"
-                
+
                 , "will update"
                 , "Current props and state: Hello, 101"
                 , "New props: Helloo"

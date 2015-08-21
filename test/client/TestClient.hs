@@ -7,9 +7,9 @@ import Data.Maybe
 import Debug.Trace
 import React.Flux
 import React.Flux.Lifecycle
+import React.Flux.Internal (toJSString)
 
 import GHCJS.Types (JSRef, JSString)
-import GHCJS.Foreign (toJSString)
 import GHCJS.Marshal (fromJSRef)
 
 -- TODO: 
