@@ -599,19 +599,19 @@ arrayIndex = JSA.index
 js_getProp :: a -> String -> JSRef b
 js_getProp _ _ = ()
 
+js_getArrayProp :: a -> String -> JSRef b
+js_getArrayProp _ _ = ()
+
 (.:) :: JSRef () -> String -> b
 _ .: _ = undefined
-
-toJSString :: String -> JSString
-toJSString = id
 
 getModifierState :: JSRef () -> String -> Bool
 getModifierState _ _ = False
 
-lengthArray :: JSArray -> IO Int
-lengthArray _ = return 0
+arrayLength :: JSArray -> Int
+arrayLength _ = 0
 
-indexArray :: Int -> JSArray -> IO (JSRef ())
-indexArray _ _ = return ()
+arrayIndex :: Int -> JSArray -> JSRef ()
+arrayIndex _ _ = ()
 
 #endif

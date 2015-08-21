@@ -25,9 +25,9 @@ import           Data.Aeson.Types (Pair)
 import           Data.Typeable (Typeable)
 import           Control.Monad.Writer
 import           Control.Monad.Identity (Identity(..))
-import qualified Data.Text as T
 
 #ifdef __GHCJS__
+import qualified Data.Text as T
 import           Unsafe.Coerce
 import qualified Data.JSString as JSS
 import qualified JavaScript.Array as JSA
@@ -37,8 +37,8 @@ import           GHCJS.Types (JSRef, castRef, JSString)
 import           GHCJS.Marshal (toJSRef_aeson, ToJSRef(..), fromJSRef)
 import           React.Flux.Export
 #else
+type Callback a = ()
 type JSRef a = ()
-type JSFun a = JSRef a
 #endif
 
 -- type JSObject a = JSO.Object a
