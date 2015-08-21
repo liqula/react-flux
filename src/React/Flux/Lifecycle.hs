@@ -48,8 +48,11 @@ import System.IO.Unsafe (unsafePerformIO)
 
 import React.Flux.Export
 
+import GHCJS.Foreign (jsNull)
+import GHCJS.Foreign.Callback
+import GHCJS.Marshal (ToJSRef(..))
 import GHCJS.Types (JSRef, castRef)
-import GHCJS.Foreign (syncCallback1, syncCallback2, toJSString, ForeignRetention(..), jsNull)
+
 #endif
 
 type HTMLElement = JSRef ()
@@ -151,32 +154,42 @@ defineLifecycleView name initialState cfg = unsafePerformIO $ do
     willUnmountCb <- mkLCallback1 (lComponentWillUnmount cfg) $ \f this ->
         f (dom this)
 
+    -- willMountCbRef <- toJSRef willMountCb
+    -- didMountCbRef <- toJSRef didMountCb
+    -- willRecvPropsCbRef <- toJSRef willRecvPropsCb
+    -- willUpdateCbRef  <- toJSRef willUpdateCb
+    -- didUpdateCbRef   <- toJSRef didUpdateCb
+    -- willUnmountCbRef <- toJSRef willUnmountCb
     ReactView <$> js_makeLifecycleView (toJSString name) initialRef
-                    renderCb willMountCb didMountCb willRecvPropsCb willUpdateCb didUpdateCb willUnmountCb
+      renderCb willMountCb didMountCb willRecvPropsCb willUpdateCb didUpdateCb willUnmountCb
 
 mkLCallback1 :: (Typeable props, Typeable state)
              => Maybe (LPropsAndState props state -> f)
              -> (f -> ReactThis state props -> IO ())
-             -> IO (Callback (JSRef () -> IO ()))
+             -> IO (JSRef (Callback (JSRef () -> IO ())))
 mkLCallback1 Nothing _ = return jsNull
-mkLCallback1 (Just f) c = syncCallback1 AlwaysRetain False $ \thisRef -> do
+mkLCallback1 (Just f) c = do
+  cb <- syncCallback1 ThrowWouldBlock $ \thisRef -> do
     let this = ReactThis thisRef
         ps = LPropsAndState { lGetProps = js_ReactGetProps this >>= parseExport
                             , lGetState = js_ReactGetState this >>= parseExport
                             }
     c (f ps) this
+  toJSRef cb
 
 mkLCallback2 :: (Typeable props, Typeable state)
              => Maybe (LPropsAndState props state -> f)
              -> (f -> ReactThis state props -> JSRef a -> IO ())
-             -> IO (Callback (JSRef () -> JSRef a -> IO ()))
+             -> IO (JSRef (Callback (JSRef () -> JSRef a -> IO ())))
 mkLCallback2 Nothing _ = return jsNull
-mkLCallback2 (Just f) c = syncCallback2 AlwaysRetain False $ \thisRef argRef -> do
+mkLCallback2 (Just f) c = do
+  cb <- syncCallback2 ThrowWouldBlock $ \thisRef argRef -> do
     let this = ReactThis thisRef
         ps = LPropsAndState { lGetProps = js_ReactGetProps this >>= parseExport
                             , lGetState = js_ReactGetState this >>= parseExport
                             }
     c (f ps) this argRef
+  toJSRef cb
 
 #else
 

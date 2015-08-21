@@ -92,7 +92,6 @@ import React.Flux.Store
 
 #ifdef __GHCJS__
 import GHCJS.Types (JSString)
-import GHCJS.Foreign (toJSString)
 #endif
 
 ----------------------------------------------------------------------------------------------------

@@ -16,26 +16,32 @@ module React.Flux.Internal(
   , childrenPassedToView
   , elementToM
   , mkReactElement
+  , toJSString
 ) where
 
-import Data.String (IsString(..))
-import Data.Aeson
-import Data.Aeson.Types (Pair)
-import Data.Typeable (Typeable)
-import Control.Monad.Writer
-import Control.Monad.Identity (Identity(..))
+import           Data.String (IsString(..))
+import           Data.Aeson
+import           Data.Aeson.Types (Pair)
+import           Data.Typeable (Typeable)
+import           Control.Monad.Writer
+import           Control.Monad.Identity (Identity(..))
+import qualified Data.Text as T
 
 #ifdef __GHCJS__
-import GHCJS.Types (JSRef, castRef, JSString, JSArray, JSObject, JSFun)
-import qualified GHCJS.Foreign as Foreign
-import GHCJS.Marshal (toJSRef_aeson, ToJSRef(..), fromJSRef)
-import React.Flux.Export
+import           Unsafe.Coerce
+import qualified Data.JSString as JSS
+import qualified JavaScript.Array as JSA
+import           GHCJS.Foreign.Callback
+import qualified JavaScript.Object as JSO
+import           GHCJS.Types (JSRef, castRef, JSString)
+import           GHCJS.Marshal (toJSRef_aeson, ToJSRef(..), fromJSRef)
+import           React.Flux.Export
 #else
 type JSRef a = ()
 type JSFun a = JSRef a
 #endif
 
-type Callback a = JSFun a
+-- type JSObject a = JSO.Object a
 
 -- | This type is for the return value of @React.createClass@
 newtype ReactViewRef props = ReactViewRef { reactViewRef :: JSRef () }
@@ -75,7 +81,7 @@ class ReactViewKey key where
 
 #if __GHCJS__
 instance ReactViewKey String where
-    toKeyRef = return . castRef . Foreign.toJSString
+    toKeyRef = return . unsafeCoerce . toJSString
 
 instance ReactViewKey Int where
     toKeyRef i = castRef <$> toJSRef i
@@ -210,8 +216,8 @@ mkReactElement runHandler getPropsChildren eM = runWriterT $ do
         [] -> lift $ js_ReactCreateElementNoChildren "div"
         [x] -> return x
         xs -> lift $ do
-            emptyObj <- Foreign.newObj
-            arr <- Foreign.toArray $ map reactElementRef xs
+            emptyObj <- JSO.create
+            let arr = JSA.fromList $ map reactElementRef xs
             js_ReactCreateElementName "div" emptyObj arr
 
 foreign import javascript unsafe
@@ -220,39 +226,41 @@ foreign import javascript unsafe
 
 foreign import javascript unsafe
     "React['createElement']($1, $2, $3)"
-    js_ReactCreateElementName :: JSString -> JSObject b -> JSArray c -> IO ReactElementRef
+    js_ReactCreateElementName :: JSString -> JSO.Object -> JSA.JSArray -> IO ReactElementRef
 
 foreign import javascript unsafe
     "React['createElement']($1, $2, $3)"
-    js_ReactCreateForeignElement :: ReactViewRef a -> JSObject b -> JSArray c -> IO ReactElementRef
+    js_ReactCreateForeignElement :: ReactViewRef a -> JSO.Object -> JSA.JSArray -> IO ReactElementRef
 
 foreign import javascript unsafe
     "React['createElement']($1, {hs:$2}, $3)"
-    js_ReactCreateClass :: ReactViewRef a -> Export props -> JSArray b -> IO ReactElementRef
+    js_ReactCreateClass :: ReactViewRef a -> Export props -> JSA.JSArray -> IO ReactElementRef
 
 foreign import javascript unsafe
     "React['createElement']($1, {key: $2, hs:$3}, $4)"
-    js_ReactCreateKeyedElement :: ReactViewRef a -> JSRef key -> Export props -> JSArray b -> IO ReactElementRef
+    js_ReactCreateKeyedElement :: ReactViewRef a -> JSRef key -> Export props -> JSA.JSArray -> IO ReactElementRef
 
 js_ReactCreateContent :: String -> ReactElementRef
-js_ReactCreateContent = ReactElementRef . castRef . Foreign.toJSString
+js_ReactCreateContent = ReactElementRef . unsafeCoerce . toJSString
 
-addPropOrHandlerToObj :: JSObject a -> PropertyOrHandler (IO ()) -> WriterT [Callback (JSRef () -> IO ())] IO ()
+addPropOrHandlerToObj :: JSO.Object -> PropertyOrHandler (IO ()) -> WriterT [Callback (JSRef () -> IO ())] IO ()
 addPropOrHandlerToObj obj (Property (n, v)) = lift $ do
     vRef <- toJSRef_aeson v
-    Foreign.setProp (Foreign.toJSString n) vRef obj
+    JSO.setProp (toJSString $ T.unpack n) vRef obj
 addPropOrHandlerToObj obj (EventHandler str handler) = do
     -- this will be released by the render function of the class (jsbits/class.js)
-    cb <- lift $ Foreign.syncCallback1 Foreign.AlwaysRetain True $ \evtRef ->
+    cb <- lift $ syncCallback1 ContinueAsync $ \evtRef ->
         handler $ HandlerArg evtRef
     tell [cb]
-    lift $ Foreign.setProp (Foreign.toJSString str) cb obj
+    cbRef <- lift $ toJSRef cb
+    lift $ JSO.setProp (toJSString str) cbRef obj
 addPropOrHandlerToObj obj (CallbackProperty str handler) = do
-    cb <- lift $ Foreign.syncCallback1 Foreign.AlwaysRetain True $ \argref -> do
+    cb <- lift $ syncCallback1 ContinueAsync $ \argref -> do
         v <- fromJSRef $ castRef argref
         handler $ maybe (error "Unable to decode callback value") id v
     tell [cb]
-    lift $ Foreign.setProp (Foreign.toJSString str) cb obj
+    cbRef <- lift $ toJSRef cb
+    lift $ JSO.setProp (toJSString str) cbRef obj
 
 createElement :: IO [ReactElementRef] -> ReactElement (IO ()) -> WriterT [Callback (JSRef () -> IO ())] IO [ReactElementRef]
 createElement _ EmptyElement = return []
@@ -260,18 +268,18 @@ createElement c (Append x y) = (++) <$> createElement c x <*> createElement c y
 createElement _ (Content s) = return [js_ReactCreateContent s]
 createElement c ChildrenPassedToView = lift c
 createElement c (f@(ForeignElement{})) = do
-    obj <- lift $ Foreign.newObj
+    obj <- lift $ JSO.create
     mapM_ (addPropOrHandlerToObj obj) $ fProps f
     childNodes <- createElement c $ fChild f
-    childArr <- lift $ Foreign.toArray $ map reactElementRef childNodes
+    let childArr = JSA.fromList $ map reactElementRef childNodes
     e <- lift $ case fName f of
-        Left s -> js_ReactCreateElementName (Foreign.toJSString s) obj childArr
+        Left s -> js_ReactCreateElementName (toJSString s) obj childArr
         Right ref -> js_ReactCreateForeignElement ref obj childArr
     return [e]
 createElement c (ViewElement { ceClass = rc, ceProps = props, ceKey = mkey, ceChild = child }) = do
     childNodes <- createElement c child
     propsE <- lift $ export props -- this will be released inside the lifetime events for the class (jsbits/class.js)
-    arr <- lift $ Foreign.toArray $ map reactElementRef childNodes
+    let arr = JSA.fromList $ map reactElementRef childNodes
     e <- lift $ case mkey of
         Just key -> do
             keyRef <- toKeyRef key
@@ -279,7 +287,12 @@ createElement c (ViewElement { ceClass = rc, ceProps = props, ceKey = mkey, ceCh
         Nothing -> js_ReactCreateClass rc propsE arr
     return [e]
 
+toJSString :: String -> JSString
+toJSString = JSS.pack
+
 #else
+toJSString :: String -> String
+toJSString = id
 
 mkReactElement _ _ _ = return (ReactElementRef (), [])
 

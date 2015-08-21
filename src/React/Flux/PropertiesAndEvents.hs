@@ -74,22 +74,25 @@ module React.Flux.PropertiesAndEvents (
   , onError
 ) where
 
-import Control.Monad (forM)
-import Control.Concurrent.MVar (newMVar)
-import Control.DeepSeq
-import System.IO.Unsafe (unsafePerformIO)
+import           Control.Monad (forM)
+import           Control.Concurrent.MVar (newMVar)
+import           Control.DeepSeq
+import           System.IO.Unsafe (unsafePerformIO)
 import qualified Data.Text as T
 import qualified Data.Aeson as A
 
-import React.Flux.Internal
-import React.Flux.Store
+import           React.Flux.Internal
+import           React.Flux.Store
 
 #ifdef __GHCJS__
-import Data.Maybe (fromMaybe)
+import           Data.Maybe (fromMaybe)
 
-import GHCJS.Types (JSRef, nullRef, JSString, JSBool)
-import GHCJS.Foreign (toJSString, lengthArray, indexArray, fromJSBool)
-import GHCJS.Marshal (FromJSRef(..))
+import qualified Data.JSString as JSS
+import           GHCJS.Foreign (fromJSBool)
+import           GHCJS.Marshal (FromJSRef(..))
+import           GHCJS.Types (JSRef, nullRef, JSString)
+import           JavaScript.Array as JSA
+
 #else
 type JSRef a = ()
 type JSString = String
@@ -487,10 +490,10 @@ parseTouch o = Touch
 
 parseTouchList :: JSRef a -> JSString -> [Touch]
 parseTouchList obj key = unsafePerformIO $ do
-    let arr = js_getProp obj key
-    len <- lengthArray arr
+    let arr = js_getArrayProp obj key
+        len = arrayLength arr
     forM [0..len-1] $ \idx -> do
-        jsref <- indexArray idx arr
+        let jsref = arrayIndex idx arr
         return $ parseTouch jsref
 parseTouchEvent :: HandlerArg -> TouchEvent
 parseTouchEvent (HandlerArg o) = TouchEvent
@@ -568,6 +571,10 @@ foreign import javascript unsafe
     "$1[$2]"
     js_getProp :: JSRef a -> JSString -> JSRef b
 
+foreign import javascript unsafe
+    "$1[$2]"
+    js_getArrayProp :: JSRef a -> JSString -> JSA.JSArray
+
 -- | Access a property from an object.  Since event objects are immutable, we can use
 -- unsafePerformIO without worry.
 (.:) :: FromJSRef b => JSRef a -> JSString -> b
@@ -576,10 +583,16 @@ obj .: key = fromMaybe (error "Unable to decode event target") $ unsafePerformIO
 
 foreign import javascript unsafe
     "$1['getModifierState']($2)"
-    js_GetModifierState :: JSRef () -> JSString -> JSBool
+    js_GetModifierState :: JSRef () -> JSString -> JSRef Bool
 
 getModifierState :: JSRef () -> String -> Bool
 getModifierState ref = fromJSBool . js_GetModifierState ref . toJSString
+
+arrayLength :: JSArray -> Int
+arrayLength = JSA.length
+
+arrayIndex :: Int -> JSArray -> JSRef a
+arrayIndex = JSA.index
 
 #else
 

@@ -11,11 +11,11 @@ import React.Flux.Internal
 import Control.DeepSeq
 import System.IO.Unsafe (unsafePerformIO)
 import React.Flux.Export
-
-import GHCJS.Types (JSRef, castRef, JSFun, JSString, JSArray)
-import GHCJS.Foreign (syncCallback2, toJSString, ForeignRetention(..), fromArray)
+import JavaScript.Array
+import GHCJS.Foreign.Callback
+import GHCJS.Types (JSRef, castRef, JSString)
 import GHCJS.Marshal (ToJSRef(..))
-type Callback a = JSFun a
+
 #else
 type JSRef a = ()
 #endif
@@ -285,7 +285,7 @@ foreign import javascript unsafe
 
 foreign import javascript unsafe
     "$1['props']['children']"
-    js_ReactGetChildren :: ReactThis state props -> IO (JSArray ())
+    js_ReactGetChildren :: ReactThis state props -> IO (JSArray)
 
 foreign import javascript unsafe
     "$1._updateAndReleaseState($2)"
@@ -338,7 +338,7 @@ mkRenderCallback :: Typeable props
                  -> (ReactThis state props -> eventHandler -> IO ()) -- ^ execute event args
                  -> (state -> props -> IO (ReactElementM eventHandler ())) -- ^ renderer
                  -> IO (Callback (JSRef () -> JSRef () -> IO ()))
-mkRenderCallback parseState runHandler render = syncCallback2 AlwaysRetain False $ \thisRef argRef -> do
+mkRenderCallback parseState runHandler render = syncCallback2 ContinueAsync $ \thisRef argRef -> do
     let this = ReactThis thisRef
         arg = RenderCbArg argRef
     state <- parseState this
@@ -346,7 +346,7 @@ mkRenderCallback parseState runHandler render = syncCallback2 AlwaysRetain False
     node <- render state props
 
     let getPropsChildren = do childRef <- js_ReactGetChildren this
-                              childArr <- fromArray childRef
+                              let childArr = toList childRef
                               return $ map ReactElementRef childArr
 
     (element, evtCallbacks) <- mkReactElement (runHandler this) getPropsChildren node
