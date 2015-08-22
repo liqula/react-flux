@@ -10,7 +10,9 @@ The [haddocks](https://hackage.haskell.org/package/react-flux) contain the docum
 
 # Build
 
-I am currently using the latest git version of GHCJS with GHC 7.10.2.  To compile and build, I use:
+This package requires GHC 7.10 (I am using GHC 7.10.2) and the improved-base branch of ghcjs.
+I followed the instructions in the [ghcjs wiki](https://github.com/ghcjs/ghcjs/wiki/GHCJS-with-GHC-7.10)
+to install the improved-base branch.  Once ghcjs is installed, I use the following to build react-flux:
 
 ~~~
 echo "compiler: ghcjs" > cabal.config
