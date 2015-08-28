@@ -82,7 +82,7 @@ spec = session " for the test client" $ using Chrome $ do
         [clickName, evt, mouseEvt, modState] <- loadLog
         clickName `shouldBe` "click"
         evt `shouldBeEvent` ("click", True, 3)
-        mouseEvt `shouldBe` "(False,0,0,33,55,False,False,33,55,EventTarget,33,55,False)"
+        mouseEvt `shouldBe` "(False,0,0,37,54,False,False,37,54,EventTarget,37,54,False)"
         modState `shouldBe` "alt modifier: False"
 
     {- touch events can't be tested at the moment, chrome doesn't support them
@@ -110,6 +110,10 @@ spec = session " for the test client" $ using Chrome $ do
         [inner, outer] <- loadLog
         inner `shouldBe` "Click inner span"
         outer `shouldBe` "Double click outer div"
+
+    it "has rendered the raw show view" $ runWD $
+        (findElem (ById "raw-show-view") >>= getText)
+            `shouldReturn` "42"
 
     describe "lifecycle events" $ do
 

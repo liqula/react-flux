@@ -211,7 +211,10 @@ mkReactElement :: (eventHandler -> IO ())
 
 mkReactElement runHandler getPropsChildren eM = runWriterT $ do
     let e = execWriter $ runReactElementM eM
-    refs <- createElement getPropsChildren $ fmap runHandler e
+        e' = case e of
+                Content txt -> ForeignElement (Left "span") [] (Content txt)
+                _ -> e
+    refs <- createElement getPropsChildren $ fmap runHandler e'
     case refs of
         [] -> lift $ js_ReactCreateElementNoChildren "div"
         [x] -> return x

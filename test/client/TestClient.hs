@@ -52,6 +52,9 @@ logM f = "alt modifier: " ++ show (f "Alt")
 logT :: EventTarget -> String
 logT t = eventTargetProp t "id"
 
+rawShowView :: ReactView Int
+rawShowView = defineView "raw show view" elemShow
+
 eventsView :: ReactView ()
 eventsView = defineView "events" $ \() ->
     div_ $ do
@@ -113,6 +116,8 @@ eventsView = defineView "events" $ \() ->
                       , onDoubleClick $ \_ _ -> output ["Double click inner span"]
                       ]
                       "Testing stopPropagation"
+
+        p_ [ "id" $= "raw-show-view"] $ view rawShowView 42 mempty
 
 eventsView_ :: ReactElementM eventHandler ()
 eventsView_ = view eventsView () mempty
