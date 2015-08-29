@@ -49,6 +49,7 @@ library
                    React.Flux.PropertiesAndEvents
                    React.Flux.Lifecycle
                    React.Flux.Internal
+                   React.Flux.Addons.React
 
   other-modules: React.Flux.Views
                  React.Flux.Store
@@ -62,6 +63,7 @@ library
                       FunctionalDependencies
                       GeneralizedNewtypeDeriving
                       MultiParamTypeClasses
+                      DeriveGeneric
                       OverloadedStrings
                       ScopedTypeVariables
                       TypeFamilies
