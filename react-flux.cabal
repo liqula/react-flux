@@ -50,6 +50,7 @@ library
                    React.Flux.Lifecycle
                    React.Flux.Internal
                    React.Flux.Addons.React
+                   React.Flux.Addons.Bootstrap
 
   other-modules: React.Flux.Views
                  React.Flux.Store
