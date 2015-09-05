@@ -10,20 +10,20 @@
 
 -- |
 
-module RouteExample.TabbedApps (TabbedAction(..)
-                                      , TabbedState(..)
-                                      , Tab(..)
-                                      , ParentRouter
-                                      , dispatch
-                                      , newStore
-                                      , view
-                                      , view_) where
+module TabbedApps (TabbedAction(..)
+                  , TabbedState(..)
+                  , Tab(..)
+                  , ParentRouter
+                  , dispatch
+                  , newStore
+                  , view
+                  , view_) where
 
 import           React.Flux          hiding (view)
 import qualified React.Flux          as RF
 
-import           RouteExample.Router
-import           RouteExample.Types
+import           Router
+import           Types
 
 import           Control.Applicative ((<|>))
 import           Control.DeepSeq

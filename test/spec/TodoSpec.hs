@@ -42,7 +42,7 @@ spec :: Spec
 spec = session " for todo example application" $ using Chrome $ do
     it "opens the page" $ runWD $ do
         dir <- liftIO $ getCurrentDirectory
-        openPage $ "file://" ++ dir ++ "/../../example/todo-dev.html"
+        openPage $ "file://" ++ dir ++ "/../../example/todo/todo.html"
         expectTodos [("Learn react", True), ("Learn react-flux", False)]
 
     it "adds a new todo via blur" $ runWD $ do

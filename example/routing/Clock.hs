@@ -8,7 +8,7 @@
 
 -- |
 
-module RouteExample.Clock where
+module Clock where
 
 import           React.Flux         hiding (view)
 import qualified React.Flux         as RF

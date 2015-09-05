@@ -10,7 +10,7 @@ The [haddocks](https://hackage.haskell.org/package/react-flux) contain the docum
 
 # Build
 
-This package requires GHC 7.10 (I am using GHC 7.10.2) and the improved-base branch of ghcjs.
+This package requires GHC 7.10.2 and the improved-base branch of ghcjs.
 I followed the instructions in the [ghcjs wiki](https://github.com/ghcjs/ghcjs/wiki/GHCJS-with-GHC-7.10)
 to install the improved-base branch.  Once ghcjs is installed, I use the following to build react-flux:
 
@@ -20,32 +20,33 @@ cabal configure
 cabal build
 ~~~
 
-# TODO Example Application
+# Example Applications
 
-The source contains an [example TODO
-application](https://bitbucket.org/wuzzeb/react-flux/src/tip/example/).
+The source contains some [example applications](https://bitbucket.org/wuzzeb/react-flux/src/tip/example).
+To try out the TODO example, execute
 
 ~~~
 cabal configure -fexample
 cabal build
-cd example
+cd example/todo
 make
 firefox todo.html
 ~~~
 
-If you don't have closure installed, you can open `example/todo-dev.html`.
+If you don't have closure installed, you can open `todo-dev.html` instead of `todo.html`.  For more details on
+the example applications, see the [README](https://bitbucket.org/wuzzeb/react-flux/src/tip/example/README.md).
 
 # Test Suite
 
-To run the test suite, first you must build both the example application and the test-client.  (The
-test-client is a react-flux application which contains everything not contained in the todo
+To run the test suite, first you must build both the example applications and the test-client.  (The
+test-client is a react-flux application which contains code for everything not contained in the todo
 example.)
 
 ~~~
 echo "compiler: ghcjs" > cabal.config
 cabal configure -fexample -ftest-client
 cabal build
-cd example
+cd example/todo
 make
 ~~~
 
@@ -64,7 +65,7 @@ Finally, start selenium-server-standalone and execute the test suite.  It must b
 `test/spec` directory, otherwise it does not find the correct javascript files.
 
 ~~~
-.stack-work/dist/x86_64-linux/Cabal-1.22.4.0/build/react-flux-spec/react-flux-spec
+stack exec react-flux-spec
 ~~~
 
 # Other Projects

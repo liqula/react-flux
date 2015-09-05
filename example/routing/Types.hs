@@ -7,7 +7,7 @@
 
 -- |
 
-module RouteExample.Types where
+module Types where
 
 import           React.Flux
 

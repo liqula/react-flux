@@ -87,7 +87,7 @@ executable todo
    cpp-options: -DGHCJS_BROWSER
 
    default-language: Haskell2010
-   hs-source-dirs: example
+   hs-source-dirs: example/todo
    main-is: Main.hs
    build-depends: base
                 , react-flux
@@ -115,8 +115,8 @@ executable route-example
 
    default-extensions: CPP
    default-language: Haskell2010
-   hs-source-dirs: example
-   main-is: RouteExample.hs
+   hs-source-dirs: example/routing
+   main-is: Main.hs
    build-depends: base
                 , react-flux
                 , time

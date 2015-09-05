@@ -6,14 +6,14 @@
 #endif
 -- |
 
-module RouteExample.Router (setLocationHash
-                           , getLocationHash
-                           , onLocationHashChange
-                           , actionRoute
-                           , childRoutePath
-                           , initRouter
-                           , storeRouter
-                           ) where
+module Router (setLocationHash
+              , getLocationHash
+              , onLocationHashChange
+              , actionRoute
+              , childRoutePath
+              , initRouter
+              , storeRouter
+              ) where
 
 import           React.Flux
 

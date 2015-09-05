@@ -4,11 +4,11 @@ module Main where
 
 import           React.Flux
 
-import qualified RouteExample.Clock      as Clock
-import qualified RouteExample.EventTest  as EventTest
-import           RouteExample.Router
-import qualified RouteExample.TabbedApps as TabbedApps
-import           RouteExample.Types
+import qualified Clock      as Clock
+import qualified EventTest  as EventTest
+import           Router
+import qualified TabbedApps as TabbedApps
+import           Types
 
 main :: IO ()
 main = do

@@ -17,7 +17,7 @@
 -- __Organization__: Briefly, you should create one module to contain the dispatcher, one module for
 -- each store, and modules for the view definitions.  These are then imported into a Main module,
 -- which calls 'reactRender' and initializes any AJAX load calls to the backend. The source package
--- contains an example <https://bitbucket.org/wuzzeb/react-flux/src/tip/example/ TODO application>.
+-- contains some <https://bitbucket.org/wuzzeb/react-flux/src/tip/example/ example applications>.
 --
 -- __Deployment__: Care has been taken to make sure closure with ADVANCED_OPTIMIZATIONS correctly
 -- minimizes a react-flux application.  No externs are needed, instead all you need to do is provide

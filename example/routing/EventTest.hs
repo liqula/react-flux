@@ -10,7 +10,7 @@
 
 -- |
 
-module RouteExample.EventTest where
+module EventTest where
 
 import           React.Flux                   hiding (view)
 import qualified React.Flux                   as RF
