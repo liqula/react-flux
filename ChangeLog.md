@@ -1,3 +1,7 @@
+# 0.9.3
+
+* Don't require web-routes dependency if not building the routing example
+
 # 0.9.2
 
 * Bindings to react-bootstrap and the react addons
