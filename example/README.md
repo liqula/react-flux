@@ -37,7 +37,7 @@ make
 This produces a file `js-build/todo.min.js` which is only 500 kibibytes which when compressed with
 gzip is 124 kibibytes.
 
-#### Testing
+### Testing
 
 Finally, you might be interested to look at
 [test/spec/TodoSpec.hs](https://bitbucket.org/wuzzeb/react-flux/src/tip/test/spec/TodoSpec.hs) as it
