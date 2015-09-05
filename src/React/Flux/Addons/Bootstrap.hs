@@ -15,8 +15,8 @@ import React.Flux.Internal (toJSString)
 -- | A bootstrap <http://react-bootstrap.github.io/components.html component>.  For example,
 --
 -- >bootstrap_ "Alert" [ "bsStyle" $= "danger"
---                     , callback "onDismiss" (const $ dispatch CloseAlert)
---                     ] $
+-- >                   , callback "onDismiss" (const $ dispatch CloseAlert)
+-- >                   ] $
 -- >    p_ "Hello, World!"
 bootstrap_ :: String
            -- ^ The component name.   Uses @window['ReactBootstrap'][name]@ to find the class, so
