@@ -1,5 +1,5 @@
--- | Replace this with Export from improved-base branch of ghcjs-base once
--- the improved-base branch becomes the default
+-- | At some point this should be replaced by GHCJS.Foreign.Export, but GHCJS.Foreign.Export
+-- currently causes a bug in the Todo example application to appear.
 module React.Flux.Export where
 
 #ifdef __GHCJS__
