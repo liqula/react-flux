@@ -5,6 +5,7 @@ module React.Flux.PropertiesAndEvents (
     PropertyOrHandler
   , (@=)
   , ($=)
+  , property
   , callback
 
   -- * Events
@@ -88,7 +89,7 @@ import           React.Flux.Store
 import           Data.Maybe (fromMaybe)
 
 import           GHCJS.Foreign (fromJSBool)
-import           GHCJS.Marshal (FromJSRef(..))
+import           GHCJS.Marshal (FromJSRef(..), ToJSRef(..))
 import           GHCJS.Types (JSRef, nullRef, JSString)
 import           JavaScript.Array as JSA
 
@@ -97,6 +98,7 @@ type JSRef a = ()
 type JSString = String
 type JSArray = ()
 class FromJSRef a
+class ToJSRef a
 nullRef :: ()
 nullRef = ()
 #endif
@@ -111,6 +113,10 @@ n @= a = Property (T.unpack n) (A.toJSON a)
 -- is enabled
 ($=) :: T.Text -> T.Text -> PropertyOrHandler handler
 n $= a = Property (T.unpack n) a
+
+-- | Create a property from anything that can be converted to a JSRef
+property :: ToJSRef val => String -> val -> PropertyOrHandler handler
+property = Property
 
 -- | Create a callback property.  This is primarily intended for foreign React classes which expect
 -- callbacks to be passed to them as properties.  For events on DOM elements, you should instead use
