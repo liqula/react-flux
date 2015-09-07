@@ -6,6 +6,7 @@ module React.Flux.PropertiesAndEvents (
   , (@=)
   , ($=)
   , property
+  , elementProperty
   , callback
 
   -- * Events
@@ -117,6 +118,12 @@ n $= a = Property (T.unpack n) a
 -- | Create a property from anything that can be converted to a JSRef
 property :: ToJSRef val => String -> val -> PropertyOrHandler handler
 property = Property
+
+-- | Some third-party React classes allow passing React elements as properties.  This function
+-- will first run the given 'ReactElementM' to obtain an element or elements, and then use that
+-- element as the value for a property with the given key.
+elementProperty :: String -> ReactElementM handler () -> PropertyOrHandler handler
+elementProperty = ElementProperty
 
 -- | Create a callback property.  This is primarily intended for foreign React classes which expect
 -- callbacks to be passed to them as properties.  For events on DOM elements, you should instead use
