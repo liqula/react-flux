@@ -21,20 +21,18 @@ module React.Flux.Internal(
 
 import           Data.String (IsString(..))
 import           Data.Aeson
-import           Data.Aeson.Types (Pair)
 import           Data.Typeable (Typeable)
 import           Control.Monad.Writer
 import           Control.Monad.Identity (Identity(..))
 
 #ifdef __GHCJS__
-import qualified Data.Text as T
 import           Unsafe.Coerce
 import qualified Data.JSString as JSS
 import qualified JavaScript.Array as JSA
 import           GHCJS.Foreign.Callback
 import qualified JavaScript.Object as JSO
 import           GHCJS.Types (JSRef, castRef, JSString)
-import           GHCJS.Marshal (toJSRef_aeson, ToJSRef(..), fromJSRef)
+import           GHCJS.Marshal (ToJSRef(..), fromJSRef)
 import           React.Flux.Export
 #else
 type Callback a = ()
@@ -60,7 +58,10 @@ instance Show HandlerArg where
 -- The combination of all properties and event handlers are used to create the javascript object
 -- passed as the second argument to @React.createElement@.
 data PropertyOrHandler handler =
-   Property Pair
+   forall ref. ToJSRef ref => Property
+     { propertyName :: String
+     , propertyVal :: ref
+     }
  | EventHandler
       { evtHandlerName :: String
       , evtHandler :: HandlerArg -> handler
@@ -71,7 +72,7 @@ data PropertyOrHandler handler =
       }
 
 instance Functor PropertyOrHandler where
-    fmap _ (Property p) = Property p
+    fmap _ (Property name val) = Property name val
     fmap f (EventHandler name h) = EventHandler name (f . h)
     fmap f (CallbackProperty name g) = CallbackProperty name (f . g)
 
@@ -247,9 +248,9 @@ js_ReactCreateContent :: String -> ReactElementRef
 js_ReactCreateContent = ReactElementRef . unsafeCoerce . toJSString
 
 addPropOrHandlerToObj :: JSO.Object -> PropertyOrHandler (IO ()) -> WriterT [Callback (JSRef () -> IO ())] IO ()
-addPropOrHandlerToObj obj (Property (n, v)) = lift $ do
-    vRef <- toJSRef_aeson v
-    JSO.setProp (toJSString $ T.unpack n) vRef obj
+addPropOrHandlerToObj obj (Property n val) = lift $ do
+    vRef <- toJSRef val
+    JSO.setProp (toJSString n) vRef obj
 addPropOrHandlerToObj obj (EventHandler str handler) = do
     -- this will be released by the render function of the class (jsbits/class.js)
     cb <- lift $ syncCallback1 ContinueAsync $ \evtRef ->

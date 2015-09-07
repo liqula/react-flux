@@ -87,7 +87,6 @@ import           React.Flux.Store
 #ifdef __GHCJS__
 import           Data.Maybe (fromMaybe)
 
-import qualified Data.JSString as JSS
 import           GHCJS.Foreign (fromJSBool)
 import           GHCJS.Marshal (FromJSRef(..))
 import           GHCJS.Types (JSRef, nullRef, JSString)
@@ -102,14 +101,16 @@ nullRef :: ()
 nullRef = ()
 #endif
 
+-- TOOD: change these to take a String next time we bump the major version
+
 -- | Create a property.
 (@=) :: A.ToJSON a => T.Text -> a -> PropertyOrHandler handler
-n @= a = Property (n, A.toJSON a)
+n @= a = Property (T.unpack n) (A.toJSON a)
 
 -- | Create a text-valued property.  This is here to avoid problems when OverloadedStrings extension
 -- is enabled
 ($=) :: T.Text -> T.Text -> PropertyOrHandler handler
-n $= a = Property (n, A.toJSON a)
+n $= a = Property (T.unpack n) a
 
 -- | Create a callback property.  This is primarily intended for foreign React classes which expect
 -- callbacks to be passed to them as properties.  For events on DOM elements, you should instead use
