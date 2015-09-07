@@ -50,12 +50,11 @@ import React.Flux.Export
 
 import GHCJS.Foreign (jsNull)
 import GHCJS.Foreign.Callback
-import GHCJS.Marshal (ToJSRef(..))
-import GHCJS.Types (JSRef, castRef)
+import GHCJS.Types (JSRef, jsref)
 
 #endif
 
-type HTMLElement = JSRef ()
+type HTMLElement = JSRef
 
 -- | Actions to access the current properties and state.
 data LPropsAndState props state = LPropsAndState
@@ -136,7 +135,7 @@ defineLifecycleView name initialState cfg = unsafePerformIO $ do
         f (dom this) (setStateFn this)
 
     willRecvPropsCb <- mkLCallback2 (lComponentWillReceiveProps cfg) $ \f this newPropsE -> do
-        newProps <- parseExport $ Export $ castRef newPropsE
+        newProps <- parseExport $ Export newPropsE
         f (dom this) (setStateFn this) newProps
 
     willUpdateCb <- mkLCallback2 (lComponentWillUpdate cfg) $ \f this argRef -> do
@@ -166,7 +165,7 @@ defineLifecycleView name initialState cfg = unsafePerformIO $ do
 mkLCallback1 :: (Typeable props, Typeable state)
              => Maybe (LPropsAndState props state -> f)
              -> (f -> ReactThis state props -> IO ())
-             -> IO (JSRef (Callback (JSRef () -> IO ())))
+             -> IO JSRef
 mkLCallback1 Nothing _ = return jsNull
 mkLCallback1 (Just f) c = do
   cb <- syncCallback1 ThrowWouldBlock $ \thisRef -> do
@@ -175,12 +174,12 @@ mkLCallback1 (Just f) c = do
                             , lGetState = js_ReactGetState this >>= parseExport
                             }
     c (f ps) this
-  toJSRef cb
+  return $ jsref cb
 
 mkLCallback2 :: (Typeable props, Typeable state)
              => Maybe (LPropsAndState props state -> f)
-             -> (f -> ReactThis state props -> JSRef a -> IO ())
-             -> IO (JSRef (Callback (JSRef () -> JSRef a -> IO ())))
+             -> (f -> ReactThis state props -> JSRef -> IO ())
+             -> IO JSRef
 mkLCallback2 Nothing _ = return jsNull
 mkLCallback2 (Just f) c = do
   cb <- syncCallback2 ThrowWouldBlock $ \thisRef argRef -> do
@@ -189,7 +188,7 @@ mkLCallback2 (Just f) c = do
                             , lGetState = js_ReactGetState this >>= parseExport
                             }
     c (f ps) this argRef
-  toJSRef cb
+  return $ jsref cb
 
 #else
 

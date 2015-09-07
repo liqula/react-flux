@@ -57,7 +57,7 @@ cssTransitionGroup p children = foreignClass js_CSSTransitionGroup props childre
 
 foreign import javascript unsafe
     "React['addons']['CSSTransitionGroup']"
-    js_CSSTransitionGroup :: JSRef ()
+    js_CSSTransitionGroup :: JSRef
 
 #else
 cssTransitionGroup _ x = x

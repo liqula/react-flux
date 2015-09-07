@@ -134,7 +134,7 @@ logPandS ps = do
 
 foreign import javascript unsafe
     "$1.id"
-    js_domGetId :: JSRef a -> IO (JSRef String)
+    js_domGetId :: JSRef -> IO JSRef
 
 logDOM :: LDOM -> IO ()
 logDOM dom = do

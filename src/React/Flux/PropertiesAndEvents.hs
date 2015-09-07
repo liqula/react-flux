@@ -91,14 +91,15 @@ import           Data.Maybe (fromMaybe)
 
 import           GHCJS.Foreign (fromJSBool)
 import           GHCJS.Marshal (FromJSRef(..))
-import           GHCJS.Types (JSRef, nullRef, JSString)
+import           GHCJS.Types (JSRef, nullRef, JSString, IsJSRef)
 import           JavaScript.Array as JSA
 
 #else
-type JSRef a = ()
+type JSRef = ()
 type JSString = String
 type JSArray = ()
 class FromJSRef a
+class IsJSRef a
 nullRef :: ()
 nullRef = ()
 #endif
@@ -132,7 +133,8 @@ callback = CallbackProperty
 
 -- | A reference to the object that dispatched the event.
 -- <https://developer.mozilla.org/en-US/docs/Web/API/Event/target>
-newtype EventTarget = EventTarget (JSRef ())
+newtype EventTarget = EventTarget JSRef
+instance IsJSRef EventTarget
 
 instance Show (EventTarget) where
     show _ = "EventTarget"
@@ -235,11 +237,11 @@ instance NFData FakeEventStoreAction where
 
 foreign import javascript unsafe
     "$1['preventDefault']();"
-    js_preventDefault :: JSRef () -> IO ()
+    js_preventDefault :: JSRef -> IO ()
 
 foreign import javascript unsafe
     "$1['stopPropagation']();"
-    js_stopProp :: JSRef () -> IO ()
+    js_stopProp :: JSRef -> IO ()
 
 #else
 
@@ -485,7 +487,7 @@ instance Show TouchEvent where
     show (TouchEvent t1 t2 t3 _ t4 t5 t6 t7)
         = show (t1, t2, t3, t4, t5, t6, t7)
 
-parseTouch :: JSRef a -> Touch
+parseTouch :: JSRef -> Touch
 parseTouch o = Touch
     { touchIdentifier = o .: "identifier"
     , touchTarget = EventTarget $ js_getProp o "target"
@@ -497,7 +499,7 @@ parseTouch o = Touch
     , touchPageY = o .: "pageY"
     }
 
-parseTouchList :: JSRef a -> JSString -> [Touch]
+parseTouchList :: JSRef -> JSString -> [Touch]
 parseTouchList obj key = unsafePerformIO $ do
     let arr = js_getArrayProp obj key
         len = arrayLength arr
@@ -578,49 +580,49 @@ onError f = on "onError" (f . parseEvent)
 
 foreign import javascript unsafe
     "$1[$2]"
-    js_getProp :: JSRef a -> JSString -> JSRef b
+    js_getProp :: JSRef -> JSString -> JSRef
 
 foreign import javascript unsafe
     "$1[$2]"
-    js_getArrayProp :: JSRef a -> JSString -> JSA.JSArray
+    js_getArrayProp :: JSRef -> JSString -> JSA.JSArray
 
 -- | Access a property from an object.  Since event objects are immutable, we can use
 -- unsafePerformIO without worry.
-(.:) :: FromJSRef b => JSRef a -> JSString -> b
+(.:) :: FromJSRef b => JSRef -> JSString -> b
 obj .: key = fromMaybe (error "Unable to decode event target") $ unsafePerformIO $
     fromJSRef $ js_getProp obj key
 
 foreign import javascript unsafe
     "$1['getModifierState']($2)"
-    js_GetModifierState :: JSRef () -> JSString -> JSRef Bool
+    js_GetModifierState :: JSRef -> JSString -> JSRef
 
-getModifierState :: JSRef () -> String -> Bool
+getModifierState :: JSRef -> String -> Bool
 getModifierState ref = fromJSBool . js_GetModifierState ref . toJSString
 
 arrayLength :: JSArray -> Int
 arrayLength = JSA.length
 
-arrayIndex :: Int -> JSArray -> JSRef a
+arrayIndex :: Int -> JSArray -> JSRef
 arrayIndex = JSA.index
 
 #else
 
-js_getProp :: a -> String -> JSRef b
+js_getProp :: a -> String -> JSRef
 js_getProp _ _ = ()
 
-js_getArrayProp :: a -> String -> JSRef b
+js_getArrayProp :: a -> String -> JSRef
 js_getArrayProp _ _ = ()
 
-(.:) :: JSRef () -> String -> b
+(.:) :: JSRef -> String -> b
 _ .: _ = undefined
 
-getModifierState :: JSRef () -> String -> Bool
+getModifierState :: JSRef -> String -> Bool
 getModifierState _ _ = False
 
 arrayLength :: JSArray -> Int
 arrayLength _ = 0
 
-arrayIndex :: Int -> JSArray -> JSRef ()
+arrayIndex :: Int -> JSArray -> JSRef
 arrayIndex _ _ = ()
 
 #endif

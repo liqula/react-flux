@@ -33,7 +33,7 @@ bootstrap_ n = foreignClass (js_ReactBootstrap $ toJSString n)
 
 foreign import javascript unsafe
     "window['ReactBootstrap'][$1]"
-    js_ReactBootstrap :: JSString -> JSRef ()
+    js_ReactBootstrap :: JSString -> JSRef
 
 #else
 

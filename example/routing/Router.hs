@@ -37,7 +37,7 @@ import           Unsafe.Coerce
 
 foreign import javascript unsafe
   "window.onhashchange = function() {$1(location.hash.toString());}"
-  js_attachtLocationHashCb :: (Callback (JSRef JSString -> IO ())) -> IO ()
+  js_attachtLocationHashCb :: (Callback (JSRef -> IO ())) -> IO ()
 
 foreign import javascript unsafe
   "window.location.hash = $1"

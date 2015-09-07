@@ -32,28 +32,32 @@ import qualified Data.JSString as JSS
 import qualified JavaScript.Array as JSA
 import           GHCJS.Foreign.Callback
 import qualified JavaScript.Object as JSO
-import           GHCJS.Types (JSRef, castRef, JSString)
+import           GHCJS.Types (JSRef, JSString, IsJSRef, jsref)
 import           GHCJS.Marshal (ToJSRef(..), fromJSRef)
 import           React.Flux.Export
 #else
 import Data.Text (Text)
 type Callback a = ()
-type JSRef a = ()
+type JSRef = ()
 class ToJSRef a
 instance ToJSRef Value
 instance ToJSRef Text
+class IsJSRef a
 #endif
 
 -- type JSObject a = JSO.Object a
 
 -- | This type is for the return value of @React.createClass@
-newtype ReactViewRef props = ReactViewRef { reactViewRef :: JSRef () }
+newtype ReactViewRef props = ReactViewRef { reactViewRef :: JSRef }
+instance IsJSRef (ReactViewRef props)
 
 -- | This type is for the return value of @React.createElement@
-newtype ReactElementRef = ReactElementRef { reactElementRef :: JSRef () }
+newtype ReactElementRef = ReactElementRef { reactElementRef :: JSRef }
+instance IsJSRef ReactElementRef
 
 -- | The first parameter of an event handler registered with React.
-newtype HandlerArg = HandlerArg (JSRef ())
+newtype HandlerArg = HandlerArg JSRef
+instance IsJSRef HandlerArg
 
 instance Show HandlerArg where
     show _ = "HandlerArg"
@@ -93,14 +97,14 @@ property = Property
 
 -- | Keys in React can either be strings or integers
 class ReactViewKey key where
-    toKeyRef :: key -> IO (JSRef ())
+    toKeyRef :: key -> IO JSRef
 
 #if __GHCJS__
 instance ReactViewKey String where
     toKeyRef = return . unsafeCoerce . toJSString
 
 instance ReactViewKey Int where
-    toKeyRef i = castRef <$> toJSRef i
+    toKeyRef i = toJSRef i
 #else
 instance ReactViewKey String where
     toKeyRef = const $ return ()
@@ -222,7 +226,7 @@ mkReactElement :: forall eventHandler.
                   (eventHandler -> IO ())
                -> IO [ReactElementRef] -- ^ this.props.children
                -> ReactElementM eventHandler ()
-               -> IO (ReactElementRef, [Callback (JSRef () -> IO ())])
+               -> IO (ReactElementRef, [Callback (JSRef -> IO ())])
 
 #ifdef __GHCJS__
 
@@ -257,15 +261,13 @@ mkReactElement runHandler getPropsChildren = runWriterT . mToElem
             cb <- lift $ syncCallback1 ContinueAsync $ \evtRef ->
                 runHandler $ handler $ HandlerArg evtRef
             tell [cb]
-            cbRef <- lift $ toJSRef cb
-            lift $ JSO.setProp (toJSString str) cbRef obj
+            lift $ JSO.setProp (toJSString str) (jsref cb) obj
         addPropOrHandlerToObj obj (CallbackProperty str handler) = do
             cb <- lift $ syncCallback1 ContinueAsync $ \argref -> do
-                v <- fromJSRef $ castRef argref
+                v <- fromJSRef argref
                 runHandler $ handler $ maybe (error "Unable to decode callback value") id v
             tell [cb]
-            cbRef <- lift $ toJSRef cb
-            lift $ JSO.setProp (toJSString str) cbRef obj
+            lift $ JSO.setProp (toJSString str) (jsref cb) obj
 
         -- call React.createElement
         createElement :: ReactElement eventHandler -> MkReactElementM [ReactElementRef]
@@ -293,7 +295,7 @@ mkReactElement runHandler getPropsChildren = runWriterT . mToElem
                 Nothing -> js_ReactCreateClass rc propsE arr
             return [e]
 
-type MkReactElementM a = WriterT [Callback (JSRef () -> IO ())] IO a
+type MkReactElementM a = WriterT [Callback (JSRef -> IO ())] IO a
 
 foreign import javascript unsafe
     "React['createElement']($1)"
@@ -313,7 +315,7 @@ foreign import javascript unsafe
 
 foreign import javascript unsafe
     "React['createElement']($1, {key: $2, hs:$3}, $4)"
-    js_ReactCreateKeyedElement :: ReactViewRef a -> JSRef key -> Export props -> JSA.JSArray -> IO ReactElementRef
+    js_ReactCreateKeyedElement :: ReactViewRef a -> JSRef -> Export props -> JSA.JSArray -> IO ReactElementRef
 
 js_ReactCreateContent :: String -> ReactElementRef
 js_ReactCreateContent = ReactElementRef . unsafeCoerce . toJSString
