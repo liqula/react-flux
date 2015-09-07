@@ -8,6 +8,7 @@ module React.Flux.Internal(
   , ReactElementRef(..)
   , HandlerArg(..)
   , PropertyOrHandler(..)
+  , property
   , ReactElement(..)
   , ReactElementM(..)
   , elemText
@@ -35,8 +36,12 @@ import           GHCJS.Types (JSRef, castRef, JSString)
 import           GHCJS.Marshal (ToJSRef(..), fromJSRef)
 import           React.Flux.Export
 #else
+import Data.Text (Text)
 type Callback a = ()
 type JSRef a = ()
+class ToJSRef a
+instance ToJSRef Value
+instance ToJSRef Text
 #endif
 
 -- type JSObject a = JSO.Object a
@@ -81,6 +86,10 @@ instance Functor PropertyOrHandler where
         ElementProperty name $ ReactElementM $ mapWriter (\((),e) -> ((), fmap f e)) mkElem
     fmap f (EventHandler name h) = EventHandler name (f . h)
     fmap f (CallbackProperty name g) = CallbackProperty name (f . g)
+
+-- | Create a property from anything that can be converted to a JSRef
+property :: ToJSRef val => String -> val -> PropertyOrHandler handler
+property = Property
 
 -- | Keys in React can either be strings or integers
 class ReactViewKey key where

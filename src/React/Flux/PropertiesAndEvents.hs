@@ -90,7 +90,7 @@ import           React.Flux.Store
 import           Data.Maybe (fromMaybe)
 
 import           GHCJS.Foreign (fromJSBool)
-import           GHCJS.Marshal (FromJSRef(..), ToJSRef(..))
+import           GHCJS.Marshal (FromJSRef(..))
 import           GHCJS.Types (JSRef, nullRef, JSString)
 import           JavaScript.Array as JSA
 
@@ -99,7 +99,6 @@ type JSRef a = ()
 type JSString = String
 type JSArray = ()
 class FromJSRef a
-class ToJSRef a
 nullRef :: ()
 nullRef = ()
 #endif
@@ -114,10 +113,6 @@ n @= a = Property (T.unpack n) (A.toJSON a)
 -- is enabled
 ($=) :: T.Text -> T.Text -> PropertyOrHandler handler
 n $= a = Property (T.unpack n) a
-
--- | Create a property from anything that can be converted to a JSRef
-property :: ToJSRef val => String -> val -> PropertyOrHandler handler
-property = Property
 
 -- | Some third-party React classes allow passing React elements as properties.  This function
 -- will first run the given 'ReactElementM' to obtain an element or elements, and then use that
