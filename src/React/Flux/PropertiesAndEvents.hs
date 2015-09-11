@@ -1,12 +1,14 @@
 -- | This module contains the definitions for creating properties to pass to elements, as well as
 -- the definitions for the
 -- <https://facebook.github.io/react/docs/events.html React Event System>.
+{-# LANGUAGE UndecidableInstances, IncoherentInstances #-}
 module React.Flux.PropertiesAndEvents (
     PropertyOrHandler
   , (@=)
   , ($=)
   , property
   , elementProperty
+  , CallbackFunction
   , callback
 
   -- * Events
@@ -121,11 +123,42 @@ n $= a = Property (T.unpack n) a
 elementProperty :: String -> ReactElementM handler () -> PropertyOrHandler handler
 elementProperty = ElementProperty
 
+-- | A class which contains all <https://wiki.haskell.org/Varargs a variable argument functions>
+-- where each argument implements 'FromJSRef' and the result is @handler@.
+class CallbackFunction handler a | a -> handler  where
+    applyFromArguments :: JSA.JSArray -> Int -> a -> IO handler
+
+instance CallbackFunction handler handler where
+    applyFromArguments _ _ h = return h
+
+instance (FromJSRef a, CallbackFunction handler b) => CallbackFunction handler (a -> b) where
+    applyFromArguments args k f = do
+        ma <- fromJSRef $ if k >= JSA.length args then nullRef else JSA.index k args
+        a <- maybe (error "Unable to decode callback argument") return ma
+        applyFromArguments args (k+1) $ f a
+
 -- | Create a callback property.  This is primarily intended for foreign React classes which expect
 -- callbacks to be passed to them as properties.  For events on DOM elements, you should instead use
 -- the handlers below.
-callback :: String -> (A.Value -> handler) -> PropertyOrHandler handler
-callback = CallbackProperty
+--
+-- @handler@ is the type of the handler expected by the view (so either @ViewEventHandler@ or
+-- @StatefulViewEventHandler@).  Therefore, any variable argument function which produces a
+-- @handler@ and where each argument implements 'FromJSRef' can be passed as @func@.  What happens
+-- is that a javascript function which loads the the javascript @arguments@ object is created and
+-- set as a property with the given name on the React element.  The variable arguments to @func@ are
+-- parsed one by one from the @arguments@ object.  If @func@ has more arguments than the javascript
+-- @arguments@ object, a null reference is used.  Since the 'Maybe' instance of 'FromJSRef' converts
+-- a null reference to 'Nothing', you can even create variable-argument javascript callbacks.
+--
+-- For example, all three of the following functions could be passed as @func@ inside a view.
+--
+-- >foo :: Int -> Maybe String -> ViewEventHandler
+-- >bar :: Aeson.Value -> ViewEventHandler
+-- >baz :: ViewEventHandler
+--
+-- For another example, see the haddock comments in "React.Flux.Addons.Bootstrap".
+callback :: CallbackFunction handler func => String -> func -> PropertyOrHandler handler
+callback name func = CallbackPropertyWithArgumentArray name $ \arr -> applyFromArguments arr 0 func
 
 ----------------------------------------------------------------------------------------------------
 --- Generic Event
@@ -184,24 +217,22 @@ parseEvent arg@(HandlerArg o) = Event
     , evtHandlerArg = arg
     }
 
--- | Create an event handler from a name and a handler function.
---
--- This can also be used to pass in arbitrary callbacks to foreign javascript React classes.
--- Indeed, what 'on' does is create a callback and then add a property with key the string passed to
--- 'on' and value the callback.
-on :: String -> (HandlerArg -> handler) -> PropertyOrHandler handler
-on = EventHandler
-
--- | Construct a handler from a detail parser, used by the various events below.
-mkHandler :: String -- ^ The event name
-          -> (HandlerArg -> detail) -- ^ A function parsing the details for the specific event.
-          -> (Event -> detail -> handler) -- ^ The function implementing the handler.
-          -> PropertyOrHandler handler
-mkHandler name parseDetail f = EventHandler
-    { evtHandlerName = name
-    , evtHandler = \raw -> f (parseEvent raw) (parseDetail raw)
+-- | Construct a handler from a function taking the event
+on :: String -> (Event -> handler) -> PropertyOrHandler handler
+on name f = CallbackPropertyWithSingleArgument
+    { csPropertyName = name
+    , csFunc = f . parseEvent
     }
 
+-- | Construct a handler from a detail parser, used by the various events below.
+on2 :: String -- ^ The event name
+    -> (HandlerArg -> detail) -- ^ A function parsing the details for the specific event.
+    -> (Event -> detail -> handler) -- ^ The function implementing the handler.
+    -> PropertyOrHandler handler
+on2 name parseDetail f = CallbackPropertyWithSingleArgument
+    { csPropertyName = name
+    , csFunc = \raw -> f (parseEvent raw) (parseDetail raw)
+    }
 
 -- | In a hack, the prevent default and stop propagation are actions since that is the easiest way
 -- of allowing users to specify these actions (IO is not available in view event handlers).  We
@@ -262,7 +293,7 @@ stopPropagation = SomeStoreAction fakeEventStore . StopPropagation . evtHandlerA
 -- | By default, the handlers below are triggered during the bubbling phase.  Use this to switch
 -- them to trigger during the capture phase.
 capturePhase :: PropertyOrHandler handler -> PropertyOrHandler handler
-capturePhase (EventHandler n h) = EventHandler (n ++ "Capture") h
+capturePhase (CallbackPropertyWithSingleArgument n h) = CallbackPropertyWithSingleArgument (n ++ "Capture") h
 capturePhase _ = error "You must use React.Flux.PropertiesAndEvents.capturePhase on an event handler"
 
 ---------------------------------------------------------------------------------------------------
@@ -311,13 +342,13 @@ parseKeyboardEvent (HandlerArg o) = KeyboardEvent
     }
 
 onKeyDown :: (Event -> KeyboardEvent -> handler) -> PropertyOrHandler handler
-onKeyDown = mkHandler "onKeyDown" parseKeyboardEvent
+onKeyDown = on2 "onKeyDown" parseKeyboardEvent
 
 onKeyPress :: (Event -> KeyboardEvent -> handler) -> PropertyOrHandler handler
-onKeyPress = mkHandler "onKeyPress" parseKeyboardEvent
+onKeyPress = on2 "onKeyPress" parseKeyboardEvent
 
 onKeyUp :: (Event -> KeyboardEvent -> handler) -> PropertyOrHandler handler
-onKeyUp = mkHandler "onKeyUp" parseKeyboardEvent
+onKeyUp = on2 "onKeyUp" parseKeyboardEvent
 
 --------------------------------------------------------------------------------
 -- Focus Events
@@ -331,10 +362,10 @@ parseFocusEvent :: HandlerArg -> FocusEvent
 parseFocusEvent (HandlerArg ref) = FocusEvent $ EventTarget $ js_getProp ref "relatedTarget"
 
 onBlur :: (Event -> FocusEvent -> handler) -> PropertyOrHandler handler
-onBlur = mkHandler "onBlur" parseFocusEvent
+onBlur = on2 "onBlur" parseFocusEvent
 
 onFocus :: (Event -> FocusEvent -> handler) -> PropertyOrHandler handler
-onFocus = mkHandler "onFocus" parseFocusEvent
+onFocus = on2 "onFocus" parseFocusEvent
 
 --------------------------------------------------------------------------------
 -- Form Events
@@ -343,13 +374,13 @@ onFocus = mkHandler "onFocus" parseFocusEvent
 -- | The onChange event is special in React and should be used for all input change events.  For
 -- details, see <https://facebook.github.io/react/docs/forms.html>
 onChange :: (Event -> handler) -> PropertyOrHandler handler
-onChange f = on "onChange" (f . parseEvent)
+onChange = on "onChange"
 
 onInput :: (Event -> handler) -> PropertyOrHandler handler
-onInput f = on "onInput" (f . parseEvent)
+onInput = on "onInput"
 
 onSubmit :: (Event -> handler) -> PropertyOrHandler handler
-onSubmit f = on "onSubmit" (f . parseEvent)
+onSubmit = on "onSubmit"
 
 --------------------------------------------------------------------------------
 -- Mouse Events
@@ -395,58 +426,58 @@ parseMouseEvent (HandlerArg o) = MouseEvent
     }
 
 onClick :: (Event -> MouseEvent -> handler) -> PropertyOrHandler handler
-onClick = mkHandler "onClick" parseMouseEvent
+onClick = on2 "onClick" parseMouseEvent
 
 onContextMenu :: (Event -> MouseEvent -> handler) -> PropertyOrHandler handler
-onContextMenu = mkHandler "onContextMenu" parseMouseEvent
+onContextMenu = on2 "onContextMenu" parseMouseEvent
 
 onDoubleClick :: (Event -> MouseEvent -> handler) -> PropertyOrHandler handler
-onDoubleClick = mkHandler "onDoubleClick" parseMouseEvent
+onDoubleClick = on2 "onDoubleClick" parseMouseEvent
 
 onDrag :: (Event -> MouseEvent -> handler) -> PropertyOrHandler handler
-onDrag = mkHandler "onDrag" parseMouseEvent
+onDrag = on2 "onDrag" parseMouseEvent
 
 onDragEnd :: (Event -> MouseEvent -> handler) -> PropertyOrHandler handler
-onDragEnd = mkHandler "onDragEnd" parseMouseEvent
+onDragEnd = on2 "onDragEnd" parseMouseEvent
 
 onDragEnter :: (Event -> MouseEvent -> handler) -> PropertyOrHandler handler
-onDragEnter = mkHandler "onDragEnter" parseMouseEvent
+onDragEnter = on2 "onDragEnter" parseMouseEvent
 
 onDragExit :: (Event -> MouseEvent -> handler) -> PropertyOrHandler handler
-onDragExit = mkHandler "onDragExit" parseMouseEvent
+onDragExit = on2 "onDragExit" parseMouseEvent
 
 onDragLeave :: (Event -> MouseEvent -> handler) -> PropertyOrHandler handler
-onDragLeave = mkHandler "onDragLeave" parseMouseEvent
+onDragLeave = on2 "onDragLeave" parseMouseEvent
 
 onDragOver :: (Event -> MouseEvent -> handler) -> PropertyOrHandler handler
-onDragOver = mkHandler "onDragOver" parseMouseEvent
+onDragOver = on2 "onDragOver" parseMouseEvent
 
 onDragStart :: (Event -> MouseEvent -> handler) -> PropertyOrHandler handler
-onDragStart = mkHandler "onDragStart" parseMouseEvent
+onDragStart = on2 "onDragStart" parseMouseEvent
 
 onDrop :: (Event -> MouseEvent -> handler) -> PropertyOrHandler handler
-onDrop = mkHandler "onDrop" parseMouseEvent
+onDrop = on2 "onDrop" parseMouseEvent
 
 onMouseDown :: (Event -> MouseEvent -> handler) -> PropertyOrHandler handler
-onMouseDown = mkHandler "onMouseDown" parseMouseEvent
+onMouseDown = on2 "onMouseDown" parseMouseEvent
 
 onMouseEnter :: (Event -> MouseEvent -> handler) -> PropertyOrHandler handler
-onMouseEnter = mkHandler "onMouseEnter" parseMouseEvent
+onMouseEnter = on2 "onMouseEnter" parseMouseEvent
 
 onMouseLeave :: (Event -> MouseEvent -> handler) -> PropertyOrHandler handler
-onMouseLeave = mkHandler "onMouseLeave" parseMouseEvent
+onMouseLeave = on2 "onMouseLeave" parseMouseEvent
 
 onMouseMove :: (Event -> MouseEvent -> handler) -> PropertyOrHandler handler
-onMouseMove = mkHandler "onMouseMove" parseMouseEvent
+onMouseMove = on2 "onMouseMove" parseMouseEvent
 
 onMouseOut :: (Event -> MouseEvent -> handler) -> PropertyOrHandler handler
-onMouseOut = mkHandler "onMouseOut" parseMouseEvent
+onMouseOut = on2 "onMouseOut" parseMouseEvent
 
 onMouseOver :: (Event -> MouseEvent -> handler) -> PropertyOrHandler handler
-onMouseOver = mkHandler "onMouseOver" parseMouseEvent
+onMouseOver = on2 "onMouseOver" parseMouseEvent
 
 onMouseUp :: (Event -> MouseEvent -> handler) -> PropertyOrHandler handler
-onMouseUp = mkHandler "onMouseUp" parseMouseEvent
+onMouseUp = on2 "onMouseUp" parseMouseEvent
 
 --------------------------------------------------------------------------------
 -- Touch
@@ -519,23 +550,23 @@ parseTouchEvent (HandlerArg o) = TouchEvent
     }
 
 onTouchCancel :: (Event -> TouchEvent -> handler) -> PropertyOrHandler handler
-onTouchCancel = mkHandler "onTouchCancel" parseTouchEvent
+onTouchCancel = on2 "onTouchCancel" parseTouchEvent
 
 onTouchEnd :: (Event -> TouchEvent -> handler) -> PropertyOrHandler handler
-onTouchEnd = mkHandler "onTouchEnd" parseTouchEvent
+onTouchEnd = on2 "onTouchEnd" parseTouchEvent
 
 onTouchMove :: (Event -> TouchEvent -> handler) -> PropertyOrHandler handler
-onTouchMove = mkHandler "onTouchMove" parseTouchEvent
+onTouchMove = on2 "onTouchMove" parseTouchEvent
 
 onTouchStart :: (Event -> TouchEvent -> handler) -> PropertyOrHandler handler
-onTouchStart = mkHandler "onTouchStart" parseTouchEvent
+onTouchStart = on2 "onTouchStart" parseTouchEvent
 
 --------------------------------------------------------------------------------
 -- UI Events
 --------------------------------------------------------------------------------
 
 onScroll :: (Event -> handler) -> PropertyOrHandler handler
-onScroll f = on "onScroll" (f . parseEvent)
+onScroll = on "onScroll"
 
 --------------------------------------------------------------------------------
 -- Wheel
@@ -557,9 +588,9 @@ parseWheelEvent (HandlerArg o) = WheelEvent
     }
 
 onWheel :: (Event -> MouseEvent -> WheelEvent -> handler) -> PropertyOrHandler handler
-onWheel f = EventHandler
-    { evtHandlerName = "onWheel"
-    , evtHandler = \raw -> f (parseEvent raw) (parseMouseEvent raw) (parseWheelEvent raw)
+onWheel f = CallbackPropertyWithSingleArgument
+    { csPropertyName = "onWheel"
+    , csFunc = \raw -> f (parseEvent raw) (parseMouseEvent raw) (parseWheelEvent raw)
     }
 
 --------------------------------------------------------------------------------
@@ -567,10 +598,10 @@ onWheel f = EventHandler
 --------------------------------------------------------------------------------
 
 onLoad :: (Event -> handler) -> PropertyOrHandler handler
-onLoad f = on "onLoad" (f . parseEvent)
+onLoad = on "onLoad"
 
 onError :: (Event -> handler) -> PropertyOrHandler handler
-onError f = on "onError" (f . parseEvent)
+onError = on "onError"
 
 --------------------------------------------------------------------------------
 --- JS Utils

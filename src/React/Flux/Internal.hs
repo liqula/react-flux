@@ -33,7 +33,7 @@ import qualified JavaScript.Array as JSA
 import           GHCJS.Foreign.Callback
 import qualified JavaScript.Object as JSO
 import           GHCJS.Types (JSRef, JSString, IsJSRef, jsref)
-import           GHCJS.Marshal (ToJSRef(..), fromJSRef)
+import           GHCJS.Marshal (ToJSRef(..))
 import           React.Flux.Export
 #else
 import Data.Text (Text)
@@ -75,21 +75,21 @@ data PropertyOrHandler handler =
       { elementPropertyName :: String
       , elementValue :: ReactElementM handler ()
       }
- | EventHandler
-      { evtHandlerName :: String
-      , evtHandler :: HandlerArg -> handler
+ | CallbackPropertyWithArgumentArray
+      { caPropertyName :: String
+      , caFunc :: JSA.JSArray -> IO handler
       }
- | CallbackProperty
-      { callbackName :: String
-      , callbackFn :: Value -> handler
+ | CallbackPropertyWithSingleArgument
+      { csPropertyName :: String
+      , csFunc :: HandlerArg -> handler
       }
 
 instance Functor PropertyOrHandler where
     fmap _ (Property name val) = Property name val
     fmap f (ElementProperty name (ReactElementM mkElem)) =
         ElementProperty name $ ReactElementM $ mapWriter (\((),e) -> ((), fmap f e)) mkElem
-    fmap f (EventHandler name h) = EventHandler name (f . h)
-    fmap f (CallbackProperty name g) = CallbackProperty name (f . g)
+    fmap f (CallbackPropertyWithArgumentArray name h) = CallbackPropertyWithArgumentArray name (fmap f . h)
+    fmap f (CallbackPropertyWithSingleArgument name h) = CallbackPropertyWithSingleArgument name (f . h)
 
 -- | Create a property from anything that can be converted to a JSRef
 property :: ToJSRef val => String -> val -> PropertyOrHandler handler
@@ -256,18 +256,20 @@ mkReactElement runHandler getPropsChildren = runWriterT . mToElem
         addPropOrHandlerToObj obj (ElementProperty name rM) = do
             ReactElementRef ref <- mToElem rM
             lift $ JSO.setProp (toJSString name) ref obj
-        addPropOrHandlerToObj obj (EventHandler str handler) = do
+        addPropOrHandlerToObj obj (CallbackPropertyWithArgumentArray name func) = do
             -- this will be released by the render function of the class (jsbits/class.js)
-            cb <- lift $ syncCallback1 ContinueAsync $ \evtRef ->
-                runHandler $ handler $ HandlerArg evtRef
-            tell [cb]
-            lift $ JSO.setProp (toJSString str) (jsref cb) obj
-        addPropOrHandlerToObj obj (CallbackProperty str handler) = do
             cb <- lift $ syncCallback1 ContinueAsync $ \argref -> do
-                v <- fromJSRef argref
-                runHandler $ handler $ maybe (error "Unable to decode callback value") id v
+                handler <- func $ unsafeCoerce argref
+                runHandler handler
             tell [cb]
-            lift $ JSO.setProp (toJSString str) (jsref cb) obj
+            wrappedCb <- lift $ js_CreateArgumentsCallback cb
+            lift $ JSO.setProp (toJSString name) wrappedCb obj
+        addPropOrHandlerToObj obj (CallbackPropertyWithSingleArgument name func) = do
+            -- this will be released by the render function of the class (jsbits/class.js)
+            cb <- lift $ syncCallback1 ContinueAsync $ \ref ->
+                runHandler $ func $ HandlerArg ref
+            tell [cb]
+            lift $ JSO.setProp (toJSString name) (jsref cb) obj
 
         -- call React.createElement
         createElement :: ReactElement eventHandler -> MkReactElementM [ReactElementRef]
@@ -316,6 +318,10 @@ foreign import javascript unsafe
 foreign import javascript unsafe
     "React['createElement']($1, {key: $2, hs:$3}, $4)"
     js_ReactCreateKeyedElement :: ReactViewRef a -> JSRef -> Export props -> JSA.JSArray -> IO ReactElementRef
+
+foreign import javascript unsafe
+    "hsreact$mk_arguments_callback($1)"
+    js_CreateArgumentsCallback :: Callback (JSRef -> IO ()) -> IO JSRef
 
 js_ReactCreateContent :: String -> ReactElementRef
 js_ReactCreateContent = ReactElementRef . unsafeCoerce . toJSString
