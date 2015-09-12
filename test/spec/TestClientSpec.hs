@@ -5,6 +5,7 @@ module TestClientSpec (spec) where
 import           Control.Monad
 import           Control.Monad.IO.Class (liftIO)
 import           Data.List
+import           Data.Time
 import qualified Data.Text              as T
 import           System.Directory       (getCurrentDirectory)
 import           Test.Hspec.WebDriver
@@ -33,6 +34,11 @@ lifecyclePropsAndStateAre props st = do
     getText stE `shouldReturn` (T.pack $ show st)
     p <- findElem (ById "world")
     getText p `shouldReturn` (T.pack $ "Current props: " ++ props)
+
+intlSpanShouldBe :: String -> String -> WD ()
+intlSpanShouldBe ident txt = do
+    e <- findElem (ById $ T.pack ident)
+    getText e `shouldReturn` T.pack txt
 
 spec :: Spec
 spec = session " for the test client" $ using Chrome $ do
@@ -157,6 +163,24 @@ spec = session " for the test client" $ using Chrome $ do
                 [ "will unmount"
                 , "Current props and state: Helloo, 101"
                 ]
+
+    it "displays the intl formatted data" $ runWD $ do
+        "f-number" `intlSpanShouldBe` "90%"
+        "f-int" `intlSpanShouldBe` "100,000"
+        "f-double" `intlSpanShouldBe` "40,000.2"
+        "f-shortday" `intlSpanShouldBe` "Aug 20, 1969"
+        "f-fullday" `intlSpanShouldBe` "Wednesday, August 20, 69 AD"
+        "f-date" `intlSpanShouldBe` "Wed, Aug 20, 69"
+        -- f-shorttime and f-fulltime cannot be (easily) tested since they rely on the current timezone
+        "f-time" `intlSpanShouldBe` "Aug 19, 69, 4:56:00 PM GMT-10"
+
+        today <- liftIO (utctDay <$> getCurrentTime)
+        let moon = fromGregorian 1969 7 20
+            daysAgo = diffDays today moon
+            yearsAgo :: Int = round $ realToFrac daysAgo / (365 :: Double) -- is close enough
+        "f-relative" `intlSpanShouldBe` (show yearsAgo ++ " years ago")
+
+        --"f-relative-days" isn't correct in react since it ignores leap years, so will not match daysAgo
 
     {-
     it "inspects the session" $ runWD $ do

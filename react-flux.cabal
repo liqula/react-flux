@@ -110,6 +110,7 @@ executable test-client
    main-is: TestClient.hs
    build-depends: base
                 , react-flux
+                , time
    if impl(ghcjs)
       build-depends: ghcjs-base
 

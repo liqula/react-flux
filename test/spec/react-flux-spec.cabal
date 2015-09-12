@@ -15,3 +15,4 @@ executable react-flux-spec
                 , directory
                 , transformers
                 , text
+                , time

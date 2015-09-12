@@ -4,67 +4,92 @@
 -- @window.ReactIntl@ exists.  Next, add a call to 'setLocales_' to the top level of your
 -- application and then use the various formatting combinators in your rendering functions.
 --
--- Note that the mixin is only used for the locale, the formats and messages are better managed from
--- Haskell.  The @formats@ property of the mixin allows you to specify custom number and date
--- formats so as to shorten the resulting properties you need to pass to @FormattedNumber@ and
--- friends, but it is easier to just create a Haskell utility function wrapping for example
--- 'foramttedNumber_' if you need custom formats.  Finally, the @messages@ passed down through the
--- mixin is used only for the @getIntlMessage()@ function, and it is better to just load the
--- messages from Haskell (see 'formattedMessage_' for more details).
+-- Note that this module uses the mixin is only used for the locale, the formats and messages are
+-- better managed from Haskell.  The @formats@ property of the mixin allows you to specify custom
+-- number and date formats so as to shorten the resulting properties you need to pass to
+-- @FormattedNumber@ and friends, but it is easier to just create a Haskell utility function
+-- wrapping for example 'foramttedNumber_' if you need custom formats.  Finally, the @messages@
+-- passed down through the mixin is used only for the @getIntlMessage()@ function, and it is better
+-- to just load the messages from Haskell (see 'formattedMessage_' for more details).
 module React.Flux.Addons.Intl(
     setLocales_
-  , formattedNumber_
+
+  -- * Numbers
   , int_
   , double_
-  , formattedDate_
+  , formattedNumber_
+
+  -- * Dates and Times
+  , DayFormat(..)
+  , shortDate
   , day_
-  , formattedTime_
+  , TimeFormat(..)
+  , shortDateTime
   , utcTime_
-  , formattedRelative_
+  , formattedDate_
+
+  -- * Relative Times
   , relativeTo_
+  , formattedRelative_
+
+  -- * Messages
   , formattedMessage_
   , formattedHTMLMessage_
 ) where
 
 import React.Flux
 import Data.Time
+import Data.Maybe (catMaybes)
 import GHCJS.Types (JSRef)
 
 foreign import javascript unsafe
-    "hsreact$intl_mixin_class()"
+    "hsreact$intl_mixin_class"
     js_intlMixinClass :: JSRef
 
 foreign import javascript unsafe
-    "window['ReactIntl']['FormatNumber']"
+    "$r = window['ReactIntl']['FormattedNumber']"
     js_formatNumber :: JSRef
 
 foreign import javascript unsafe
-    "window['ReactIntl']['FormattedDate']"
+    "$r = window['ReactIntl']['FormattedDate']"
     js_formatDate :: JSRef
 
 foreign import javascript unsafe
-    "window['ReactIntl']['FormattedTime']"
-    js_formatTime :: JSRef
-
-foreign import javascript unsafe
-    "window['ReactIntl']['FormattedRelative']"
+    "$r = window['ReactIntl']['FormattedRelative']"
     js_formatRelative :: JSRef
 
 foreign import javascript unsafe
-    "window['ReactIntl']['FormattedMessage']"
+    "$r = window['ReactIntl']['FormattedMessage']"
     js_formatMsg :: JSRef
 
 foreign import javascript unsafe
-    "window['ReactIntl']['FormattedHTMLMessage']"
+    "$r = window['ReactIntl']['FormattedHTMLMessage']"
     js_formatHtmlMsg :: JSRef
 
 foreign import javascript unsafe
-    "(new Date($1, $2, $3))"
+    "$r = (new Date($1, $2, $3))"
     js_mkDate :: Int -> Int -> Int -> JSRef
 
+-- | Convert a day to a javascript Date
+dayToRef :: Day -> JSRef
+dayToRef day = js_mkDate (fromIntegral y) m d
+    where
+        (y, m, d) = toGregorian day
+
 foreign import javascript unsafe
-    "(new Date(Date.UTC($1, $2, $3, $4, $5, $6, $7)))"
+    "$r = (new Date(Date.UTC($1, $2, $3, $4, $5, $6, $7)))"
     js_mkDateTime :: Int -> Int -> Int -> Int -> Int -> Int -> Int -> JSRef
+
+-- | Convert a UTCTime to a javascript date object.
+timeToRef :: UTCTime -> JSRef
+timeToRef (UTCTime uday time) = js_mkDateTime (fromIntegral year) month day hour minute sec micro
+    where
+        (year, month, day) = toGregorian uday
+        TimeOfDay hour minute pSec = timeToTimeOfDay time
+        (sec, fracSec) = properFraction pSec
+        micro = round $ fracSec * 1000000
+
+
 
 -- | Use the IntlMixin to set the @locales@ property.  This @locales@ property will be passed to all
 -- nested formatters.  It is strongly recommended that you set the initial locale from the server by
@@ -78,20 +103,14 @@ foreign import javascript unsafe
 -- store if you allow the user to change the locale on the fly.
 --
 -- >foreign import javascript unsafe
--- >    "window['myInitialConfig']['locale']"
+-- >    "$r = window['myInitialConfig']['locale']"
 -- >    js_initialLocale :: JSString
 -- >
 -- >myApp :: ReactView ()
 -- >myApp = defineView "my application" $ \() ->
 -- >    setLocales_ [JSString.unpack js_initialLocale] $ ...
-setLocales_ :: [String] -> ReactElementM eventHandler a -> ReactElementM eventHandler a
+setLocales_ :: String -> ReactElementM eventHandler a -> ReactElementM eventHandler a
 setLocales_ locales = foreignClass js_intlMixinClass [ "locales" @= locales ]
-
--- | A <http://formatjs.io/react/#formatted-number FormattedNumber> which allows arbitrary properties
--- and therefore allows control over the style and format of the number.  Use 'int_' or 'double_' if
--- you are OK with the default style.
-formattedNumber_ :: [PropertyOrHandler eventHandler] -> ReactElementM eventHandler ()
-formattedNumber_ props = foreignClass js_formatNumber props mempty
 
 -- | Format an integer using 'formattedNumber_' and the default style.
 int_ :: Int -> ReactElementM eventHandler ()
@@ -101,66 +120,133 @@ int_ i = formattedNumber_ [ "value" @= i ]
 double_ :: Double -> ReactElementM eventHandler ()
 double_ d = formattedNumber_ [ "value" @= d ]
 
--- | Format a day using the <http://formatjs.io/react/#formatted-date FormattedDate> class using
--- custom styles and/or formats.  The given 'Day' will be converted to a javascript Date object
--- and passed in the @value@ property.  Thus the list of properties should just give the style
--- and format.
-formattedDate_ :: Day -> [PropertyOrHandler eventHandler] -> ReactElementM eventHandler ()
-formattedDate_ day props = foreignClass js_formatDate (valProp:props) mempty
-    where
-        (y, m, d) = toGregorian day
-        valProp = property "value" $ js_mkDate (fromIntegral y) m d
+-- | A <http://formatjs.io/react/#formatted-number FormattedNumber> which allows arbitrary properties
+-- and therefore allows control over the style and format of the number.  The accepted properties are
+-- any options supported by
+-- <https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/NumberFormat Intl.NumberFormat>.
+formattedNumber_ :: [PropertyOrHandler eventHandler] -> ReactElementM eventHandler ()
+formattedNumber_ props = foreignClass js_formatNumber props mempty
 
--- | Format a day using the @FormattedDate@ class with the default style and then wrapped in a
+--------------------------------------------------------------------------------
+-- Date/Time
+--------------------------------------------------------------------------------
+
+-- | How to display a date.  Each non-Nothing component will be displayed while the Nothing
+-- components will be ommitted.  If everything is nothing, then it is assumed that year, month, and
+-- day are each numeric.
+--
+-- These properties coorespond directly the options accepted by
+-- <https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/DateTimeFormat Intl.DateTimeFormat>.
+data DayFormat = DayFormat {
+    weekdayF :: Maybe String -- ^ possible values are narrow, short, and long
+  , eraF :: Maybe String -- ^ possible values are narrow, short, and long
+  , yearF :: Maybe String -- ^ possible values are numeric and 2-digit
+  , monthF :: Maybe String -- ^ possible values are numeric, 2-digit, narrow, short, and long
+  , dayF :: Maybe String -- ^ possible values are numeric and 2-digit
+} deriving Show
+
+-- | Convert a format to the properties accepted by FormattedDate
+dayFtoProps :: DayFormat -> [PropertyOrHandler handler]
+dayFtoProps (DayFormat w e y m d) = catMaybes
+    [ ("weekday"@=) <$> w
+    , ("era"@=) <$> e
+    , ("year"@=) <$> y
+    , ("month"@=) <$> m
+    , ("day"@=) <$> d
+    ]
+
+-- | A short day format, where month is \"short\" and year and day are \"numeric\".
+shortDate :: DayFormat
+shortDate = DayFormat
+  { weekdayF = Nothing
+  , eraF = Nothing
+  , yearF = Just "numeric"
+  , monthF = Just "short"
+  , dayF = Just "numeric"
+  }
+
+-- | How to display a time.  Each non-Nothing component will be displayed while Nothing components
+-- will be ommitted.
+--
+-- These properties coorespond directly the options accepted by
+-- <https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/DateTimeFormat Intl.DateTimeFormat>.
+data TimeFormat = TimeFormat {
+    hourF :: Maybe String -- ^ possible values are numeric and 2-digit
+  , minuteF :: Maybe String -- ^ possible values are numeric and 2-digit
+  , secondF :: Maybe String -- ^ possible values are numeric and 2-digit
+  , timeZoneNameF :: Maybe String -- ^ possible values are short and long
+} deriving Show
+
+-- | Convert a time format to properties for the FormattedDate element
+timeFtoProps :: TimeFormat -> [PropertyOrHandler handler]
+timeFtoProps (TimeFormat h m s t) = catMaybes
+    [ ("hour"@=) <$> h
+    , ("minute"@=) <$> m
+    , ("second"@=) <$> s
+    , ("timeZoneName"@=) <$> t
+    ]
+
+-- | A default date and time format, using 'shortDate' and then numeric for hour, minute, and
+-- second.
+shortDateTime :: (DayFormat, TimeFormat)
+shortDateTime = (shortDate, TimeFormat
+  { hourF = Just "numeric"
+  , minuteF = Just "numeric"
+  , secondF = Just "numeric"
+  , timeZoneNameF = Nothing
+  })
+
+-- | Display a 'Day' in the given format using the @FormattedDate@ class and then wrap it in a
 -- HTML5 <https://developer.mozilla.org/en-US/docs/Web/HTML/Element/time time> element.
-day_ :: Day -> ReactElementM eventHandler ()
-day_ day = time_ [property "dateTime" dateRef] $ foreignClass js_formatDate [property "value" dateRef] mempty
+day_ :: DayFormat -> Day -> ReactElementM eventHandler ()
+day_ fmt day = time_ [property "dateTime" dateRef] $ foreignClass js_formatDate props mempty
     where
-        (y, m, d) = toGregorian day
-        dateRef = js_mkDate (fromIntegral y) m d
+        dateRef = dayToRef day
+        props = property "value" dateRef : dayFtoProps fmt
 
--- | Convert a UTCTime to a javascript date object.
-timeToRef :: UTCTime -> JSRef
-timeToRef (UTCTime uday time) = js_mkDateTime (fromIntegral year) month day hour minute sec micro
-    where
-        (year, month, day) = toGregorian uday
-        TimeOfDay hour minute pSec = timeToTimeOfDay time
-        (sec, fracSec) = properFraction pSec
-        micro = round $ fracSec * 1000000
-
--- | Format the given UTCTime using the <http://formatjs.io/react/#formatted-time FormattedTime> class.
--- Note that even though you specify the time in UTC, it will be displayed to the user in the local
--- time zone using the current locale.  To do so, the UTCTime is converted to a javascript Date
--- object (which are always UTC) and passed as the @value@ property.  Therefore, the list of properties
--- should just give the style and format.
-formattedTime_ :: UTCTime -> [PropertyOrHandler eventHandler] -> ReactElementM eventHandler ()
-formattedTime_ t props = foreignClass js_formatTime (property "value" (timeToRef t) : props) mempty
-
--- | Display a UTCTime to the user in their current timezone and locale.  In addition, wrap the
--- display in a HTML5 <https://developer.mozilla.org/en-US/docs/Web/HTML/Element/time time> element.
-utcTime_ :: UTCTime -> ReactElementM eventHandler ()
-utcTime_ t = time_ [property "dateTime" timeRef] $ foreignClass js_formatTime [property "value" timeRef] mempty
+-- | Display a 'UTCTime' using the given format.  Despite giving the time in UTC, it will be
+-- displayed to the user in their current timezone.  In addition, wrap it in a HTML5
+-- <https://developer.mozilla.org/en-US/docs/Web/HTML/Element/time time> element.
+utcTime_ :: (DayFormat, TimeFormat) -> UTCTime -> ReactElementM eventHandler ()
+utcTime_ (dayFmt, timeF) t = time_ [property "dateTime" timeRef] $ foreignClass js_formatDate props mempty
     where
         timeRef = timeToRef t
+        props = property "value" timeRef : (dayFtoProps dayFmt ++ timeFtoProps timeF)
 
--- | Format the given UTCTime using the <http://formatjs.io/react/#formatted-relative FormattedRelative>
--- class to display a relative time to now.  Again, the list of properties should just
--- give the style and format, since the UTCTime is passed in the @value@ property.
-formattedRelative_ :: UTCTime -> [PropertyOrHandler eventHandler] -> ReactElementM eventHandler ()
-formattedRelative_ t props = foreignClass js_formatRelative (property "value" (timeToRef t) : props) mempty
+-- | A raw <http://formatjs.io/react/#formatted-date FormattedDate> class which allows custom
+-- properties to be passed.  The given 'Day' or 'UTCTime' will be converted to a javascript Date
+-- object and passed in the @value@ property.  The remaining properties can be any properties that
+-- <https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/DateTimeFormat Intl.DateTimeFormat>
+-- accepts.  For example, you could pass in \"timeZone\" to specify a specific timezone to display.
+formattedDate_ :: Either Day UTCTime -> [PropertyOrHandler eventHandler] -> ReactElementM eventHandler ()
+formattedDate_ t props = foreignClass js_formatDate (valProp:props) mempty
+    where
+        valProp = property "value" $ either dayToRef timeToRef t
 
--- | Display the given UTCTime as a relative time.  In addition, wrap the display in a HTML5
+
+-- | Display the 'UTCTime' as a relative time.  In addition, wrap the display in a HTML5
 -- <https://developer.mozilla.org/en-US/docs/Web/HTML/Element/time time> element.
 relativeTo_ :: UTCTime -> ReactElementM eventHandler ()
 relativeTo_ t = time_ [property "dateTime" timeRef] $ foreignClass js_formatRelative [property "value" timeRef] mempty
     where
         timeRef = timeToRef t
 
+-- | Format the given UTCTime using the <http://formatjs.io/react/#formatted-relative FormattedRelative>
+-- class to display a relative time to now.  The given 'UTCTime' is passed in the value property.
+-- The supported style/formatting properties are \"units\" which can be one of second, minute, hour,
+-- day, month, or year and \"style\" which if given must be numeric.
+formattedRelative_ :: UTCTime -> [PropertyOrHandler eventHandler] -> ReactElementM eventHandler ()
+formattedRelative_ t props = foreignClass js_formatRelative (property "value" (timeToRef t) : props) mempty
+
+--------------------------------------------------------------------------------
+-- Messages
+--------------------------------------------------------------------------------
+
 -- | Display a message using <http://formatjs.io/react/#formatted-message FormattedMessage>.  This
 -- requires the @message@ property to be a string which contains the ICU Message syntax for the
 -- message.  The class will cache the parsing of the string into the @intl-messageformat@ AST.
 -- For formatted rich text objects, @FormattedMessage@ allows react elements to be passed as
--- properties.  These properties can be created using 'elementProperty'.
+-- properties and these properties can be created using 'elementProperty'.
 --
 -- The ReactIntl documentation shows how to use @this.getIntlMessage@ which looks up the string from
 -- the @messages@ property passed to the mixin.  Instead, you should lookup the message string from
@@ -197,9 +283,6 @@ relativeTo_ t = time_ [property "dateTime" timeRef] $ foreignClass js_formatRela
 -- >       , "numPhotos" @= (100 :: Int)
 -- >       , elementProperty "takenAgo" $ relativeTo_ (UTCTime (fromGregorian 1969 7 21) 0)
 -- >       ]
---
--- Note that since there is no IO on the @js_myMessage@ type, you cannot change the contents of the
--- message dictionary at runtime!
 formattedMessage_ :: [PropertyOrHandler eventHandler] -> ReactElementM eventHandler ()
 formattedMessage_ props = foreignClass js_formatMsg props mempty
 

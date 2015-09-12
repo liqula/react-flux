@@ -3,11 +3,13 @@ module Main where
 
 import Control.Monad
 import Data.Typeable (Typeable)
+import Data.Time
 import Data.Maybe
 import Debug.Trace
 import React.Flux
 import React.Flux.Lifecycle
 import React.Flux.Internal (toJSString)
+import React.Flux.Addons.Intl
 
 import GHCJS.Types (JSRef, JSString)
 import GHCJS.Marshal (fromJSRef)
@@ -192,6 +194,41 @@ testLifecycle_ :: String -> ReactElementM eventHandler ()
 testLifecycle_ s = view testLifecycle s $ span_ ["id" $= "child-passed-to-view"] "I am a child!!!"
 
 --------------------------------------------------------------------------------
+--- Intl
+--------------------------------------------------------------------------------
+
+intlSpec :: ReactView ()
+intlSpec = defineView "intl" $ \() -> setLocales_ "en-US" $
+    ul_ $ do
+        li_ ["id" $= "f-number"] $
+            formattedNumber_ [ "value" @= (0.9 :: Double), "style" $= "percent" ]
+        li_ ["id" $= "f-int"] $ int_ 100000
+        li_ ["id" $= "f-double"] $ double_ 40000.2
+
+        let moon = fromGregorian 1969 7 20
+            fullDayF = DayFormat { weekdayF = Just "long", eraF = Just "short", yearF = Just "2-digit", monthF = Just "long", dayF = Just "2-digit" }
+
+        li_ ["id" $= "f-shortday"] $ day_ shortDate moon
+        li_ ["id" $= "f-fullday"] $ day_ fullDayF moon
+        li_ ["id" $= "f-date"] $ formattedDate_ (Left moon)
+                [ "weekday" $= "short", "month" $= "short", "day" $= "numeric", "year" $= "2-digit" ]
+
+        let step = UTCTime moon (2*60*60 + 56*60) -- 1969-7-20 02:56 UTC
+            fullT = (fullDayF, TimeFormat { hourF = Just "numeric", minuteF = Just "2-digit", secondF = Just "numeric", timeZoneNameF = Just "long" })
+        
+        li_ ["id" $= "f-shorttime"] $ utcTime_ shortDateTime step
+        li_ ["id" $= "f-fulltime"] $ utcTime_ fullT step
+        li_ ["id" $= "f-time"] $ formattedDate_ (Right step)
+                [ "year" $= "2-digit", "month" $= "short", "day" $= "numeric"
+                , "hour" $= "numeric", "minute" $= "2-digit", "second" $= "numeric"
+                , "timeZoneName" $= "short"
+                , "timeZone" $= "Pacific/Tahiti"
+                ]
+
+        li_ ["id" $= "f-relative"] $ relativeTo_ step
+        li_ ["id" $= "f-relative-days"] $ formattedRelative_ step [ "units" $= "day" ]
+
+--------------------------------------------------------------------------------
 --- Main
 --------------------------------------------------------------------------------
 
@@ -200,6 +237,9 @@ app :: ReactView ()
 app = defineLifecycleView "app" "Hello" lifecycleConfig
     { lRender = \s () -> do
         eventsView_
+
+        view intlSpec () mempty
+
         when (s /= "") $
             testLifecycle_ s
         button_ [ "id" $= "add-app-str"
