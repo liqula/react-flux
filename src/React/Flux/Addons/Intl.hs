@@ -260,7 +260,7 @@ formattedRelative_ t props = foreignClass js_formatRelative (property "value" (t
 --
 -- >window.myMessages = window.myMessages || {};
 -- >window.myMessages["en-US"] = {
--- >    photos: "{name} took {numPhotos, plural, =0 {no photos}, =1 {one photo}, other {# photos}} {takenAgo}."
+-- >    photos: "{name} took {numPhotos, plural, =0 {no photos} =1 {one photo} other {# photos}} {takenAgo}."
 -- >};
 --
 -- and similar files for each locale you support.  The server then includes these files depending on

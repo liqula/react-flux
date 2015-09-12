@@ -228,6 +228,20 @@ intlSpec = defineView "intl" $ \() -> setLocales_ "en-US" $
         li_ ["id" $= "f-relative"] $ relativeTo_ step
         li_ ["id" $= "f-relative-days"] $ formattedRelative_ step [ "units" $= "day" ]
 
+        li_ ["id" $= "f-msg"] $
+            formattedMessage_
+                [ "message" $= "{name} took {numPhotos, plural, =0 {no photos} =1 {one photo} other {# photos}} {takenAgo}."
+                , "name" $= "Neil Armstrong"
+                , "numPhotos" @= (100 :: Int)
+                , elementProperty "takenAgo" $ span_ ["id" $= "takenAgoSpan"] "years ago"
+                ]
+
+        li_ ["id" $= "f-html-msg"] $
+            formattedHTMLMessage_
+                [ "message" $= "<b>{num}</b> is the answer to life, the universe, and everything"
+                , "num" @= (42 :: Int)
+                ]
+
 --------------------------------------------------------------------------------
 --- Main
 --------------------------------------------------------------------------------
