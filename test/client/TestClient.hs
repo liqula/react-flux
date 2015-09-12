@@ -2,6 +2,7 @@
 module Main where
 
 import Control.Monad
+import Data.Monoid ((<>))
 import Data.Typeable (Typeable)
 import Data.Time
 import Data.Maybe
@@ -158,7 +159,6 @@ testLifecycle = defineLifecycleView "testlifecycle" (12 :: Int) lifecycleConfig
         button_ [ "id" $= "increment-state"
                 , onClick $ \_ _ st -> ([], Just $ st + 1)
                 ] "Incr"
-        div_ childrenPassedToView
 
     , lComponentWillMount = Just $ \pAndS setStateFn -> do
         outputIO ["will mount"]
@@ -192,6 +192,23 @@ testLifecycle = defineLifecycleView "testlifecycle" (12 :: Int) lifecycleConfig
 
 testLifecycle_ :: String -> ReactElementM eventHandler ()
 testLifecycle_ s = view testLifecycle s $ span_ ["id" $= "child-passed-to-view"] "I am a child!!!"
+
+--------------------------------------------------------------------------------
+--- Children passed to view
+--------------------------------------------------------------------------------
+
+displayChildren :: ReactView String
+displayChildren = defineView "display children" $ \ident ->
+    span_ ["class" $= "display-children", "id" @= ident] childrenPassedToView
+
+displayChildren_ :: String -> ReactElementM handler () -> ReactElementM handler ()
+displayChildren_ = view displayChildren
+
+displayChildrenSpec :: ReactElementM handler ()
+displayChildrenSpec = ul_ $ do
+    li_ $ displayChildren_ "empty-children" mempty
+    li_ $ displayChildren_ "single-child-wrapper" $ span_ ["id" $= "single-child"] "Single Child!!"
+    li_ $ displayChildren_ "multi-child" $ span_ ["id" $= "child1"] "Child 1" <> span_ ["id" $= "child2"] "Child 2"
 
 --------------------------------------------------------------------------------
 --- Intl
@@ -263,6 +280,8 @@ app = defineLifecycleView "app" "Hello" lifecycleConfig
         button_ [ "id" $= "clear-app-str"
                 , onClick $ \_ _ _ -> ([], Just "")
                 ] "Clear"
+
+        displayChildrenSpec
     }
 
 main :: IO ()

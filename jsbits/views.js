@@ -130,3 +130,13 @@ function hsreact$mk_lifecycle_view(name, initialState, renderCb,
 
     return React['createClass'](cl);
 }
+
+//React 0.14 introduced React.Children.toArray
+var hsreact$children_to_array = React['Children']['toArray'] ? React['Children']['toArray'] :
+    (function (children) {
+        var ret = [];
+        React['Children']['forEach'](children, function(x) {
+            ret.push(x);
+        });
+        return ret;
+    });

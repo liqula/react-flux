@@ -16,7 +16,7 @@ expectTodos todos = do
     forM_ (zip entries todos) $ \(li, (todo, complete)) -> do
         chk <- findElemFrom li $ ByCSS "input[type=checkbox]"
         attr chk "checked" `shouldReturn` if complete then Just "true" else Nothing
-        spn <- findElemFrom li $ ByTag "span"
+        spn <- findElemFrom li $ ByTag "label"
         getText spn `shouldReturn` todo
 
     -- check items left
@@ -30,7 +30,7 @@ expectTodos todos = do
     -- clear completed
     let completedCnt = length $ filter snd todos
     when (completedCnt > 0) $ do
-        completeBtn <- findElem $ ByCSS "button#clear-completed span"
+        completeBtn <- findElem $ ByCSS "button#clear-completed"
         getText completeBtn `shouldReturn` (T.pack $ "Clear completed (" ++ show completedCnt ++ ")")
 
 getRow :: Int -> WD Element
@@ -58,7 +58,7 @@ spec = session " for todo example application" $ using Chrome $ do
 
     it "edits a todo" $ runWD $ do
         midRow <- getRow 1
-        findElemFrom midRow (ByTag "span") >>= moveToCenter
+        findElemFrom midRow (ByTag "label") >>= moveToCenter
         doubleClick
         editBox <- findElemFrom midRow (ByCSS "input.edit")
         sendKeys "Learn react.js" editBox

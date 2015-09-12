@@ -55,8 +55,6 @@ spec = session " for the test client" $ using Chrome $ do
             , "refProps id = world"
             ]
         lifecyclePropsAndStateAre "Hello" 100
-        child <- findElem (ById "child-passed-to-view")
-        isDisplayed child `shouldReturn` True
 
     it "processes a focus event" $ runWD $ do
         findElem (ById "keyinput") >>= click
@@ -193,6 +191,25 @@ spec = session " for the test client" $ using Chrome $ do
             getText htmlMsg `shouldReturn` "42 is the answer to life, the universe, and everything"
             b <- findElemFrom htmlMsg $ ByTag "b"
             getText b `shouldReturn` "42"
+
+    describe "children passed to view" $ do
+
+        it "does not display null children" $ runWD $ do
+            s <- findElem $ ById "empty-children"
+            findElemsFrom s (ByCSS "*") `shouldReturn` []
+            getText s `shouldReturn` ""
+
+        it "displays a single child" $ runWD $ do
+            s <- findElem $ ById "single-child-wrapper"
+            s' <- findElemFrom s $ ByCSS "span#single-child"
+            getText s' `shouldReturn` "Single Child!!"
+
+        it "displays a child list" $ runWD $ do
+            s <- findElem $ ById "multi-child"
+            c1 <- findElemFrom s $ ByCSS "span#child1"
+            getText c1 `shouldReturn` "Child 1"
+            c2 <- findElemFrom s $ ByCSS "span#child2"
+            getText c2 `shouldReturn` "Child 2"
 
     {-
     it "inspects the session" $ runWD $ do

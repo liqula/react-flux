@@ -285,8 +285,8 @@ foreign import javascript unsafe
     js_ReactGetProps :: ReactThis state props -> IO (Export props)
 
 foreign import javascript unsafe
-    "$1['props']['children']"
-    js_ReactGetChildren :: ReactThis state props -> IO (JSArray)
+    "hsreact$children_to_array($1['props']['children'])"
+    js_ReactGetChildren :: ReactThis state props -> IO JSArray
 
 foreign import javascript unsafe
     "$1._updateAndReleaseState($2)"
@@ -348,8 +348,7 @@ mkRenderCallback parseState runHandler render = syncCallback2 ContinueAsync $ \t
     node <- render state props
 
     let getPropsChildren = do childRef <- js_ReactGetChildren this
-                              let childArr = toList childRef
-                              return $ map ReactElementRef childArr
+                              return $ map ReactElementRef $ toList childRef
 
     (element, evtCallbacks) <- mkReactElement (runHandler this) getPropsChildren node
 

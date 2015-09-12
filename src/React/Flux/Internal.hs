@@ -34,6 +34,7 @@ import           GHCJS.Foreign.Callback
 import qualified JavaScript.Object as JSO
 import           GHCJS.Types (JSRef, JSString, IsJSRef, jsref)
 import           GHCJS.Marshal (ToJSRef(..))
+import           GHCJS.Foreign (jsNull)
 import           React.Flux.Export
 #else
 import Data.Text (Text)
@@ -245,7 +246,7 @@ mkReactElement runHandler getPropsChildren = runWriterT . mToElem
                 [x] -> return x
                 xs -> lift $ do
                     emptyObj <- JSO.create
-                    let arr = JSA.fromList $ map reactElementRef xs
+                    let arr = jsref $ JSA.fromList $ map reactElementRef xs
                     js_ReactCreateElementName "div" emptyObj arr
 
         -- add the property or handler to the javascript object
@@ -281,20 +282,28 @@ mkReactElement runHandler getPropsChildren = runWriterT . mToElem
             obj <- lift $ JSO.create
             mapM_ (addPropOrHandlerToObj obj) $ fProps f
             childNodes <- createElement $ fChild f
-            let childArr = JSA.fromList $ map reactElementRef childNodes
+            let children = case map reactElementRef childNodes of
+                             [] -> jsNull
+                             [x] -> x
+                             xs -> jsref $ JSA.fromList xs
             e <- lift $ case fName f of
-                Left s -> js_ReactCreateElementName (toJSString s) obj childArr
-                Right ref -> js_ReactCreateForeignElement ref obj childArr
+                Left s -> js_ReactCreateElementName (toJSString s) obj children
+                Right ref -> js_ReactCreateForeignElement ref obj children
             return [e]
         createElement (ViewElement { ceClass = rc, ceProps = props, ceKey = mkey, ceChild = child }) = do
             childNodes <- createElement child
             propsE <- lift $ export props -- this will be released inside the lifetime events for the class (jsbits/class.js)
-            let arr = JSA.fromList $ map reactElementRef childNodes
+
+            let children = case map reactElementRef childNodes of
+                             [] -> jsNull
+                             [x] -> x
+                             xs -> jsref $ JSA.fromList xs
+
             e <- lift $ case mkey of
                 Just key -> do
                     keyRef <- toKeyRef key
-                    js_ReactCreateKeyedElement rc keyRef propsE arr
-                Nothing -> js_ReactCreateClass rc propsE arr
+                    js_ReactCreateKeyedElement rc keyRef propsE children
+                Nothing -> js_ReactCreateClass rc propsE children
             return [e]
 
 type MkReactElementM a = WriterT [Callback (JSRef -> IO ())] IO a
@@ -305,19 +314,19 @@ foreign import javascript unsafe
 
 foreign import javascript unsafe
     "React['createElement']($1, $2, $3)"
-    js_ReactCreateElementName :: JSString -> JSO.Object -> JSA.JSArray -> IO ReactElementRef
+    js_ReactCreateElementName :: JSString -> JSO.Object -> JSRef -> IO ReactElementRef
 
 foreign import javascript unsafe
     "React['createElement']($1, $2, $3)"
-    js_ReactCreateForeignElement :: ReactViewRef a -> JSO.Object -> JSA.JSArray -> IO ReactElementRef
+    js_ReactCreateForeignElement :: ReactViewRef a -> JSO.Object -> JSRef -> IO ReactElementRef
 
 foreign import javascript unsafe
     "React['createElement']($1, {hs:$2}, $3)"
-    js_ReactCreateClass :: ReactViewRef a -> Export props -> JSA.JSArray -> IO ReactElementRef
+    js_ReactCreateClass :: ReactViewRef a -> Export props -> JSRef -> IO ReactElementRef
 
 foreign import javascript unsafe
     "React['createElement']($1, {key: $2, hs:$3}, $4)"
-    js_ReactCreateKeyedElement :: ReactViewRef a -> JSRef -> Export props -> JSA.JSArray -> IO ReactElementRef
+    js_ReactCreateKeyedElement :: ReactViewRef a -> JSRef -> Export props -> JSRef -> IO ReactElementRef
 
 foreign import javascript unsafe
     "hsreact$mk_arguments_callback($1)"
