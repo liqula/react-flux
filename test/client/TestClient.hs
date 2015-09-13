@@ -108,7 +108,7 @@ eventsView = defineView "events" $ \() ->
                 ]
                 "Testing preventDefault"
 
-        p_ $
+        div_ $
             div_ [ "id" $= "outer-div"
                  , onClick $ \_ _ -> output ["Click on outer div"]
                  , capturePhase $ onDoubleClick $ \e _ -> output ["Double click outer div"] ++ [stopPropagation e]
@@ -199,7 +199,7 @@ testLifecycle_ s = view testLifecycle s $ span_ ["id" $= "child-passed-to-view"]
 
 displayChildren :: ReactView String
 displayChildren = defineView "display children" $ \ident ->
-    span_ ["class" $= "display-children", "id" @= ident] childrenPassedToView
+    span_ ["className" $= "display-children", "id" @= ident] childrenPassedToView
 
 displayChildren_ :: String -> ReactElementM handler () -> ReactElementM handler ()
 displayChildren_ = view displayChildren
@@ -285,6 +285,4 @@ app = defineLifecycleView "app" "Hello" lifecycleConfig
     }
 
 main :: IO ()
-main = do
-    initializeTouchEvents
-    reactRender "app" app ()
+main = reactRender "app" app ()

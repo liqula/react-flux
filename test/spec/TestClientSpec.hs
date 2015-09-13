@@ -41,10 +41,15 @@ intlSpanShouldBe ident txt = do
     getText e `shouldReturn` T.pack txt
 
 spec :: Spec
-spec = session " for the test client" $ using Chrome $ do
+spec = do
+    describe "React 0.13" $ testClientSpec "test-client.html"
+    describe "React 0.14" $ testClientSpec "test-client14.html"
+
+testClientSpec :: String -> Spec
+testClientSpec filename = session " for the test client" $ using Chrome $ do
     it "opens the page" $ runWD $ do
         dir <- liftIO $ getCurrentDirectory
-        openPage $ "file://" ++ dir ++ "/../client/test-client.html"
+        openPage $ "file://" ++ dir ++ "/../client/" ++ filename
         loadLog `shouldReturn`
             [ "will mount"
             , "Current props and state: Hello, 12"
