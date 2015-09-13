@@ -189,6 +189,7 @@ node(clipPath)
 node(defs)
 node(ellipse)
 node(g)
+node(image)
 node(line)
 node(linearGradient)
 node(mask)
@@ -327,6 +328,7 @@ clipPath_ :: Term eventHandler arg result => arg -> result; clipPath_ = term "cl
 defs_ :: Term eventHandler arg result => arg -> result; defs_ = term "defs"
 ellipse_ :: Term eventHandler arg result => arg -> result; ellipse_ = term "ellipse"
 g_ :: Term eventHandler arg result => arg -> result; g_ = term "g"
+image_ :: Term eventHandler arg result => arg -> result; image_ = term "image"
 line_ :: Term eventHandler arg result => arg -> result; line_ = term "line"
 linearGradient_ :: Term eventHandler arg result => arg -> result; linearGradient_ = term "linearGradient"
 mask_ :: Term eventHandler arg result => arg -> result; mask_ = term "mask"

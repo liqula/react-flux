@@ -19,13 +19,17 @@
 -- which calls 'reactRender' and initializes any AJAX load calls to the backend. The source package
 -- contains some <https://bitbucket.org/wuzzeb/react-flux/src/tip/example/ example applications>.
 --
--- __Deployment__: Care has been taken to make sure closure with ADVANCED_OPTIMIZATIONS correctly
--- minimizes a react-flux application.  No externs are needed, instead all you need to do is provide
--- or protect the @React@ variable.  The TODO example does this as follows:
+-- __Web Deployment__: 'reactRender' is used to render your application into the DOM.
+-- Care has been taken to make sure closure with ADVANCED_OPTIMIZATIONS correctly
+-- minimizes a react-flux application.  No externs are needed, instead all you need to do is
+-- protect the @React@ variable (and @ReactDOM@ if you are using version >= 0.14).  The TODO example
+-- does this as follows:
 --
--- >(function(global, React) {
+-- >(function(global, React, ReactDOM) {
 -- >contents of all.js
--- >})(this, window['React']);
+-- >})(window, window['React'], window['ReactDOM']);
+--
+-- __Node Deployment__: TODO
 --
 -- __Testing__:  I use the following approach to test my react-flux application.  First, I use unit
 -- testing to test the dispatcher and store 'transform' functions.  Since the dispatcher and the
@@ -113,7 +117,7 @@ reactRender htmlId rc props = do
     js_ReactRender e (toJSString htmlId)
 
 foreign import javascript unsafe
-    "React['render']($1, document.getElementById($2))"
+    "(typeof ReactDOM === 'object' ? ReactDOM : React)['render']($1, document.getElementById($2))"
     js_ReactRender :: ReactElementRef -> JSString -> IO ()
 
 #else

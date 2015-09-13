@@ -292,12 +292,15 @@ foreign import javascript unsafe
     "$1._updateAndReleaseState($2)"
     js_ReactUpdateAndReleaseState :: ReactThis state props -> Export state -> IO ()
 
+-- React 0.13 has React.findDOMNode, while 0.14 moves it to ReactDOM.findDOMNode.  Also, 0.14
+-- does not need to call findDOMNode on refs.
+
 foreign import javascript unsafe
-    "React['findDOMNode']($1)"
+    "typeof ReactDOM === 'object' ? ReactDOM['findDOMNode']($1) : React['findDOMNode']($1)"
     js_ReactFindDOMNode :: ReactThis state props -> IO JSRef
 
 foreign import javascript unsafe
-    "React['findDOMNode']($1['refs'][$2])"
+    "typeof ReactDOM === 'object' ? $1['refs'][$2] : React['findDOMNode']($1['refs'][$2])"
     js_ReactGetRef :: ReactThis state props -> JSString -> IO JSRef
 
 newtype RenderCbArg = RenderCbArg JSRef

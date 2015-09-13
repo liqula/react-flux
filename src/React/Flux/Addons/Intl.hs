@@ -1,8 +1,13 @@
 -- | Bindings to the <http://formatjs.io/react/ ReactIntl> library.
 --
--- To use these bindings, load the @react-intl.min.js@ script onto the page so that
--- @window.ReactIntl@ exists.  Next, add a call to 'setLocales_' to the top level of your
--- application and then use the various formatting combinators in your rendering functions.
+-- To use these bindings, you need to provide the @ReactIntl@ variable.  In the browser you can just
+-- load the @react-intl.min.js@ script onto the page so that @window.ReactIntl@ exists.  If you are
+-- running in node, execute @global.ReactIntl = require('ReactIntl');@ so that @global.ReactIntl@
+-- exists.  When compiling with closure, protect the ReactIntl variable as follows:
+--
+-- >(function(global, React, ReactDOM, ReactIntl) {
+-- >contents of all.js
+-- >})(this, this['React'], this['ReactDOM'], this['ReactIntl]);
 --
 -- Note that this module uses the mixin is only used for the locale, the formats and messages are
 -- better managed from Haskell.  The @formats@ property of the mixin allows you to specify custom
@@ -47,23 +52,23 @@ foreign import javascript unsafe
     js_intlMixinClass :: JSRef
 
 foreign import javascript unsafe
-    "$r = window['ReactIntl']['FormattedNumber']"
+    "$r = ReactIntl['FormattedNumber']"
     js_formatNumber :: JSRef
 
 foreign import javascript unsafe
-    "$r = window['ReactIntl']['FormattedDate']"
+    "$r = ReactIntl['FormattedDate']"
     js_formatDate :: JSRef
 
 foreign import javascript unsafe
-    "$r = window['ReactIntl']['FormattedRelative']"
+    "$r = ReactIntl['FormattedRelative']"
     js_formatRelative :: JSRef
 
 foreign import javascript unsafe
-    "$r = window['ReactIntl']['FormattedMessage']"
+    "$r = ReactIntl['FormattedMessage']"
     js_formatMsg :: JSRef
 
 foreign import javascript unsafe
-    "$r = window['ReactIntl']['FormattedHTMLMessage']"
+    "$r = ReactIntl['FormattedHTMLMessage']"
     js_formatHtmlMsg :: JSRef
 
 foreign import javascript unsafe
