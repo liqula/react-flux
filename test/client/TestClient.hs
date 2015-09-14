@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings, TypeFamilies #-}
+{-# LANGUAGE OverloadedStrings, TypeFamilies, ScopedTypeVariables #-}
 module Main where
 
 import Control.Monad
@@ -12,6 +12,7 @@ import React.Flux.Lifecycle
 import React.Flux.Internal (toJSString)
 import React.Flux.Addons.Intl
 import React.Flux.Addons.React
+import React.Flux.Addons.Bootstrap
 
 import GHCJS.Types (JSRef, JSString)
 import GHCJS.Marshal (fromJSRef)
@@ -272,6 +273,24 @@ cssTransitions = defineView "css transitions" $ \items ->
                 div_ ["key" @= key] $ span_ ["className" $= "css-transition-entry"] $ elemText txt
 
 --------------------------------------------------------------------------------
+--- Bootstrap
+--------------------------------------------------------------------------------
+
+bootstrapSpec :: ReactView ()
+bootstrapSpec = defineView "bootstrap" $ \() -> div_ ["id" $= "bootstrap"] $ do
+    bootstrap_ "Alert" [ "bsStyle" $= "danger"
+                       , callback "onDismiss" $ output ["Closing alert"]
+                       ] $
+        p_ "Hello, World!"
+
+    bootstrap_ "Nav" [ "activeKey" @= (1 :: Int)
+                     , callback "onSelect" $ \(i :: Int) -> output ["Switched to " ++ show i]
+                     ] $ do
+        bootstrap_ "NavItem" ["eventKey" @= (1 :: Int)] "Item 1"
+        bootstrap_ "NavItem" ["eventKey" @= (2 :: Int)] "Item 2"
+        bootstrap_ "NavItem" ["eventKey" @= (3 :: Int)] "Item 3"
+
+--------------------------------------------------------------------------------
 --- Main
 --------------------------------------------------------------------------------
 
@@ -296,6 +315,8 @@ app = defineLifecycleView "app" "Hello" lifecycleConfig
         displayChildrenSpec
 
         view cssTransitions ["A", "B"] mempty
+
+        view bootstrapSpec () mempty
     }
 
 main :: IO ()

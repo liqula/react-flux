@@ -222,6 +222,27 @@ testClientSpec filename = session " for the test client" $ using Chrome $ do
         getText a `shouldReturn` "A"
         getText b `shouldReturn` "B"
 
+    describe "bootstrap" $ do
+
+        it "displays and closes alert" $ runWD $ do
+            alert <- findElem $ ByCSS "div#bootstrap div.alert"
+            (findElemFrom alert (ByTag "p") >>= getText)
+                `shouldReturn` "Hello, World!"
+            findElemFrom alert (ByTag "button") >>= click
+            loadLog `shouldReturn` ["Closing alert"]
+
+        it "switchs nav items" $ runWD $ do
+            navUl <- findElem $ ByCSS "div#bootstrap nav > ul"
+            i1 <- findElemFrom navUl $ ByCSS "li:first-child a"
+            i2 <- findElemFrom navUl $ ByCSS "li:nth-child(2) a"
+            i3 <- findElemFrom navUl $ ByCSS "li:nth-child(3) a"
+            click i2
+            loadLog `shouldReturn` ["Switched to 2"]
+            click i3
+            loadLog `shouldReturn` ["Switched to 3"]
+            click i1
+            loadLog `shouldReturn` ["Switched to 1"]
+
     {-
     it "inspects the session" $ runWD $ do
         loadLog >>= \x -> liftIO $ putStrLn $ show x
