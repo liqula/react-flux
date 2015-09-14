@@ -4,4 +4,5 @@ syntax:glob
 dist/
 .cabal-sandbox
 cabal.sandbox.config
-js-build/
+example/todo/js-build/
+example/todo/node_modules/

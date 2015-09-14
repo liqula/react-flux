@@ -29,7 +29,14 @@
 -- >contents of all.js
 -- >})(window, window['React'], window['ReactDOM']);
 --
--- __Node Deployment__: TODO
+-- __Node Deployment__: 'reactRenderToString' is used to render the application to a string when
+-- running in node (not the browser).  To execute with node, you need to get @global.React@ (and
+-- @global.ReactDOM@ for 0.14) before executing all.js.  The TODO example application does this by
+-- creating a file @run-in-node.js@ with the contents
+--
+-- >React = require("react");
+-- >ReactDOM = require("react-dom");
+-- >require("../../dist/build/todo-node/todo-node.jsexe/all.js");
 --
 -- __Testing__:  I use the following approach to test my react-flux application.  First, I use unit
 -- testing to test the dispatcher and store 'transform' functions.  Since the dispatcher and the
@@ -81,12 +88,14 @@ module React.Flux (
 
   -- * Main
   , reactRender
+  , reactRenderToString
 
   -- * Performance
   -- $performance
 ) where
 
 import Data.Typeable (Typeable)
+import Data.Text (Text)
 
 import React.Flux.Views
 import React.Flux.DOM
@@ -95,14 +104,15 @@ import React.Flux.PropertiesAndEvents
 import React.Flux.Store
 
 #ifdef __GHCJS__
-import GHCJS.Types (JSString)
+import GHCJS.Types (JSString, JSRef)
+import GHCJS.Marshal (fromJSRef)
 #endif
 
 ----------------------------------------------------------------------------------------------------
 -- reactRender has two versions
 ----------------------------------------------------------------------------------------------------
 
--- | Render your React application into the DOM.
+-- | Render your React application into the DOM.  Use this from your @main@ function, and only in the browser.
 reactRender :: Typeable props
             => String -- ^ The ID of the HTML element to render the application into.
                       -- (This string is passed to @document.getElementById@)
@@ -119,6 +129,40 @@ reactRender htmlId rc props = do
 foreign import javascript unsafe
     "(typeof ReactDOM === 'object' ? ReactDOM : React)['render']($1, document.getElementById($2))"
     js_ReactRender :: ReactElementRef -> JSString -> IO ()
+
+#else
+
+reactRender _ _ _ = return ()
+
+#endif
+
+-- | Render your React application to a string using either @React.renderToString@ if the first
+-- argument is false or @React.renderToStaticMarkup@ if the first argument is true.
+-- Use this only on the server when running with node.
+reactRenderToString :: Typeable props
+                    => Bool -- ^ Render to static markup?  If true, this won't create extra DOM attributes
+                            -- that React uses internally.
+                    -> ReactView props -- ^ A single instance of this view is created
+                    -> props -- ^ the properties to pass to the view
+                    -> IO Text
+
+#ifdef __GHCJS__
+
+reactRenderToString includeStatic rc props = do
+    (e, _) <- mkReactElement id (return []) $ view rc props mempty
+    sRef <- (if includeStatic then js_ReactRenderStaticMarkup else js_ReactRenderToString) e
+    --return sRef
+    --return $ JSS.unpack sRef
+    mtxt <- fromJSRef sRef
+    maybe (error "Unable to convert string return to Text") return mtxt
+
+foreign import javascript unsafe
+    "(typeof ReactDOM === 'object' ? ReactDOM : React)['renderToString']($1)"
+    js_ReactRenderToString :: ReactElementRef -> IO JSRef
+
+foreign import javascript unsafe
+    "(typeof ReactDOM === 'object' ? ReactDOM : React)['renderToStaticMarkup']($1)"
+    js_ReactRenderStaticMarkup :: ReactElementRef -> IO JSRef
 
 #else
 

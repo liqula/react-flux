@@ -10,7 +10,7 @@ overview from the flux repository covers this example application as well.
 
 When reading the code for the example application, you should start with `TodoStore.hs`.  Next, look
 at `TodoDispatcher.hs` and `TodoViews.hs`.  Finally, you can look at `TodoComponents.hs` and
-`Main.hs`.
+`Main.hs` and `NodeMain.hs`.
 
 ### Build
 
@@ -21,7 +21,9 @@ cabal configure -fexample
 cabal build
 ~~~
 
-The result of this build is a file `dist/build/todo/todo.jsexe/all.js`.  There is a file
+### TODO in the browser
+
+A result of this build is a file `dist/build/todo/todo.jsexe/all.js`.  There is a file
 `example/todo/todo-dev.html` which loads this `all.js` file directly from the `dist` directory, so you
 can open `todo-dev.html` after building.
 
@@ -35,7 +37,18 @@ make
 ~~~
 
 This produces a file `js-build/todo.min.js` which is only 500 kibibytes which when compressed with
-gzip is 124 kibibytes.
+gzip is 124 kibibytes.  You can then open `example/todo/todo.html` which loads this minimized javascript.
+
+### TODO in node
+
+`NodeMain.hs` is a separate main module which instead of rendering the TODO example application into the DOM,
+it renders it to a string and then displays it.  To execute this, run
+
+~~~
+cd example/todo
+npm install react@0.13.3
+node run-in-node.js
+~~~
 
 ### Testing
 

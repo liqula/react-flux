@@ -20,6 +20,8 @@
       properties.  There were several changes to the possible properties and covering them all from Haskell is not worth
       it when the properties can easily be created directly.
 
+* `reactRenderToString` was added to allow executing a react-flux application using node.
+
 # 0.9.4
 
 * Fix to build with latest ghcjs-base (requires at least aaa4d59117f37d1b9c60a154a9128b3bcc6301cd)
