@@ -19,6 +19,7 @@ module React.Flux.PropertiesAndEvents (
   , preventDefault
   , stopPropagation
   , capturePhase
+  , on
 
   -- * Keyboard
   , KeyboardEvent(..)
@@ -217,7 +218,8 @@ parseEvent arg@(HandlerArg o) = Event
     , evtHandlerArg = arg
     }
 
--- | Construct a handler from a function taking the event
+-- | Use this to create an event handler for an event not covered by the rest of this module.  At
+-- the moment, this is just the media events (onPlay, onPause, etc.) on image and video tags.
 on :: String -> (Event -> handler) -> PropertyOrHandler handler
 on name f = CallbackPropertyWithSingleArgument
     { csPropertyName = name
