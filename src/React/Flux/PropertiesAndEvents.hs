@@ -492,7 +492,7 @@ onMouseUp = on2 "onMouseUp" parseMouseEvent
 -- | Initialize touch events is only needed with React 0.13, in version 0.14 it was removed.
 #ifdef __GHCJS__
 foreign import javascript unsafe
-    "React['initializeTouchEvents'](true)"
+    "React['initializeTouchEvents'] ? React['initializeTouchEvents'](true) : null"
     initializeTouchEvents :: IO ()
 #else
 initializeTouchEvents :: IO ()

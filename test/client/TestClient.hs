@@ -320,4 +320,6 @@ app = defineLifecycleView "app" "Hello" lifecycleConfig
     }
 
 main :: IO ()
-main = reactRender "app" app ()
+main = do
+    initializeTouchEvents
+    reactRender "app" app ()
