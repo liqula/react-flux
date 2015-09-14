@@ -40,6 +40,12 @@ intlSpanShouldBe ident txt = do
     e <- findElem (ById $ T.pack ident)
     getText e `shouldReturn` T.pack txt
 
+-- | Only up to 999,999 since this is just used for the number of days since 1969
+showWithComma :: Integer -> String
+showWithComma i = show x ++ "," ++ show y
+    where
+        (x, y) = divMod i 1000
+
 spec :: Spec
 spec = do
     describe "React 0.13" $ testClientSpec "test-client.html"
@@ -172,19 +178,18 @@ testClientSpec filename = session " for the test client" $ using Chrome $ do
             "f-number" `intlSpanShouldBe` "90%"
             "f-int" `intlSpanShouldBe` "100,000"
             "f-double" `intlSpanShouldBe` "40,000.2"
-            "f-shortday" `intlSpanShouldBe` "Aug 20, 1969"
-            "f-fullday" `intlSpanShouldBe` "Wednesday, August 20, 69 AD"
-            "f-date" `intlSpanShouldBe` "Wed, Aug 20, 69"
+            "f-shortday" `intlSpanShouldBe` "Jul 20, 1969"
+            "f-fullday" `intlSpanShouldBe` "Sunday, July 20, 69 AD"
+            "f-date" `intlSpanShouldBe` "Sun, Jul 20, 69"
             -- f-shorttime and f-fulltime cannot be (easily) tested since they rely on the current timezone
-            "f-time" `intlSpanShouldBe` "Aug 19, 69, 4:56:00 PM GMT-10"
+            "f-time" `intlSpanShouldBe` "Jul 19, 69, 4:56:00 PM GMT-10"
 
             today <- liftIO (utctDay <$> getCurrentTime)
             let moon = fromGregorian 1969 7 20
                 daysAgo = diffDays today moon
                 yearsAgo :: Int = round $ realToFrac daysAgo / (365 :: Double) -- is close enough
             "f-relative" `intlSpanShouldBe` (show yearsAgo ++ " years ago")
-
-            --"f-relative-days" isn't correct in react since it ignores leap years, so will not match daysAgo
+            "f-relative-days" `intlSpanShouldBe` (showWithComma daysAgo ++ " days ago")
 
         it "displays messages" $ runWD $ do
             msg <- findElem $ ById "f-msg"

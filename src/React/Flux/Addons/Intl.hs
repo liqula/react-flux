@@ -75,7 +75,7 @@ foreign import javascript unsafe
     js_formatHtmlMsg :: JSRef
 
 foreign import javascript unsafe
-    "$r = (new Date($1, $2, $3))"
+    "$r = (new Date($1, $2-1, $3))"
     js_mkDate :: Int -> Int -> Int -> JSRef
 
 -- | Convert a day to a javascript Date
@@ -85,7 +85,7 @@ dayToRef day = js_mkDate (fromIntegral y) m d
         (y, m, d) = toGregorian day
 
 foreign import javascript unsafe
-    "$r = (new Date(Date.UTC($1, $2, $3, $4, $5, $6, $7)))"
+    "$r = (new Date(Date.UTC($1, $2-1, $3, $4, $5, $6, $7)))"
     js_mkDateTime :: Int -> Int -> Int -> Int -> Int -> Int -> Int -> JSRef
 
 -- | Convert a UTCTime to a javascript date object.
