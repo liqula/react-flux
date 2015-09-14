@@ -1,4 +1,4 @@
-# 1.0.0
+# 1.0.0 (unreleased)
 
 * Bindings to react-intl (http://formatjs.io/react/) for i18n support
 
