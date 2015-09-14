@@ -216,6 +216,12 @@ testClientSpec filename = session " for the test client" $ using Chrome $ do
             c2 <- findElemFrom s $ ByCSS "span#child2"
             getText c2 `shouldReturn` "Child 2"
 
+    it "displays the elements inside the transition" $ runWD $ do
+        d <- findElem $ ById "css-transitions"
+        [a, b] <- findElemsFrom d $ ByCSS "span.css-transition-entry"
+        getText a `shouldReturn` "A"
+        getText b `shouldReturn` "B"
+
     {-
     it "inspects the session" $ runWD $ do
         loadLog >>= \x -> liftIO $ putStrLn $ show x

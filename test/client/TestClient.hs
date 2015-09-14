@@ -11,6 +11,7 @@ import React.Flux
 import React.Flux.Lifecycle
 import React.Flux.Internal (toJSString)
 import React.Flux.Addons.Intl
+import React.Flux.Addons.React
 
 import GHCJS.Types (JSRef, JSString)
 import GHCJS.Marshal (fromJSRef)
@@ -260,6 +261,17 @@ intlSpec = defineView "intl" $ \() -> setLocales_ "en-US" $
                 ]
 
 --------------------------------------------------------------------------------
+--- CSS Transitions
+--------------------------------------------------------------------------------
+
+cssTransitions :: ReactView [String]
+cssTransitions = defineView "css transitions" $ \items ->
+    div_ ["id" $= "css-transitions"] $
+        cssTransitionGroup ["transitionName" $= "example"] $
+            forM_ (zip items [(0 :: Int)..]) $ \(txt, key) ->
+                div_ ["key" @= key] $ span_ ["className" $= "css-transition-entry"] $ elemText txt
+
+--------------------------------------------------------------------------------
 --- Main
 --------------------------------------------------------------------------------
 
@@ -282,6 +294,8 @@ app = defineLifecycleView "app" "Hello" lifecycleConfig
                 ] "Clear"
 
         displayChildrenSpec
+
+        view cssTransitions ["A", "B"] mempty
     }
 
 main :: IO ()

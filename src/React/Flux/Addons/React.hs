@@ -5,8 +5,6 @@
 module React.Flux.Addons.React (
   -- * Animation
     cssTransitionGroup
-  , CSSTransitionProps(..)
-  , defaultTransitionProps
 
   -- * Perf
   , PerfAction(..)
@@ -17,7 +15,6 @@ module React.Flux.Addons.React (
 
 import Control.DeepSeq (NFData)
 import Control.Monad (forM_)
-import Data.Typeable (Typeable)
 import GHC.Generics (Generic)
 import React.Flux
 
@@ -25,35 +22,15 @@ import React.Flux
 import GHCJS.Types (JSRef, JSString)
 #endif
 
--- | The properties for the CSS Transition Group.
-data CSSTransitionProps = CSSTransitionProps
-    { transitionName :: String
-    , transitionAppear :: Bool
-    , transitionEnter :: Bool
-    , transitionLeave :: Bool
-    } deriving (Typeable)
-
--- | Default properties for CSS Transition Group, using \"react-transition\" as the transition name.
-defaultTransitionProps :: CSSTransitionProps
-defaultTransitionProps = CSSTransitionProps
-    { transitionName = "react-transition"
-    , transitionAppear = False
-    , transitionEnter = True
-    , transitionLeave = True
-    }
-
--- | The <https://facebook.github.io/react/docs/animation.html ReactCSSTransitionGroup> element.  At
--- the moment, only the high-level API is supported.
-cssTransitionGroup :: CSSTransitionProps -> ReactElementM eventHandler a -> ReactElementM eventHandler a
+-- | The <https://facebook.github.io/react/docs/animation.html ReactCSSTransitionGroup> element.
+-- For example in React 0.14,
+--
+-- >cssTransitionGroup ["transitionName" $= "example", transitionAppear @= True, transitionAppearTimeout @= (100 :: Int)] $
+-- >    h1_ "Fading at initial mount"
+cssTransitionGroup :: [PropertyOrHandler eventHandler] -> ReactElementM eventHandler a -> ReactElementM eventHandler a
 
 #ifdef __GHCJS__
-cssTransitionGroup p children = foreignClass js_CSSTransitionGroup props children
-    where
-        props = [ "transitionName" @= transitionName p
-                , "transitionAppear" @= transitionAppear p
-                , "transitionEnter" @= transitionEnter p
-                , "transitionLeave" @= transitionLeave p
-                ]
+cssTransitionGroup props children = foreignClass js_CSSTransitionGroup props children
 
 foreign import javascript unsafe
     "React['addons']['CSSTransitionGroup']"
