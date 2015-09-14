@@ -6,13 +6,14 @@ cabal-version: >= 1.9
 executable react-flux-spec
    ghc-options: -Wall
    hs-source-dirs: .
-   main-is: Spec.hs
-   other-modules: TodoSpec, TestClientSpec
+   main-is: Main.hs
+   other-modules: TodoSpec, TestClientSpec, Spec
    build-depends: base
                 , hspec
                 , webdriver
                 , hspec-webdriver
                 , directory
+                , process
                 , transformers
                 , text
                 , time

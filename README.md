@@ -46,11 +46,9 @@ example.)
 echo "compiler: ghcjs" > cabal.config
 cabal configure -fexample -ftest-client
 cabal build
-cd example/todo
-make
 ~~~
 
-The above builds the TODO application, compresses it with closure, and builds the test client.
+The above builds the TODO application and the test client.
 Next, install [selenium-server-standalone](http://www.seleniumhq.org/download/) (also from
 [npm](https://www.npmjs.com/package/selenium-server-standalone-jar)).  Then, build the
 [hspec-webdriver](https://hackage.haskell.org/package/hspec-webdriver) test suite using GHC (not
@@ -61,8 +59,9 @@ cd test/spec
 stack build
 ~~~
 
-Finally, start selenium-server-standalone and execute the test suite.  It must be started from the
-`test/spec` directory, otherwise it does not find the correct javascript files.
+Finally, start selenium-server-standalone and execute the test suite.  Make sure you also have
+closure installed, since the test suite will compress the todo app before testing it.  It must be
+started from the `test/spec` directory, otherwise it does not find the correct javascript files.
 
 ~~~
 stack exec react-flux-spec
