@@ -127,16 +127,20 @@ elementProperty = ElementProperty
 -- | A class which contains all <https://wiki.haskell.org/Varargs a variable argument functions>
 -- where each argument implements 'FromJSRef' and the result is @handler@.
 class CallbackFunction handler a | a -> handler  where
-    applyFromArguments :: JSA.JSArray -> Int -> a -> IO handler
+    applyFromArguments :: JSArray -> Int -> a -> IO handler
 
 instance CallbackFunction handler handler where
     applyFromArguments _ _ h = return h
 
 instance (FromJSRef a, CallbackFunction handler b) => CallbackFunction handler (a -> b) where
+#if __GHCJS__
     applyFromArguments args k f = do
         ma <- fromJSRef $ if k >= JSA.length args then nullRef else JSA.index k args
         a <- maybe (error "Unable to decode callback argument") return ma
         applyFromArguments args (k+1) $ f a
+#else
+    applyFromArguments _ _ _ = error "Not supported in GHC"
+#endif
 
 -- | Create a callback property.  This is primarily intended for foreign React classes which expect
 -- callbacks to be passed to them as properties.  For events on DOM elements, you should instead use
@@ -618,7 +622,7 @@ foreign import javascript unsafe
 
 foreign import javascript unsafe
     "$1[$2]"
-    js_getArrayProp :: JSRef -> JSString -> JSA.JSArray
+    js_getArrayProp :: JSRef -> JSString -> JSArray
 
 -- | Access a property from an object.  Since event objects are immutable, we can use
 -- unsafePerformIO without worry.

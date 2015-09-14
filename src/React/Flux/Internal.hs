@@ -29,6 +29,7 @@ import           Control.Monad.Identity (Identity(..))
 #ifdef __GHCJS__
 import           Unsafe.Coerce
 import qualified Data.JSString as JSS
+import           JavaScript.Array (JSArray)
 import qualified JavaScript.Array as JSA
 import           GHCJS.Foreign.Callback
 import qualified JavaScript.Object as JSO
@@ -43,7 +44,9 @@ type JSRef = ()
 class ToJSRef a
 instance ToJSRef Value
 instance ToJSRef Text
+instance ToJSRef ()
 class IsJSRef a
+type JSArray = JSRef
 #endif
 
 -- type JSObject a = JSO.Object a
@@ -78,7 +81,7 @@ data PropertyOrHandler handler =
       }
  | CallbackPropertyWithArgumentArray
       { caPropertyName :: String
-      , caFunc :: JSA.JSArray -> IO handler
+      , caFunc :: JSArray -> IO handler
       }
  | CallbackPropertyWithSingleArgument
       { csPropertyName :: String

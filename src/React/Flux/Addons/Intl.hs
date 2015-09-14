@@ -45,6 +45,9 @@ module React.Flux.Addons.Intl(
 import React.Flux
 import Data.Time
 import Data.Maybe (catMaybes)
+
+#ifdef __GHCJS__
+
 import GHCJS.Types (JSRef)
 
 foreign import javascript unsafe
@@ -94,6 +97,35 @@ timeToRef (UTCTime uday time) = js_mkDateTime (fromIntegral year) month day hour
         (sec, fracSec) = properFraction pSec
         micro = round $ fracSec * 1000000
 
+#else
+
+type JSRef = ()
+
+js_intlMixinClass :: JSRef
+js_intlMixinClass = ()
+
+js_formatNumber :: JSRef
+js_formatNumber = ()
+
+js_formatDate :: JSRef
+js_formatDate = ()
+
+js_formatRelative :: JSRef
+js_formatRelative = ()
+
+js_formatMsg :: JSRef
+js_formatMsg = ()
+
+js_formatHtmlMsg :: JSRef
+js_formatHtmlMsg = ()
+
+dayToRef :: Day -> JSRef
+dayToRef _ = ()
+
+timeToRef :: UTCTime -> JSRef
+timeToRef _ = ()
+
+#endif
 
 
 -- | Use the IntlMixin to set the @locales@ property.  This @locales@ property will be passed to all
