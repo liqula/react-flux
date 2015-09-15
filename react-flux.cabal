@@ -115,7 +115,23 @@ executable todo-node
                 , deepseq
                 , text
 
-executable test-client
+executable test-client-13
+   if !flag(test-client)
+        Buildable: False
+   ghc-options: -Wall
+   cpp-options: -DGHCJS_BROWSER
+
+   default-language: Haskell2010
+   hs-source-dirs: test/client
+   other-modules: TestClient
+   main-is: TestClient13.hs
+   build-depends: base
+                , react-flux
+                , time
+   if impl(ghcjs)
+      build-depends: ghcjs-base
+
+executable test-client-14
    if !flag(test-client)
         Buildable: False
    ghc-options: -Wall
@@ -123,7 +139,8 @@ executable test-client
 
    default-language: Haskell2010
    hs-source-dirs: test/client
-   main-is: TestClient.hs
+   other-modules: TestClient
+   main-is: TestClient14.hs
    build-depends: base
                 , react-flux
                 , time

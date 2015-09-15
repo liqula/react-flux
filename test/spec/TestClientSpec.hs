@@ -5,7 +5,7 @@ module TestClientSpec (spec) where
 import           Control.Monad
 import           Control.Monad.IO.Class (liftIO)
 import           Data.List
-import           Data.Time
+--import           Data.Time
 import qualified Data.Text              as T
 import           System.Directory       (getCurrentDirectory)
 import           Test.Hspec.WebDriver
@@ -48,8 +48,10 @@ showWithComma i = show x ++ "," ++ show y
 
 spec :: Spec
 spec = do
-    describe "React 0.13" $ testClientSpec "test-client.html"
-    describe "React 0.14" $ testClientSpec "test-client14.html"
+    describe "React 0.13" $ testClientSpec "test-client13.html"
+    describe "React 0.14" $ do
+        testClientSpec "test-client14.html"
+        intlSpec "test-client14.html"
 
 testClientSpec :: String -> Spec
 testClientSpec filename = session " for the test client" $ using Chrome $ do
@@ -173,35 +175,6 @@ testClientSpec filename = session " for the test client" $ using Chrome $ do
                 , "Current props and state: Helloo, 101"
                 ]
 
-    describe "intl" $ do
-        it "displays the intl formatted data" $ runWD $ do
-            "f-number" `intlSpanShouldBe` "90%"
-            "f-int" `intlSpanShouldBe` "100,000"
-            "f-double" `intlSpanShouldBe` "40,000.2"
-            "f-shortday" `intlSpanShouldBe` "Jul 20, 1969"
-            "f-fullday" `intlSpanShouldBe` "Sunday, July 20, 69 AD"
-            "f-date" `intlSpanShouldBe` "Sun, Jul 20, 69"
-            -- f-shorttime and f-fulltime cannot be (easily) tested since they rely on the current timezone
-            "f-time" `intlSpanShouldBe` "Jul 19, 69, 4:56:00 PM GMT-10"
-
-            today <- liftIO (utctDay <$> getCurrentTime)
-            let moon = fromGregorian 1969 7 20
-                daysAgo = diffDays today moon
-                yearsAgo :: Int = round $ realToFrac daysAgo / (365 :: Double) -- is close enough
-            "f-relative" `intlSpanShouldBe` (show yearsAgo ++ " years ago")
-            "f-relative-days" `intlSpanShouldBe` (showWithComma daysAgo ++ " days ago")
-
-        it "displays messages" $ runWD $ do
-            msg <- findElem $ ById "f-msg"
-            getText msg `shouldReturn` "Neil Armstrong took 100 photos years ago."
-            takenAgoSpan <- findElemFrom msg $ ById "takenAgoSpan"
-            getText takenAgoSpan `shouldReturn` "years ago"
-
-            htmlMsg <- findElem $ ById "f-html-msg"
-            getText htmlMsg `shouldReturn` "42 is the answer to life, the universe, and everything"
-            b <- findElemFrom htmlMsg $ ByTag "b"
-            getText b `shouldReturn` "42"
-
     describe "children passed to view" $ do
 
         it "does not display null children" $ runWD $ do
@@ -253,3 +226,46 @@ testClientSpec filename = session " for the test client" $ using Chrome $ do
         loadLog >>= \x -> liftIO $ putStrLn $ show x
         inspectSession
     -}
+
+intlSpec :: String -> Spec
+intlSpec filename = session " for the i18n test client" $ using Chrome $ do
+    it "opens the page" $ runWD $ do
+        dir <- liftIO $ getCurrentDirectory
+        openPage $ "file://" ++ dir ++ "/../client/" ++ filename
+
+    it "displays the intl formatted data" $ runWD $ do
+        "f-number" `intlSpanShouldBe` "90%"
+        "f-int" `intlSpanShouldBe` "100,000"
+        "f-double" `intlSpanShouldBe` "40,000.2"
+        "f-shortday" `intlSpanShouldBe` "Jul 20, 1969"
+        "f-fullday" `intlSpanShouldBe` "Sunday, July 20, 69 AD"
+        "f-date" `intlSpanShouldBe` "Sun, Jul 20, 69"
+        -- f-shorttime and f-fulltime cannot be (easily) tested since they rely on the current timezone
+        "f-time" `intlSpanShouldBe` "Jul 19, 69, 4:56:00 PM GMT-10"
+        "f-plural" `intlSpanShouldBe` "plural other"
+
+        {-
+        today <- liftIO (utctDay <$> getCurrentTime)
+        let moon = fromGregorian 1969 7 20
+            daysAgo = diffDays today moon
+            yearsAgo :: Int = round $ realToFrac daysAgo / (365 :: Double) -- is close enough
+        "f-relative" `intlSpanShouldBe` (show yearsAgo ++ " years ago")
+        "f-relative-days" `intlSpanShouldBe` (showWithComma daysAgo ++ " days ago")
+        -}
+
+    it "displays messages" $ runWD $ do
+        msg <- findElem $ ById "f-msg"
+        getText msg `shouldReturn` "Neil Armstrong took 100 photos years ago."
+        takenAgoSpan <- findElemFrom msg $ ById "takenAgoSpan"
+        getText takenAgoSpan `shouldReturn` "years ago"
+
+        msg' <- findElem $ ById "f-msg-with-descr"
+        getText msg' `shouldReturn` "Neil Armstrong took no photos."
+
+        {-
+        htmlMsg <- findElem $ ById "f-html-msg"
+        getText htmlMsg `shouldReturn` "42 is the answer to life, the universe, and everything"
+        b <- findElemFrom htmlMsg $ ByTag "b"
+        getText b `shouldReturn` "42"
+        -}
+

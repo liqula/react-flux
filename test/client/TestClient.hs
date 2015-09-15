@@ -1,25 +1,19 @@
-{-# LANGUAGE OverloadedStrings, TypeFamilies, ScopedTypeVariables, TemplateHaskell #-}
-module Main where
+{-# LANGUAGE OverloadedStrings, TypeFamilies, ScopedTypeVariables #-}
+module TestClient (testClient) where
 
 import Control.Monad
 import Data.Monoid ((<>))
 import Data.Typeable (Typeable)
-import Data.Time
 import Data.Maybe
 import Debug.Trace
 import React.Flux
 import React.Flux.Lifecycle
 import React.Flux.Internal (toJSString)
-import React.Flux.Addons.Intl
 import React.Flux.Addons.React
 import React.Flux.Addons.Bootstrap
 
 import GHCJS.Types (JSRef, JSString)
 import GHCJS.Marshal (fromJSRef)
-
--- TODO: 
--- * Addons
--- * callback property
 
 foreign import javascript unsafe
     "(function(x) { \
@@ -213,64 +207,6 @@ displayChildrenSpec = ul_ $ do
     li_ $ displayChildren_ "multi-child" $ span_ ["id" $= "child1"] "Child 1" <> span_ ["id" $= "child2"] "Child 2"
 
 --------------------------------------------------------------------------------
---- Intl
---------------------------------------------------------------------------------
-
-intlSpec :: ReactView ()
-intlSpec = defineView "intl" $ \() -> div_ ["id" $= "intl-spec"] $ intlProvider_ "en-US" Nothing $
-    ul_ $ do
-        li_ ["id" $= "f-number"] $
-            formattedNumber_ [ "value" @= (0.9 :: Double), "style" $= "percent" ]
-        li_ ["id" $= "f-int"] $ int_ 100000
-        li_ ["id" $= "f-double"] $ double_ 40000.2
-
-        let moon = fromGregorian 1969 7 20
-            fullDayF = DayFormat { weekdayF = Just "long", eraF = Just "short", yearF = Just "2-digit", monthF = Just "long", dayF = Just "2-digit" }
-
-        li_ ["id" $= "f-shortday"] $ day_ shortDate moon
-        li_ ["id" $= "f-fullday"] $ day_ fullDayF moon
-        li_ ["id" $= "f-date"] $ formattedDate_ (Left moon)
-                [ "weekday" $= "short", "month" $= "short", "day" $= "numeric", "year" $= "2-digit" ]
-
-        let step = UTCTime moon (2*60*60 + 56*60) -- 1969-7-20 02:56 UTC
-            fullT = (fullDayF, TimeFormat { hourF = Just "numeric", minuteF = Just "2-digit", secondF = Just "numeric", timeZoneNameF = Just "long" })
-        
-        li_ ["id" $= "f-shorttime"] $ utcTime_ shortDateTime step
-        li_ ["id" $= "f-fulltime"] $ utcTime_ fullT step
-        li_ ["id" $= "f-time"] $ formattedDate_ (Right step)
-                [ "year" $= "2-digit", "month" $= "short", "day" $= "numeric"
-                , "hour" $= "numeric", "minute" $= "2-digit", "second" $= "numeric"
-                , "timeZoneName" $= "short"
-                , "timeZone" $= "Pacific/Tahiti"
-                ]
-
-        {-
-        li_ ["id" $= "f-relative"] $ relativeTo_ step
-        li_ ["id" $= "f-relative-days"] $ formattedRelative_ step [ "units" $= "day" ]
-        -}
-
-        li_ ["id" $= "f-msg"] $
-            $(message "photos" "{name} took {numPhotos, plural, =0 {no photos} =1 {one photo} other {# photos}} {takenAgo}.")
-                [ "name" $= "Neil Armstrong"
-                , "numPhotos" @= (100 :: Int)
-                , elementProperty "takenAgo" $ span_ ["id" $= "takenAgoSpan"] "years ago"
-                ]
-
-        li_ ["id" $= "f-msg-with-descr"] $
-            $(message' "photos2" "How many photos?" "{name} took {numPhotos, plural, =0 {no photos} =1 {one photo} other {# photos}}.")
-                [ "name" $= "Neil Armstrong"
-                , "numPhotos" @= (100 :: Int)
-                ]
-
-        {-
-        li_ ["id" $= "f-html-msg"] $
-            formattedHTMLMessage_
-                [ "message" $= "<b>{num}</b> is the answer to life, the universe, and everything"
-                , "num" @= (42 :: Int)
-                ]
-        -}
-
---------------------------------------------------------------------------------
 --- CSS Transitions
 --------------------------------------------------------------------------------
 
@@ -304,12 +240,10 @@ bootstrapSpec = defineView "bootstrap" $ \() -> div_ ["id" $= "bootstrap"] $ do
 --------------------------------------------------------------------------------
 
 -- | Test a lifecycle view with all lifecycle methods nothing
-app :: ReactView ()
-app = defineLifecycleView "app" "Hello" lifecycleConfig
+testClient :: ReactView ()
+testClient = defineLifecycleView "app" "Hello" lifecycleConfig
     { lRender = \s () -> do
         eventsView_
-
-        view intlSpec () mempty
 
         when (s /= "") $
             testLifecycle_ s
@@ -327,13 +261,3 @@ app = defineLifecycleView "app" "Hello" lifecycleConfig
 
         view bootstrapSpec () mempty
     }
-
-main :: IO ()
-main = do
-    initializeTouchEvents
-    reactRender "app" app ()
-
-
-writeIntlMessages (intlFormatJson "messageout.json")
-writeIntlMessages (intlFormatJsonWithoutDescription "messageout2.json")
-writeIntlMessages (intlFormatAndroidXML "messages.xml")
