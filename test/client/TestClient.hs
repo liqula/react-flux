@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings, TypeFamilies, ScopedTypeVariables #-}
+{-# LANGUAGE OverloadedStrings, TypeFamilies, ScopedTypeVariables, TemplateHaskell #-}
 module Main where
 
 import Control.Monad
@@ -217,7 +217,7 @@ displayChildrenSpec = ul_ $ do
 --------------------------------------------------------------------------------
 
 intlSpec :: ReactView ()
-intlSpec = defineView "intl" $ \() -> setLocales_ "en-US" $
+intlSpec = defineView "intl" $ \() -> -- setLocales_ "en-US" $
     ul_ $ do
         li_ ["id" $= "f-number"] $
             formattedNumber_ [ "value" @= (0.9 :: Double), "style" $= "percent" ]
@@ -248,18 +248,25 @@ intlSpec = defineView "intl" $ \() -> setLocales_ "en-US" $
         li_ ["id" $= "f-relative-days"] $ formattedRelative_ step [ "units" $= "day" ]
 
         li_ ["id" $= "f-msg"] $
-            formattedMessage_
-                [ "message" $= "{name} took {numPhotos, plural, =0 {no photos} =1 {one photo} other {# photos}} {takenAgo}."
-                , "name" $= "Neil Armstrong"
+            $(message "photos" "{name} took {numPhotos, plural, =0 {no photos} =1 {one photo} other {# photos}} {takenAgo}.")
+                [ "name" $= "Neil Armstrong"
                 , "numPhotos" @= (100 :: Int)
                 , elementProperty "takenAgo" $ span_ ["id" $= "takenAgoSpan"] "years ago"
                 ]
 
+        li_ ["id" $= "f-msg-with-descr"] $
+            $(message' "photos2" "How many photos?" "{name} took {numPhotos, plural, =0 {no photos} =1 {one photo} other {# photos}}.")
+                [ "name" $= "Neil Armstrong"
+                , "numPhotos" @= (100 :: Int)
+                ]
+
+        {-
         li_ ["id" $= "f-html-msg"] $
             formattedHTMLMessage_
                 [ "message" $= "<b>{num}</b> is the answer to life, the universe, and everything"
                 , "num" @= (42 :: Int)
                 ]
+        -}
 
 --------------------------------------------------------------------------------
 --- CSS Transitions
@@ -323,3 +330,8 @@ main :: IO ()
 main = do
     initializeTouchEvents
     reactRender "app" app ()
+
+
+writeIntlMessages (intlFormatJson "messageout.json")
+writeIntlMessages (intlFormatJsonWithoutDescription "messageout2.json")
+writeIntlMessages (intlFormatAndroidXML "messages.xml")

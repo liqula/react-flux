@@ -1,23 +1,21 @@
--- | Bindings to the <http://formatjs.io/react/ ReactIntl> library.
+-- | Bindings to the <http://formatjs.io/react/ ReactIntl> library, which allows easy formatting of
+-- numbers, dates, times, relative times, and pluralization which can be used even if you do not
+-- intend to translate your application.  In addition, it provides a method for providing translations of
+-- messages.
 --
+-- These bindings are currently against the 2.0 version of ReactIntl which is currently just a
+-- pre-release.  For temporary documentation, see <https://github.com/yahoo/react-intl/issues/162 issue62>.
 -- To use these bindings, you need to provide the @ReactIntl@ variable.  In the browser you can just
 -- load the @react-intl.min.js@ script onto the page so that @window.ReactIntl@ exists.  If you are
--- running in node, execute @global.ReactIntl = require('ReactIntl');@ so that @global.ReactIntl@
+-- running in node, execute @ReactIntl = require('ReactIntl');@ so that @global.ReactIntl@
 -- exists.  When compiling with closure, protect the ReactIntl variable as follows:
 --
 -- >(function(global, React, ReactDOM, ReactIntl) {
 -- >contents of all.js
--- >})(this, this['React'], this['ReactDOM'], this['ReactIntl]);
---
--- Note that this module uses the mixin is only used for the locale, the formats and messages are
--- better managed from Haskell.  The @formats@ property of the mixin allows you to specify custom
--- number and date formats so as to shorten the resulting properties you need to pass to
--- @FormattedNumber@ and friends, but it is easier to just create a Haskell utility function
--- wrapping for example 'foramttedNumber_' if you need custom formats.  Finally, the @messages@
--- passed down through the mixin is used only for the @getIntlMessage()@ function, and it is better
--- to just load the messages from Haskell (see 'formattedMessage_' for more details).
+-- >})(window, window['React'], window['ReactDOM'], window['ReactIntl]);
+{-# LANGUAGE TemplateHaskell, QuasiQuotes, OverloadedStrings #-}
 module React.Flux.Addons.Intl(
-    setLocales_
+    intlProvider
 
   -- * Numbers
   , int_
@@ -37,22 +35,43 @@ module React.Flux.Addons.Intl(
   , relativeTo_
   , formattedRelative_
 
+  -- * Plural
+
   -- * Messages
-  , formattedMessage_
-  , formattedHTMLMessage_
+  , MessageId
+  , Message(..)
+  , message
+  , message'
+  , htmlMsg
+  , htmlMsg'
+  , writeIntlMessages
+  , intlFormatJson
+  , intlFormatJsonWithoutDescription
+  , intlFormatAndroidXML
 ) where
 
 import React.Flux
 import Data.Time
-import Data.Maybe (catMaybes)
+import Control.Monad (when, forM_)
+import Data.Monoid ((<>))
+import Data.Maybe (catMaybes, fromMaybe)
+import System.IO (withFile, IOMode(..))
+import Language.Haskell.TH (runIO, Q, Loc, location, ExpQ)
+import Language.Haskell.TH.Syntax (liftString, qGetQ, qPutQ, reportWarning, Dec)
+import qualified Data.HashMap.Strict as H
+import qualified Data.Text as T
+import qualified Data.Text.Encoding as T
+import qualified Data.ByteString as B
+import qualified Data.ByteString.Lazy as BL
+import qualified Data.Aeson as Aeson
 
 #ifdef __GHCJS__
 
 import GHCJS.Types (JSRef)
 
 foreign import javascript unsafe
-    "hsreact$intl_mixin_class"
-    js_intlMixinClass :: JSRef
+    "$r = ReactIntl['IntlProvider']"
+    js_intlProvider :: JSRef
 
 foreign import javascript unsafe
     "$r = ReactIntl['FormattedNumber']"
@@ -101,8 +120,8 @@ timeToRef (UTCTime uday time) = js_mkDateTime (fromIntegral year) month day hour
 
 type JSRef = ()
 
-js_intlMixinClass :: JSRef
-js_intlMixinClass = ()
+js_intlProvider :: JSRef
+js_intlProvider = ()
 
 js_formatNumber :: JSRef
 js_formatNumber = ()
@@ -127,12 +146,14 @@ timeToRef _ = ()
 
 #endif
 
-
--- | Use the IntlMixin to set the @locales@ property.  This @locales@ property will be passed to all
--- nested formatters.  It is strongly recommended that you set the initial locale from the server by
--- reading the @Accept-Language@ header and/or a user setting so that the page as a whole is
--- consistent between the locale and the translated messages.  Therefore, I recommend that in your
--- server you dynamically create a small snippet such as
+-- | Use the IntlProvider to set the @locale@ and @messages@ property.  @formats@ are not supported,
+-- since it is easier to write Haskell wrappers around for example 'formattedNumber_' if you need
+-- custom formats.
+--
+-- If you are going to use different locales, it is strongly recommended that you set the initial
+-- locale from the server by reading the @Accept-Language@ header and/or a user setting so that the
+-- page as a whole is consistent between the locale and the translated messages.  Therefore, I
+-- recommend that in your server you dynamically create a small snippet such as
 --
 -- >window.myIntialConfig = { "locale": "en-US" };
 --
@@ -145,9 +166,21 @@ timeToRef _ = ()
 -- >
 -- >myApp :: ReactView ()
 -- >myApp = defineView "my application" $ \() ->
--- >    setLocales_ [JSString.unpack js_initialLocale] $ ...
-setLocales_ :: String -> ReactElementM eventHandler a -> ReactElementM eventHandler a
-setLocales_ locales = foreignClass js_intlMixinClass [ "locales" @= locales ]
+-- >    intlProvider_ (JSString.unpack js_initialLocale) Nothing $ ...
+intlProvider_ :: String -- ^ the locale to use
+              -> Maybe JSRef
+                  -- ^ A reference to the translated messages. See below for more information on
+                  -- providing translated messages.  Set this as Nothing if you are not using
+                  -- translated messages.
+              -> ReactElementM eventHandler a -- ^ the children of this element which will use the given locale and messages
+              -> ReactElementM eventHandler a
+intlProvider_ locale mmsgs = foreignClass js_intlProvider props
+    where
+        props = ("locale" @= locale) : [ property "messsages" msgs | let Just msgs = mmsgs ]
+
+--------------------------------------------------------------------------------
+--- Numbers
+--------------------------------------------------------------------------------
 
 -- | Format an integer using 'formattedNumber_' and the default style.
 int_ :: Int -> ReactElementM eventHandler ()
@@ -279,6 +312,158 @@ formattedRelative_ t props = foreignClass js_formatRelative (property "value" (t
 -- Messages
 --------------------------------------------------------------------------------
 
+-- | An identifier for a message, must be unique.
+type MessageId = T.Text
+
+-- | A message
+data Message = Message {
+    msgDescription :: T.Text -- ^ A description intended to provide context for translators.
+  , msgDefaultMsg :: T.Text -- ^ The default message written in ICU message syntax.
+} deriving Show
+
+-- | This is the type stored in the Q monad
+type MessageMap = H.HashMap MessageId (Message, Loc)
+
+-- | Utility function to build the properties for FormattedMessage.
+messageToProps :: MessageId -> Message -> [PropertyOrHandler eventHandler] -> [PropertyOrHandler eventHandler]
+messageToProps i (Message desc m) props = ["id" @= i, "description" @= desc, "defaultMessage" @= m, nestedProperty "values" props]
+
+-- | Render a @FormattedMessage@ and also record it during compilation.  This template haskell
+-- splice produces a value of type @[PropertyOrHandler eventHandler] -> ReactElementM eventHandler
+-- ()@, which should be passed the values for the message (these properties are passed in the @values@
+-- property of the @FormattedMessage@ class).  For example,
+--
+-- >li_ ["id" $= "some-id"] $
+-- >    $(message "num_photos" "{name} took {numPhotos, plural, =0 {no photos} =1 {one photo} other {# photos}} {takenAgo}.")
+-- >        [ "name" $= "Neil Armstrong"
+-- >        , "numPhotos" @= (100 :: Int)
+-- >        , elementProperty "takenAgo" $ relativeTo_ (UTCTime (fromGregorian 1969 7 20) (2*60*60 + 56*60))
+-- >        ]
+message :: MessageId
+        -> T.Text -- ^ the default message written in ICU message syntax
+        -> ExpQ --Q (TExp ([PropertyOrHandler eventHandler] -> ReactElementM eventHandler ()))
+message ident m = formattedMessage [|js_formatMsg|] ident $ Message "" m
+
+-- | Similar to 'message' but use a @FormattedHTMLMessage@ which allows HTML inside the message.  It
+-- is recomended that you instead use 'message' together with 'elementProperty' to include rich text
+-- inside the message property.  Again, this splice produces a value of type @[PropertyOrHandler
+-- eventHandler] -> ReactElementM eventHandler ()@.
+htmlMsg :: MessageId
+        -> T.Text -- ^ default message written in ICU message syntax
+        -> ExpQ
+htmlMsg ident m = formattedMessage [|js_formatHtmlMsg|] ident $ Message "" m
+
+-- | A variant of 'message' which allows you to specify some context for translators.
+message' :: MessageId
+         -> T.Text -- ^ A description indented to provide context for translators
+         -> T.Text -- ^ The default message written in ICU message syntax
+         -> ExpQ --Q (TExp ([PropertyOrHandler eventHandler] -> ReactElementM eventHandler ()))
+message' ident descr m = formattedMessage [|js_formatMsg|] ident $ Message descr m
+
+-- | A variant of 'htmlMsg' that allows you to specify some context for translators.
+htmlMsg' :: MessageId
+         -> T.Text -- ^ A description intended to provide context for translators
+         -> T.Text -- ^ The default message written in ICU message syntax
+         -> ExpQ
+htmlMsg' ident descr m = formattedMessage [|js_formatHtmlMsg|] ident $ Message descr m
+
+-- | Utility function for messages
+formattedMessage :: ExpQ -> MessageId -> Message -> ExpQ --Q (TExp ([PropertyOrHandler eventHandler] -> ReactElementM eventHandler ()))
+formattedMessage cls ident m = do
+    curLoc <- location
+    mmap :: MessageMap <- fromMaybe H.empty <$> qGetQ
+    case H.lookup ident mmap of
+        Just (prevMsg, prevLoc) | msgDefaultMsg m /= msgDefaultMsg prevMsg -> do
+            reportWarning $ unlines
+                [ "Message with id " ++ (T.unpack ident) ++ " appears twice with different messages"
+                , show curLoc ++ ": " ++ (T.unpack $ msgDefaultMsg m)
+                , show prevLoc ++ ": " ++ (T.unpack $ msgDefaultMsg prevMsg)
+                ]
+        _ -> return ()
+    qPutQ $ H.insert ident (m, curLoc) mmap
+
+    let liftText x = [| T.pack $(liftString $ T.unpack x)|]
+        liftedMsg = [| Message $(liftText $ msgDescription m) $(liftText $ msgDefaultMsg m) |]
+    [|\vals -> foreignClass $cls (messageToProps $(liftText ident) $liftedMsg vals) mempty |]
+
+-- | Perform an arbitrary IO action on the accumulated messages at compile time, intended to write
+-- the messages to a file.  Despite producing a value of type @Q [Dec]@, no declarations are
+-- produced.  Instead, this is purly to allow IO to happen.  A call to this function should be
+-- placed at the bottom of the file, since it only will output messages that appear above the call.
+-- Also, to provide consistency, I suggest you create a utility wrapper around this function.  For
+-- example,
+--
+-- >{-# LANGUAGE TemplateHaskell #-}
+-- >module MessageUtil where
+-- >
+-- >import React.Flux.Addons.Intl
+-- >
+-- >writeMessages :: String -> Q [Dec]
+-- >writeMessages name = writeIntlMessages (intlFormatJson $ "some/diretory/" ++ name ++ ".json")
+--
+-- Note that all paths in template haskell are relative to the directory containing the @.cabal@
+-- file.  You can then use this as follows:
+--
+-- >{-# LANGUAGE TemplateHaskell #-}
+-- >module SomeViews where
+-- >
+-- >import React.Flux
+-- >import React.Flux.Addons.Intl
+-- >import MessageUtil
+-- >
+-- >someView :: ReactView ()
+-- >someView = defineView .... use $(message) in render ...
+-- >
+-- >anotherView :: ReactView ()
+-- >anotherView = defineView ... use $(message) in render ...
+-- >
+-- >writeMessages "some-views"
+--
+-- Use this to produce one message file per Haskell view module.
+writeIntlMessages :: (H.HashMap MessageId Message -> IO ()) -> Q [Dec]
+writeIntlMessages f = do
+    mmap :: MessageMap <- fromMaybe H.empty <$> qGetQ
+    runIO $ f $ fmap fst mmap
+    return []
+
+-- | Format messages as json.  The format is an object where keys are the 'MessageId's, and the
+-- value is an object with two properties, @message@ and optionally @description@.  This happens to
+-- the the same format as <https://developer.chrome.com/extensions/i18n-messages chrome>.
+intlFormatJson :: FilePath -> H.HashMap MessageId Message -> IO ()
+intlFormatJson fp mmap = BL.writeFile fp $ Aeson.encode $ Aeson.Object $ fmap f mmap
+    where
+        f (Message "" m) = Aeson.object [(Aeson..=) "message" m]
+        f (Message desc m) = Aeson.object [(Aeson..=) "message" m, (Aeson..=) "description" desc]
+
+-- | Format messages as json, ignoring the description.  The format is an object where the keys are
+-- the 'MessageId's and the value is the message string.  This format is used by many javascript
+-- libraries, so many translation tools exist.
+intlFormatJsonWithoutDescription :: FilePath -> H.HashMap MessageId Message -> IO ()
+intlFormatJsonWithoutDescription fp mmap = BL.writeFile fp $ Aeson.encode $ Aeson.Object $ fmap f mmap
+    where
+        f (Message _ m) = Aeson.String m
+
+-- | Format messages in <http://developer.android.com/guide/topics/resources/string-resource.html Android XML>
+-- format.  There are many utilities to translate these XML messages, and the format has the
+-- advantage that it can include the descriptions as well as the messages.
+intlFormatAndroidXML :: FilePath -> H.HashMap MessageId Message -> IO ()
+intlFormatAndroidXML fp mmap = withFile fp WriteMode $ \handle -> do
+    B.hPut handle "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
+    B.hPut handle "<resources>\n"
+    let putText = B.hPut handle . T.encodeUtf8
+
+    forM_ (H.toList mmap) $ \(ident, m) -> do
+        when (msgDescription m /= "") $
+            putText $ "<!-- " <> msgDescription m <> " -->\n"
+        -- TODO: escape!!
+        putText $ "<string name=\"" <> ident <> "\">" <> msgDefaultMsg m <> "</string>\n"
+    B.hPut handle "</resources>\n"
+
+{-
+
+
+
+
 -- | Display a message using <http://formatjs.io/react/#formatted-message FormattedMessage>.  This
 -- requires the @message@ property to be a string which contains the ICU Message syntax for the
 -- message.  The class will cache the parsing of the string into the @intl-messageformat@ AST.
@@ -311,7 +496,7 @@ formattedRelative_ t props = foreignClass js_formatRelative (property "value" (t
 -- >    js_myMessage :: JSString -> JSRef
 -- >
 -- >message_ :: String -> [PropertyOrHandler eventHandler] -> ReactElementM eventHandler ()
--- >message_ msg props = formattedMessage_ $ (property "message" $ js_myMessage msg) : props
+-- >message_ m props = formattedMessage_ $ (property "message" $ js_myMessage m) : props
 -- >
 -- >someView :: ReactView ()
 -- >someView = defineView "some view" $ \() ->
@@ -326,3 +511,4 @@ formattedMessage_ props = foreignClass js_formatMsg props mempty
 -- | Display a message using <http://formatjs.io/react/#formatted-html-message FormattedHTMLMessage>.
 formattedHTMLMessage_ :: [PropertyOrHandler eventHandler] -> ReactElementM eventHandler ()
 formattedHTMLMessage_ props = foreignClass js_formatHtmlMsg props mempty
+-}

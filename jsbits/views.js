@@ -131,12 +131,13 @@ function hsreact$mk_lifecycle_view(name, initialState, renderCb,
     return React['createClass'](cl);
 }
 
-//React 0.14 introduced React.Children.toArray
-var hsreact$children_to_array = React['Children']['toArray'] ? React['Children']['toArray'] :
+//React 0.14 introduced React.Children.toArray.  Also, to be able to run template haskell splices,
+//we need to defend againsg React not being defined.
+var hsreact$children_to_array = typeof React !== "object" ? null : (React['Children']['toArray'] ? React['Children']['toArray'] :
     (function (children) {
         var ret = [];
         React['Children']['forEach'](children, function(x) {
             ret.push(x);
         });
         return ret;
-    });
+    }));

@@ -8,6 +8,7 @@ module React.Flux.PropertiesAndEvents (
   , ($=)
   , property
   , elementProperty
+  , nestedProperty
   , CallbackFunction
   , callback
 
@@ -123,6 +124,20 @@ n $= a = Property (T.unpack n) a
 -- element as the value for a property with the given key.
 elementProperty :: String -> ReactElementM handler () -> PropertyOrHandler handler
 elementProperty = ElementProperty
+
+-- | Allows you to create nested object properties.  The list of properties passed in will be
+-- converted to an object which is then set as the value for a property with the given name.  For
+-- example,
+--
+-- >[ nestedProperty "Hello" [ "a" @= (100 :: Int), "b" $= "World" ]
+-- >, "c" $= "!!!"
+-- >]
+--
+-- would create a javascript object
+--
+-- >{"Hello": {a: 100, b: "World"}, "c": "!!!"}
+nestedProperty :: String -> [PropertyOrHandler handler] -> PropertyOrHandler handler
+nestedProperty = NestedProperty
 
 -- | A class which contains all <https://wiki.haskell.org/Varargs a variable argument functions>
 -- where each argument implements 'FromJSRef' and the result is @handler@.

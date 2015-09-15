@@ -75,6 +75,10 @@ data PropertyOrHandler handler =
       { propertyName :: String
       , propertyVal :: ref
       }
+ | NestedProperty
+      { nestedPropertyName :: String
+      , nestedPropertyVals :: [PropertyOrHandler handler]
+      }
  | ElementProperty
       { elementPropertyName :: String
       , elementValue :: ReactElementM handler ()
@@ -90,6 +94,7 @@ data PropertyOrHandler handler =
 
 instance Functor PropertyOrHandler where
     fmap _ (Property name val) = Property name val
+    fmap f (NestedProperty name vals) = NestedProperty name (map (fmap f) vals)
     fmap f (ElementProperty name (ReactElementM mkElem)) =
         ElementProperty name $ ReactElementM $ mapWriter (\((),e) -> ((), fmap f e)) mkElem
     fmap f (CallbackPropertyWithArgumentArray name h) = CallbackPropertyWithArgumentArray name (fmap f . h)
@@ -257,6 +262,10 @@ mkReactElement runHandler getPropsChildren = runWriterT . mToElem
         addPropOrHandlerToObj obj (Property n val) = lift $ do
             vRef <- toJSRef val
             JSO.setProp (toJSString n) vRef obj
+        addPropOrHandlerToObj obj (NestedProperty n vals) = do
+            nested <- lift $ JSO.create
+            mapM_ (addPropOrHandlerToObj nested) vals
+            lift $ JSO.setProp (toJSString n) (jsref nested) obj
         addPropOrHandlerToObj obj (ElementProperty name rM) = do
             ReactElementRef ref <- mToElem rM
             lift $ JSO.setProp (toJSString name) ref obj
