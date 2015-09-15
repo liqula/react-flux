@@ -7,6 +7,3 @@ cabal.sandbox.config
 example/todo/js-build/
 example/todo/node_modules/
 test/client/node_modules/
-test/.android.xml
-test/.jsonmsgs.json
-test/.jsonnodescr.json

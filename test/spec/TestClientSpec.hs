@@ -262,10 +262,14 @@ intlSpec filename = session " for the i18n test client" $ using Chrome $ do
         msg' <- findElem $ ById "f-msg-with-descr"
         getText msg' `shouldReturn` "Neil Armstrong took no photos."
 
-        {-
+        "f-msg-with-trans" `intlSpanShouldBe` "message from translation xxx"
+
         htmlMsg <- findElem $ ById "f-html-msg"
         getText htmlMsg `shouldReturn` "42 is the answer to life, the universe, and everything"
-        b <- findElemFrom htmlMsg $ ByTag "b"
-        getText b `shouldReturn` "42"
-        -}
+        (findElemFrom htmlMsg (ByTag "b") >>= getText)
+            `shouldReturn` "42"
 
+        htmlMsg' <- findElem $ ById "f-html-msg-with-descr"
+        getText htmlMsg' `shouldReturn` "42 is the answer to life, the universe, and everything"
+        (findElemFrom htmlMsg' (ByTag "b") >>= getText)
+            `shouldReturn` "answer"

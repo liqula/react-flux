@@ -4,6 +4,7 @@ module Main (main) where
 import Data.Time
 import React.Flux
 import React.Flux.Addons.Intl
+import GHCJS.Types (JSRef)
 
 import TestClient
 
@@ -11,8 +12,12 @@ import TestClient
 --- Intl
 --------------------------------------------------------------------------------
 
+foreign import javascript unsafe
+    "{'with_trans': 'message from translation {abc}'}"
+    js_translations :: JSRef
+
 intlSpec :: ReactView ()
-intlSpec = defineView "intl" $ \() -> div_ ["id" $= "intl-spec"] $ intlProvider_ "en-US" Nothing $
+intlSpec = defineView "intl" $ \() -> div_ ["id" $= "intl-spec"] $ intlProvider_ "en-US" (Just js_translations) $
     ul_ $ do
         li_ ["id" $= "f-number"] $
             formattedNumber_ [ "value" @= (0.9 :: Double), "style" $= "percent" ]
@@ -53,19 +58,22 @@ intlSpec = defineView "intl" $ \() -> div_ ["id" $= "intl-spec"] $ intlProvider_
                 , elementProperty "takenAgo" $ span_ ["id" $= "takenAgoSpan"] "years ago"
                 ]
 
+        li_ ["id" $= "f-msg-with-trans"] $
+            $(message "with_trans" "this is not used {abc}") ["abc" $= "xxx"]
+
         li_ ["id" $= "f-msg-with-descr"] $
             $(message' "photos2" "How many photos?" "{name} took {numPhotos, plural, =0 {no photos} =1 {one photo} other {# photos}}.")
                 [ "name" $= "Neil Armstrong"
                 , "numPhotos" @= (0 :: Int)
                 ]
 
-        {-
         li_ ["id" $= "f-html-msg"] $
-            formattedHTMLMessage_
-                [ "message" $= "<b>{num}</b> is the answer to life, the universe, and everything"
-                , "num" @= (42 :: Int)
-                ]
-        -}
+            $(htmlMsg "html1" "<b>{num}</b> is the answer to life, the universe, and everything")
+                [ "num" @= (42 :: Int) ]
+
+        li_ ["id" $= "f-html-msg-with-descr"] $
+            $(htmlMsg' "html2" "Hitchhiker's Guide" "{num} is the <b>answer</b> to life, the universe, and everything")
+                [ "num" @= (42 :: Int) ]
 
 --------------------------------------------------------------------------------
 --- Main
@@ -80,6 +88,6 @@ app = defineView "main app" $ \() -> do
 main :: IO ()
 main = reactRender "app" app ()
 
-writeIntlMessages (intlFormatJson "test/.jsonmsgs.json")
-writeIntlMessages (intlFormatJsonWithoutDescription "test/.jsonnodescr.json")
-writeIntlMessages (intlFormatAndroidXML "test/.android.xml")
+writeIntlMessages (intlFormatJson "test/client/msgs/jsonmsgs.json")
+writeIntlMessages (intlFormatJsonWithoutDescription "test/client/msgs/jsonnodescr.json")
+writeIntlMessages (intlFormatAndroidXML "test/client/msgs/android.xml")

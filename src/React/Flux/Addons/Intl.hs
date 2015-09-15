@@ -246,7 +246,7 @@ intlProvider_ locale mmsgs = foreignClass js_intlProvider props
     where
         props = case mmsgs of
                     Nothing -> ["locale" @= locale]
-                    Just m -> ["locale" @= locale, property "messsages" m]
+                    Just m -> ["locale" @= locale, property "messages" m]
 
 --------------------------------------------------------------------------------
 --- Numbers
