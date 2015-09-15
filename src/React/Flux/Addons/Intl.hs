@@ -16,13 +16,14 @@
 -- >})(window, window['React'], window['ReactDOM'], window['ReactIntl']);
 --
 -- __Using with a single locale and no translations__.  If you do not intend to translate your app,
--- you can still use this module for formatting.  The default locale is @en-US@ so you can just use
--- anything in the /Formatting/ section like 'int_', 'relativeTo_', and 'message' with no other setup required.
--- If you want to specify the locale so dates and numbers are formatted in the user's locale, it is strongly
--- recommended to set the locale from the server based on the @Accept-Language@ header and/or a
--- user setting so that the page as a whole is consistint.  I have the server set a variable on @window@
--- for the locale to use, and then pass that locale into 'intlProvider_'.  Also, @Nothing@ is passed for
--- the messages, which means the default message provided in the source code is always used.
+-- you can still use this module for formatting.  Add a call to 'intlProvider_' to the top of your
+-- app with a hard-coded locale and @Nothing@ for the messages.  You can then use anything in the
+-- /Formatting/ section like 'int_', 'relativeTo_', and 'message', where 'message' will just always
+-- use the default message provided in the source code.  If you want to specify the locale so dates
+-- and numbers are formatted in the user's locale, it is strongly recommended to set the locale from
+-- the server based on the @Accept-Language@ header and/or a user setting so that the page as a
+-- whole is consistint.  I have the server set a variable on @window@ for the locale to use, and
+-- then pass that locale into 'intlProvider_'.
 --
 -- __Translations__.  The react-intl philosophy is that messages should be defined in the source
 -- code instead of kept in a separate file.  This allows the program to function without any
@@ -234,7 +235,7 @@ timeToRef _ = ()
 
 -- | Use the IntlProvider to set the @locale@ and @messages@ property.  @formats@ are not supported,
 -- since it is easier to write Haskell wrappers around for example 'formattedNumber_' if you need
--- custom formats.  @en-US@ is the default locale which is used if 'intlProvider_' is omitted.
+-- custom formats.
 intlProvider_ :: String -- ^ the locale to use
               -> Maybe JSRef
                   -- ^ A reference to translated messages, which must be an object with keys
