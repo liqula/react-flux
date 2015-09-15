@@ -166,7 +166,7 @@ foreign import javascript unsafe
 
 #else
 
-reactRender _ _ _ = return ()
+reactRenderToString _ _ _ = return ""
 
 #endif
 
