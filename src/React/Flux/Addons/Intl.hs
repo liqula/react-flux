@@ -3,26 +3,98 @@
 -- intend to translate your application.  In addition, it provides a method for providing translations of
 -- messages.
 --
--- These bindings are currently against the 2.0 version of ReactIntl which is currently just a
+-- These bindings are for the 2.0 version of ReactIntl which is currently just a
 -- pre-release.  For temporary documentation, see <https://github.com/yahoo/react-intl/issues/162 issue62>.
 -- To use these bindings, you need to provide the @ReactIntl@ variable.  In the browser you can just
 -- load the @react-intl.min.js@ script onto the page so that @window.ReactIntl@ exists.  If you are
--- running in node, execute @ReactIntl = require('ReactIntl');@ so that @global.ReactIntl@
+-- running in node, execute @ReactIntl = require(\"ReactIntl\");@ so that @global.ReactIntl@
 -- exists.  When compiling with closure, protect the ReactIntl variable as follows:
 --
 -- >(function(global, React, ReactDOM, ReactIntl) {
 -- >contents of all.js
--- >})(window, window['React'], window['ReactDOM'], window['ReactIntl]);
+-- >})(window, window['React'], window['ReactDOM'], window['ReactIntl']);
+--
+-- __Using with a single locale and no translations__.  If you do not intend to translate your app,
+-- you can still use this module for formatting.  The default locale is @en-US@ so you can just use
+-- anything in the /Formatting/ section like 'int_', 'relativeTo_', and 'message' with no other setup required.
+-- If you want to specify the locale so dates and numbers are formatted in the user's locale, it is strongly
+-- recommended to set the locale from the server based on the @Accept-Language@ header and/or a
+-- user setting so that the page as a whole is consistint.  I have the server set a variable on @window@
+-- for the locale to use, and then pass that locale into 'intlProvider_'.  Also, @Nothing@ is passed for
+-- the messages, which means the default message provided in the source code is always used.
+--
+-- __Translations__.  The react-intl philosophy is that messages should be defined in the source
+-- code instead of kept in a separate file.  This allows the program to function without any
+-- external translation files, and therefore allows you to use messages even if you have no
+-- intention of translating the app, using the messages for plurization and formatting.  To support
+-- translations, a tool (in this case Template Haskell) is used to extract the messages from the
+-- source code into a file given to the translators.  The result of the translation is then used to
+-- replace the default message given in the source code.
+--
+--   1. Use the functions in the /Formatting/ section like 'int_', 'relativeTo_', and 'message'
+--   inside your rendering functions.
+--
+--   2. At the bottom of each file which contains messages, add a call to 'writeIntlMessages'.  This
+--   is a template haskell function which during compilation will produce a file containing all the
+--   messages found within the haskell module.
+--
+--   3. Give these message files to your translators.  The translation results will then need to be
+--   converted into javascript files in the format expected by ReactIntl, which is a javascript
+--   object with keys the 'MessageId's and value the translated message.  For example, each translation
+--   should result in a javascript file such as the following:
+--
+--       @
+--       window.myMessages = window.myMessages || {};
+--       window.myMessages["fr-FR"] = {
+--          "num_photos": "{name} {numPhotos, plural, =0 {n'a pas pris de photographie.} =1 {a pris une photographie.} other {a pris # photographies.}",
+--          ...
+--       };
+--       @
+--
+--   4. Based on the @Accept-Language@ header and/or a user setting, the server includes the
+--   appropriate translation javascript file and sets a variable on window containing the locale to
+--   use.  Note that no translation javascript file is needed if the default messages from the
+--   source code should be used.
+--
+--        @
+--        \<script type="text\/javascript"\>window.myIntialConfig = { "locale": "fr-FR" };\<\/script\>
+--        \<script src="path\/to\/translations.fr-FR.js"\>\<\/script\>
+--        @
+--
+--   5. Add a call to 'intlProvider_' at the top of your application, passing the locale and the
+--   messages.
+--
+--        @
+--        foreign import javascript unsafe
+--          "$r = window[\'myInitialConfig\'][\'locale\']"
+--          js_initialLocale :: JSString
+--
+--        foreign import javascript unsafe
+--          "window[\'myMessages\'] ? window[\'myMessages\'][$1] : null"
+--          js_myMessages :: JSString -> JSRef
+--
+--        myApp :: ReactView ()
+--        myApp = defineView "my application" $ \() -> do
+--            intlProvider_ (JSString.unpack js_initialLocale) (Just $ js_myMessages js_initialLocale) $
+--              ...
+--        @
+--
+--        If you want to allow changing the locale without a page refresh, just load the initial
+--        locale into a store and use a controller-view to pass the locale and lookup the messages
+--        for 'intlProvider_'.
+
 {-# LANGUAGE TemplateHaskell, QuasiQuotes, OverloadedStrings #-}
 module React.Flux.Addons.Intl(
-    intlProvider
+    intlProvider_
 
-  -- * Numbers
+  -- * Formatting
+  
+  -- ** Numbers
   , int_
   , double_
   , formattedNumber_
 
-  -- * Dates and Times
+  -- ** Dates and Times
   , DayFormat(..)
   , shortDate
   , day_
@@ -31,39 +103,44 @@ module React.Flux.Addons.Intl(
   , utcTime_
   , formattedDate_
 
-  -- * Relative Times
+  -- ** Relative Times
   , relativeTo_
   , formattedRelative_
 
-  -- * Plural
+  -- ** Plural
 
-  -- * Messages
+  -- ** Messages
   , MessageId
-  , Message(..)
   , message
   , message'
   , htmlMsg
   , htmlMsg'
+
+  -- * Translation
+  , Message(..)
   , writeIntlMessages
   , intlFormatJson
   , intlFormatJsonWithoutDescription
   , intlFormatAndroidXML
 ) where
 
-import React.Flux
-import Data.Time
 import Control.Monad (when, forM_)
-import Data.Monoid ((<>))
+import Data.Char (ord, isPrint)
+import Data.List (sortBy)
 import Data.Maybe (catMaybes, fromMaybe)
-import System.IO (withFile, IOMode(..))
+import Data.Monoid ((<>))
+import Data.Ord (comparing)
+import Data.Time
 import Language.Haskell.TH (runIO, Q, Loc, location, ExpQ)
 import Language.Haskell.TH.Syntax (liftString, qGetQ, qPutQ, reportWarning, Dec)
+import React.Flux
+import System.IO (withFile, IOMode(..))
+import qualified Data.Aeson as Aeson
+import qualified Data.ByteString as B
+import qualified Data.ByteString.Lazy as BL
 import qualified Data.HashMap.Strict as H
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
-import qualified Data.ByteString as B
-import qualified Data.ByteString.Lazy as BL
-import qualified Data.Aeson as Aeson
 
 #ifdef __GHCJS__
 
@@ -148,31 +225,14 @@ timeToRef _ = ()
 
 -- | Use the IntlProvider to set the @locale@ and @messages@ property.  @formats@ are not supported,
 -- since it is easier to write Haskell wrappers around for example 'formattedNumber_' if you need
--- custom formats.
---
--- If you are going to use different locales, it is strongly recommended that you set the initial
--- locale from the server by reading the @Accept-Language@ header and/or a user setting so that the
--- page as a whole is consistent between the locale and the translated messages.  Therefore, I
--- recommend that in your server you dynamically create a small snippet such as
---
--- >window.myIntialConfig = { "locale": "en-US" };
---
--- and then in your react-flux app you can either just access this directly or load it into your
--- store if you allow the user to change the locale on the fly.
---
--- >foreign import javascript unsafe
--- >    "$r = window['myInitialConfig']['locale']"
--- >    js_initialLocale :: JSString
--- >
--- >myApp :: ReactView ()
--- >myApp = defineView "my application" $ \() ->
--- >    intlProvider_ (JSString.unpack js_initialLocale) Nothing $ ...
+-- custom formats.  @en-US@ is the default locale which is used if 'intlProvider_' is omitted.
 intlProvider_ :: String -- ^ the locale to use
               -> Maybe JSRef
-                  -- ^ A reference to the translated messages. See below for more information on
-                  -- providing translated messages.  Set this as Nothing if you are not using
-                  -- translated messages.
-              -> ReactElementM eventHandler a -- ^ the children of this element which will use the given locale and messages
+                  -- ^ A reference to translated messages, which must be an object with keys
+                  -- 'MessageId' and value the translated message.  Set this as Nothing if you are not using
+                  -- translated messages, since either @Nothing@ or a null JSRef will cause the messages
+                  -- from the source code to be used.
+              -> ReactElementM eventHandler a -- ^ The children of this element.  All descendents will use the given locale and messages.
               -> ReactElementM eventHandler a
 intlProvider_ locale mmsgs = foreignClass js_intlProvider props
     where
@@ -312,26 +372,25 @@ formattedRelative_ t props = foreignClass js_formatRelative (property "value" (t
 -- Messages
 --------------------------------------------------------------------------------
 
--- | An identifier for a message, must be unique.
+-- | An identifier for a message, must be globally unique.
 type MessageId = T.Text
 
--- | A message
+-- | A message.
 data Message = Message {
     msgDescription :: T.Text -- ^ A description intended to provide context for translators.
   , msgDefaultMsg :: T.Text -- ^ The default message written in ICU message syntax.
 } deriving Show
 
--- | This is the type stored in the Q monad
+-- | This is the type stored in the Q monad with qGetQ and qPutQ
 type MessageMap = H.HashMap MessageId (Message, Loc)
 
 -- | Utility function to build the properties for FormattedMessage.
 messageToProps :: MessageId -> Message -> [PropertyOrHandler eventHandler] -> [PropertyOrHandler eventHandler]
 messageToProps i (Message desc m) props = ["id" @= i, "description" @= desc, "defaultMessage" @= m, nestedProperty "values" props]
 
--- | Render a @FormattedMessage@ and also record it during compilation.  This template haskell
--- splice produces a value of type @[PropertyOrHandler eventHandler] -> ReactElementM eventHandler
--- ()@, which should be passed the values for the message (these properties are passed in the @values@
--- property of the @FormattedMessage@ class).  For example,
+-- | Render a message and also record it during compilation.  This template haskell
+-- splice produces an expression of type @[PropertyOrHandler eventHandler] -> ReactElementM eventHandler
+-- ()@, which should be passed the values for the message.  For example,
 --
 -- >li_ ["id" $= "some-id"] $
 -- >    $(message "num_photos" "{name} took {numPhotos, plural, =0 {no photos} =1 {one photo} other {# photos}} {takenAgo}.")
@@ -339,15 +398,19 @@ messageToProps i (Message desc m) props = ["id" @= i, "description" @= desc, "de
 -- >        , "numPhotos" @= (100 :: Int)
 -- >        , elementProperty "takenAgo" $ relativeTo_ (UTCTime (fromGregorian 1969 7 20) (2*60*60 + 56*60))
 -- >        ]
+--
+-- This will first lookup the 'MessageId' (in this case @num_photos@) in the  @messages@ paramter passed to 'intlProvider_'.
+-- If no messages were passed, 'intlProvider_' was not called, or the 'MessageId' was not found, the default message is used.
 message :: MessageId
-        -> T.Text -- ^ the default message written in ICU message syntax
+        -> T.Text -- ^ The default message written in ICU message syntax.  This message is used if no translation is found,
+                  -- and is also the message given to the translators.
         -> ExpQ --Q (TExp ([PropertyOrHandler eventHandler] -> ReactElementM eventHandler ()))
 message ident m = formattedMessage [|js_formatMsg|] ident $ Message "" m
 
 -- | Similar to 'message' but use a @FormattedHTMLMessage@ which allows HTML inside the message.  It
 -- is recomended that you instead use 'message' together with 'elementProperty' to include rich text
--- inside the message property.  Again, this splice produces a value of type @[PropertyOrHandler
--- eventHandler] -> ReactElementM eventHandler ()@.
+-- inside the message.  This splice produces a value of type @[PropertyOrHandler
+-- eventHandler] -> ReactElementM eventHandler ()@, the same as 'message'.
 htmlMsg :: MessageId
         -> T.Text -- ^ default message written in ICU message syntax
         -> ExpQ
@@ -386,16 +449,18 @@ formattedMessage cls ident m = do
         liftedMsg = [| Message $(liftText $ msgDescription m) $(liftText $ msgDefaultMsg m) |]
     [|\vals -> foreignClass $cls (messageToProps $(liftText ident) $liftedMsg vals) mempty |]
 
--- | Perform an arbitrary IO action on the accumulated messages at compile time, intended to write
--- the messages to a file.  Despite producing a value of type @Q [Dec]@, no declarations are
--- produced.  Instead, this is purly to allow IO to happen.  A call to this function should be
--- placed at the bottom of the file, since it only will output messages that appear above the call.
--- Also, to provide consistency, I suggest you create a utility wrapper around this function.  For
--- example,
+-- | Perform an arbitrary IO action on the accumulated messages at compile time, which usually
+-- should be to write the messages to a file.  Despite producing a value of type @Q [Dec]@,
+-- no declarations are produced.  Instead, this is purly to allow IO to happen.  A call to this
+-- function should be placed at the bottom of the file, since it only will output messages that
+-- appear above the call.  Also, to provide consistency, I suggest you create a utility wrapper
+-- around this function.  For example,
 --
 -- >{-# LANGUAGE TemplateHaskell #-}
 -- >module MessageUtil where
 -- >
+-- >import Language.Haskell.TH
+-- >import Language.Haskell.TH.Syntax
 -- >import React.Flux.Addons.Intl
 -- >
 -- >writeMessages :: String -> Q [Dec]
@@ -418,8 +483,6 @@ formattedMessage cls ident m = do
 -- >anotherView = defineView ... use $(message) in render ...
 -- >
 -- >writeMessages "some-views"
---
--- Use this to produce one message file per Haskell view module.
 writeIntlMessages :: (H.HashMap MessageId Message -> IO ()) -> Q [Dec]
 writeIntlMessages f = do
     mmap :: MessageMap <- fromMaybe H.empty <$> qGetQ
@@ -428,7 +491,11 @@ writeIntlMessages f = do
 
 -- | Format messages as json.  The format is an object where keys are the 'MessageId's, and the
 -- value is an object with two properties, @message@ and optionally @description@.  This happens to
--- the the same format as <https://developer.chrome.com/extensions/i18n-messages chrome>.
+-- the the same format as <https://developer.chrome.com/extensions/i18n-messages chrome>, although
+-- the syntax of placeholders uses ICU message syntax instead of chrome's syntax.  This does not
+-- pretty-print the JSON, but I suggest before adding these messages in source control you pretty
+-- print and sort by MessageIds so diffs are easy to read.  This can be done with the
+-- @aeson-pretty@ package, but I did not want to add it as a dependency.
 intlFormatJson :: FilePath -> H.HashMap MessageId Message -> IO ()
 intlFormatJson fp mmap = BL.writeFile fp $ Aeson.encode $ Aeson.Object $ fmap f mmap
     where
@@ -444,71 +511,32 @@ intlFormatJsonWithoutDescription fp mmap = BL.writeFile fp $ Aeson.encode $ Aeso
         f (Message _ m) = Aeson.String m
 
 -- | Format messages in <http://developer.android.com/guide/topics/resources/string-resource.html Android XML>
--- format.  There are many utilities to translate these XML messages, and the format has the
--- advantage that it can include the descriptions as well as the messages.
+-- format, but just using strings.  String arrays and plurals are handled in the ICU message,
+-- instead of in the XML.  There are many utilities to translate these XML messages, and the format has the
+-- advantage that it can include the descriptions as well as the messages.  Also, the messages are
+-- sorted by 'MessageId' so that if the output is placed in source control the diffs are easy to
+-- review.
 intlFormatAndroidXML :: FilePath -> H.HashMap MessageId Message -> IO ()
 intlFormatAndroidXML fp mmap = withFile fp WriteMode $ \handle -> do
     B.hPut handle "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
     B.hPut handle "<resources>\n"
     let putText = B.hPut handle . T.encodeUtf8
 
-    forM_ (H.toList mmap) $ \(ident, m) -> do
+    let msgs = sortBy (comparing fst) $ H.toList mmap
+    forM_ msgs $ \(ident, m) -> do
         when (msgDescription m /= "") $
-            putText $ "<!-- " <> msgDescription m <> " -->\n"
+            putText $ "<!-- " <> escapeForXml (msgDescription m) <> " -->\n"
         -- TODO: escape!!
-        putText $ "<string name=\"" <> ident <> "\">" <> msgDefaultMsg m <> "</string>\n"
+        putText $ "<string name=\"" <> escapeForXml ident <> "\">" <> escapeForXml (msgDefaultMsg m) <> "</string>\n"
     B.hPut handle "</resources>\n"
 
-{-
-
-
-
-
--- | Display a message using <http://formatjs.io/react/#formatted-message FormattedMessage>.  This
--- requires the @message@ property to be a string which contains the ICU Message syntax for the
--- message.  The class will cache the parsing of the string into the @intl-messageformat@ AST.
--- For formatted rich text objects, @FormattedMessage@ allows react elements to be passed as
--- properties and these properties can be created using 'elementProperty'.
---
--- The ReactIntl documentation shows how to use @this.getIntlMessage@ which looks up the string from
--- the @messages@ property passed to the mixin.  Instead, you should lookup the message string from
--- Haskell.  This allows the most flexibility in how the messages are loaded.
--- There are two approaches I suggest to managing messages.  First, you can use a 'ReactStore' to
--- manage the messages, for example writing the messages as JSON documents and loading them over
--- AJAX in response to the user changing the locale.  Then you can create a controller-view wrapper
--- around 'formattedMessage_' which perhaps takes a lens getter for the message.  Alternatively, if
--- you require a page reload to change the i18n (this is what I do), write the messages in raw
--- javascript which sets a variable on window.  For example, in a file @myMsgs.en-US.js@, have
---
--- >window.myMessages = window.myMessages || {};
--- >window.myMessages["en-US"] = {
--- >    photos: "{name} took {numPhotos, plural, =0 {no photos} =1 {one photo} other {# photos}} {takenAgo}."
--- >};
---
--- and similar files for each locale you support.  The server then includes these files depending on
--- the @Accept-Language@ header and/or user settings, and might always include @en-US@ for a
--- fallback.  Next, write accessor functions to access these messages from Haskell and write a
--- wrapper function around 'formattedMessage_' which looks up the message from the global message
--- object.
---
--- >foreign import javascript unsafe
--- >    "(window['myMessages'][window['myInitialConfig']['locale']][$1] || window['myMessages']['en-US'][$1])"
--- >    js_myMessage :: JSString -> JSRef
--- >
--- >message_ :: String -> [PropertyOrHandler eventHandler] -> ReactElementM eventHandler ()
--- >message_ m props = formattedMessage_ $ (property "message" $ js_myMessage m) : props
--- >
--- >someView :: ReactView ()
--- >someView = defineView "some view" $ \() ->
--- >    message_ "photos"
--- >       [ "name" $= "Neil Armstrong"
--- >       , "numPhotos" @= (100 :: Int)
--- >       , elementProperty "takenAgo" $ relativeTo_ (UTCTime (fromGregorian 1969 7 21) 0)
--- >       ]
-formattedMessage_ :: [PropertyOrHandler eventHandler] -> ReactElementM eventHandler ()
-formattedMessage_ props = foreignClass js_formatMsg props mempty
-
--- | Display a message using <http://formatjs.io/react/#formatted-html-message FormattedHTMLMessage>.
-formattedHTMLMessage_ :: [PropertyOrHandler eventHandler] -> ReactElementM eventHandler ()
-formattedHTMLMessage_ props = foreignClass js_formatHtmlMsg props mempty
--}
+escapeForXml :: T.Text -> T.Text
+escapeForXml = T.concatMap f
+    where
+        f '<' = "&lt;"
+        f '>' = "&gt;"
+        f '&' = "&amp;"
+        f '"' = "&quot;"
+        f '\'' = "&apos;"
+        f x | isPrint x || x == '\n' = T.singleton x
+        f x = "&#" <> T.pack (show $ ord x) <> ";"
