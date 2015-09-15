@@ -1,12 +1,16 @@
 # 1.0.0 (unreleased)
 
-* Bindings to react-intl (http://formatjs.io/react/) for i18n support
+* Bindings to react-intl (http://formatjs.io/react/) for i18n support.  This is useful even if your app is
+  a single language, as it allows easy number, date, relative time, and message formatting like pluralization.
+  It also supports translations of messages.
 
 * The type of `callback` has extended to allow arbitrary function properties to be
   passed to foreign classes.  The old `callback` accepted callbacks of type `Aeson.Value -> handler`
   while the new callback allows functions of any number of arguments, as long as each argument implements
   `FromJSRef`.  Since `Aeson.Value` implements `FromJSRef`, any existing calls to `callback` should still work.
   This change also caused some changes to types in `React.Flux.Internal`.
+
+* Add a function `nestedProperty` to `React.Flux.PropertiesAndEvents` create nested properties.
 
 * Support for React 0.14
     * React 0.13 and 0.14 are both supported from the same Haskell code, the differences are handled internally.
