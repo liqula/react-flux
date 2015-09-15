@@ -4,7 +4,8 @@
 -- messages.
 --
 -- These bindings are for the 2.0 version of ReactIntl which is currently just a
--- pre-release.  For temporary documentation, see <https://github.com/yahoo/react-intl/issues/162 issue62>.
+-- pre-release, and due to how react-flux works, it also requires React 0.14.  For temporary documentation,
+-- see <https://github.com/yahoo/react-intl/issues/162 issue62>.
 -- To use these bindings, you need to provide the @ReactIntl@ variable.  In the browser you can just
 -- load the @react-intl.min.js@ script onto the page so that @window.ReactIntl@ exists.  If you are
 -- running in node, execute @ReactIntl = require(\"ReactIntl\");@ so that @global.ReactIntl@

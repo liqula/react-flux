@@ -52,10 +52,13 @@ The above builds the TODO application and the test client.
 Next, install [selenium-server-standalone](http://www.seleniumhq.org/download/) (also from
 [npm](https://www.npmjs.com/package/selenium-server-standalone-jar)).  Then, build the
 [hspec-webdriver](https://hackage.haskell.org/package/hspec-webdriver) test suite using GHC (not
-GHCJS).  I use stack for this, although you can use cabal too if you like.
+GHCJS).  I use stack for this, although you can use cabal too if you like.  Also, at the moment, the prerelease
+of the react-intl library must be installed from npm.
 
 ~~~
-cd test/spec
+cd test/client
+npm install react-intl@next
+cd ../spec
 stack build
 ~~~
 
