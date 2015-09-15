@@ -108,6 +108,7 @@ module React.Flux.Addons.Intl(
   , formattedRelative_
 
   -- ** Plural
+  , plural_
 
   -- ** Messages
   , MessageId
@@ -163,6 +164,10 @@ foreign import javascript unsafe
     js_formatRelative :: JSRef
 
 foreign import javascript unsafe
+    "$r = ReactIntl['FormattedPlural']"
+    js_formatPlural :: JSRef
+
+foreign import javascript unsafe
     "$r = ReactIntl['FormattedMessage']"
     js_formatMsg :: JSRef
 
@@ -208,6 +213,9 @@ js_formatDate = ()
 
 js_formatRelative :: JSRef
 js_formatRelative = ()
+
+js_formatPlural :: JSRef
+js_formatPlural = ()
 
 js_formatMsg :: JSRef
 js_formatMsg = ()
@@ -369,6 +377,17 @@ relativeTo_ t = time_ [property "dateTime" timeRef] $ foreignClass js_formatRela
 -- day, month, or year and \"style\" which if given must be numeric.
 formattedRelative_ :: UTCTime -> [PropertyOrHandler eventHandler] -> ReactElementM eventHandler ()
 formattedRelative_ t props = foreignClass js_formatRelative (property "value" (timeToRef t) : props) mempty
+
+--------------------------------------------------------------------------------
+-- Plural
+--------------------------------------------------------------------------------
+
+-- | A simple plural formatter useful if you do not want the full machinery of messages.  This does
+-- not support translation, for that you must use messages which via the ICU message syntax support
+-- pluralization.  The properties passed to 'plural_' must be @value@, and then at least one of the
+-- properties from @other@, @zero@, @one@, @two@, @few@, @many@.
+plural_ :: [PropertyOrHandler eventHandler] -> ReactElementM eventHandler ()
+plural_ props = foreignClass js_formatPlural props mempty
 
 --------------------------------------------------------------------------------
 -- Messages
