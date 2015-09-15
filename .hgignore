@@ -6,3 +6,4 @@ dist/
 cabal.sandbox.config
 example/todo/js-build/
 example/todo/node_modules/
+test/client/node_modules/

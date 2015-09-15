@@ -217,7 +217,7 @@ displayChildrenSpec = ul_ $ do
 --------------------------------------------------------------------------------
 
 intlSpec :: ReactView ()
-intlSpec = defineView "intl" $ \() -> -- setLocales_ "en-US" $
+intlSpec = defineView "intl" $ \() -> div_ ["id" $= "intl-spec"] $ intlProvider_ "en-US" Nothing $
     ul_ $ do
         li_ ["id" $= "f-number"] $
             formattedNumber_ [ "value" @= (0.9 :: Double), "style" $= "percent" ]
@@ -244,8 +244,10 @@ intlSpec = defineView "intl" $ \() -> -- setLocales_ "en-US" $
                 , "timeZone" $= "Pacific/Tahiti"
                 ]
 
+        {-
         li_ ["id" $= "f-relative"] $ relativeTo_ step
         li_ ["id" $= "f-relative-days"] $ formattedRelative_ step [ "units" $= "day" ]
+        -}
 
         li_ ["id" $= "f-msg"] $
             $(message "photos" "{name} took {numPhotos, plural, =0 {no photos} =1 {one photo} other {# photos}} {takenAgo}.")

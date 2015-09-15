@@ -236,7 +236,9 @@ intlProvider_ :: String -- ^ the locale to use
               -> ReactElementM eventHandler a
 intlProvider_ locale mmsgs = foreignClass js_intlProvider props
     where
-        props = ("locale" @= locale) : [ property "messsages" msgs | let Just msgs = mmsgs ]
+        props = case mmsgs of
+                    Nothing -> ["locale" @= locale]
+                    Just m -> ["locale" @= locale, property "messsages" m]
 
 --------------------------------------------------------------------------------
 --- Numbers
