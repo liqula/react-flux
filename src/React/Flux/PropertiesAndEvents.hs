@@ -1,7 +1,7 @@
--- | This module contains the definitions for creating properties to pass to elements, as well as
--- the definitions for the
+-- | This module contains the definitions for creating properties to pass to javascript elements and
+-- foreign javascript classes.  In addition, it contains definitions for the
 -- <https://facebook.github.io/react/docs/events.html React Event System>.
-{-# LANGUAGE UndecidableInstances, IncoherentInstances #-}
+{-# LANGUAGE UndecidableInstances #-}
 module React.Flux.PropertiesAndEvents (
     PropertyOrHandler
   , (@=)
@@ -89,6 +89,7 @@ import qualified Data.Aeson as A
 
 import           React.Flux.Internal
 import           React.Flux.Store
+import           React.Flux.Views (ViewEventHandler, StatefulViewEventHandler)
 
 #ifdef __GHCJS__
 import           Data.Maybe (fromMaybe)
@@ -139,12 +140,16 @@ elementProperty = ElementProperty
 nestedProperty :: String -> [PropertyOrHandler handler] -> PropertyOrHandler handler
 nestedProperty = NestedProperty
 
--- | A class which contains all <https://wiki.haskell.org/Varargs a variable argument functions>
--- where each argument implements 'FromJSRef' and the result is @handler@.
+-- | A class which is used to implement <https://wiki.haskell.org/Varargs variable argument functions>.
+-- Any function where each argument implements 'FromJSRef' and the result is either
+-- 'ViewEventHandler' or 'StatefulViewEventHandler' is an instance of this class.
 class CallbackFunction handler a | a -> handler  where
     applyFromArguments :: JSArray -> Int -> a -> IO handler
 
-instance CallbackFunction handler handler where
+instance CallbackFunction ViewEventHandler ViewEventHandler where
+    applyFromArguments _ _ h = return h
+
+instance CallbackFunction (StatefulViewEventHandler s) (StatefulViewEventHandler s) where
     applyFromArguments _ _ h = return h
 
 instance (FromJSRef a, CallbackFunction handler b) => CallbackFunction handler (a -> b) where
@@ -161,14 +166,13 @@ instance (FromJSRef a, CallbackFunction handler b) => CallbackFunction handler (
 -- callbacks to be passed to them as properties.  For events on DOM elements, you should instead use
 -- the handlers below.
 --
--- @handler@ is the type of the handler expected by the view (so either @ViewEventHandler@ or
--- @StatefulViewEventHandler@).  Therefore, any variable argument function which produces a
--- @handler@ and where each argument implements 'FromJSRef' can be passed as @func@.  What happens
--- is that a javascript function which loads the the javascript @arguments@ object is created and
--- set as a property with the given name on the React element.  The variable arguments to @func@ are
--- parsed one by one from the @arguments@ object.  If @func@ has more arguments than the javascript
--- @arguments@ object, a null reference is used.  Since the 'Maybe' instance of 'FromJSRef' converts
--- a null reference to 'Nothing', you can even create variable-argument javascript callbacks.
+-- The function @func@ can be any function, as long as each argument to the function is an instance
+-- of 'FromJSRef' and the result of the function is @handler@.  Internally, 'callback' creates a
+-- javascript function which accesses the @arguments@ javascript object and then matches entries in
+-- @arguments@ to the parameters of @func@.  If @func@ has more parameters than the javascript
+-- @arguments@ object, a javascript null is used for the conversion.  Since the 'Maybe' instance of
+-- 'FromJSRef' converts a null reference to 'Nothing', you can exploit this to create
+-- variable-argument javascript callbacks.
 --
 -- For example, all three of the following functions could be passed as @func@ inside a view.
 --

@@ -28,7 +28,7 @@ newtype ReactStoreRef storeData = ReactStoreRef JSRef
 instance IsJSRef (ReactStoreRef storeData)
 
 -- | A store contains application state, receives actions from the dispatcher, and notifies
--- component views to re-render themselves.  You can have multiple stores; it should be the case
+-- controller-views to re-render themselves.  You can have multiple stores; it should be the case
 -- that all of the state required to render the page is contained in the stores.  A store keeps a
 -- global reference to a value of type @storeData@, which must be an instance of 'StoreData'.
 --
