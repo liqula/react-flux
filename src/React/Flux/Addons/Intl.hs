@@ -1,11 +1,14 @@
 -- | Bindings to the <http://formatjs.io/react/ ReactIntl> library, which allows easy formatting of
--- numbers, dates, times, relative times, and pluralization which can be used even if you do not
--- intend to translate your application.  In addition, it provides a method for providing translations of
--- messages.
+-- numbers, dates, times, relative times, pluralization, and translated messages. This library can
+-- be used for formatting and pluralization even if you intend to present your application in a single
+-- language and locale.
 --
 -- These bindings are for the 2.0 version of ReactIntl which is currently just a
 -- pre-release, and due to how react-flux works, it also requires React 0.14.  For temporary documentation,
--- see <https://github.com/yahoo/react-intl/issues/162 issue62>.
+-- see <https://github.com/yahoo/react-intl/issues/162 issue62>.  Because this is a binding to a
+-- pre-release, the API below might change!  I consider it unlikely, but if a change is required I will
+-- violate the PVP and not increment the major number, just the minor number.
+--
 -- To use these bindings, you need to provide the @ReactIntl@ variable.  In the browser you can just
 -- load the @react-intl.min.js@ script onto the page so that @window.ReactIntl@ exists.  If you are
 -- running in node, execute @ReactIntl = require(\"ReactIntl\");@ so that @global.ReactIntl@
@@ -15,23 +18,21 @@
 -- >contents of all.js
 -- >})(window, window['React'], window['ReactDOM'], window['ReactIntl']);
 --
--- __Using with a single locale and no translations__.  If you do not intend to translate your app,
--- you can still use this module for formatting.  Add a call to 'intlProvider_' to the top of your
--- app with a hard-coded locale and @Nothing@ for the messages.  You can then use anything in the
--- /Formatting/ section like 'int_', 'relativeTo_', and 'message', where 'message' will just always
--- use the default message provided in the source code.  If you want to specify the locale so dates
--- and numbers are formatted in the user's locale, it is strongly recommended to set the locale from
--- the server based on the @Accept-Language@ header and/or a user setting so that the page as a
--- whole is consistint.  I have the server set a variable on @window@ for the locale to use, and
--- then pass that locale into 'intlProvider_'.
+-- __Using with a single locale and no translations__.  If you intend to present your application in
+-- a single language, you can still use this module for formatting.  Add a call to 'intlProvider_'
+-- to the top of your app with a hard-coded locale and @Nothing@ for the messages.  You can then use
+-- anything in the /Formatting/ section like 'int_', 'relativeTo_', and 'message', where 'message'
+-- will just always use the default message provided in the source code (helpful for templating).
+-- If you want to specify the locale so dates and numbers are formatted in the user's locale, it is
+-- strongly recommended to set the locale from the server based on the @Accept-Language@ header
+-- and/or a user setting so that the page as a whole is consistint.  I have the server set a
+-- variable on @window@ for the locale to use, and then pass that locale into 'intlProvider_'.
 --
 -- __Translations__.  The react-intl philosophy is that messages should be defined in the source
--- code instead of kept in a separate file.  This allows the program to function without any
--- external translation files, and therefore allows you to use messages even if you have no
--- intention of translating the app, using the messages for plurization and formatting.  To support
--- translations, a tool (in this case Template Haskell) is used to extract the messages from the
--- source code into a file given to the translators.  The result of the translation is then used to
--- replace the default message given in the source code.
+-- code instead of kept in a separate file.  To support translations, a tool (in this case Template
+-- Haskell) is used to extract the messages from the source code into a file given to the
+-- translators.  The result of the translation is then used to replace the default message given in
+-- the source code.
 --
 --   1. Use the functions in the /Formatting/ section like 'int_', 'relativeTo_', and 'message'
 --   inside your rendering functions.
@@ -43,7 +44,7 @@
 --   3. Give these message files to your translators.  The translation results will then need to be
 --   converted into javascript files in the format expected by ReactIntl, which is a javascript
 --   object with keys the 'MessageId's and value the translated message.  For example, each translation
---   should result in a javascript file such as the following:
+--   could result in a javascript file such as the following:
 --
 --       @
 --       window.myMessages = window.myMessages || {};
@@ -128,6 +129,7 @@ module React.Flux.Addons.Intl(
 ) where
 
 import Control.Monad (when, forM_)
+import Data.Aeson (Object, Value(Object))
 import Data.Char (ord, isPrint)
 import Data.List (sortBy)
 import Data.Maybe (catMaybes, fromMaybe)
@@ -233,22 +235,26 @@ timeToRef _ = ()
 
 #endif
 
--- | Use the IntlProvider to set the @locale@ and @messages@ property.  @formats@ are not supported,
--- since it is easier to write Haskell wrappers around for example 'formattedNumber_' if you need
--- custom formats.
+-- | Use the IntlProvider to set the @locale@, @formats@, and @messages@ property.
 intlProvider_ :: String -- ^ the locale to use
               -> Maybe JSRef
                   -- ^ A reference to translated messages, which must be an object with keys
                   -- 'MessageId' and value the translated message.  Set this as Nothing if you are not using
                   -- translated messages, since either @Nothing@ or a null JSRef will cause the messages
                   -- from the source code to be used.
+              -> Maybe Object
+                  -- ^ An object to use for the @formats@ parameter which allows custom formats.  I
+                  -- suggest you use custom formats only for messages.  Custom formats for numbers
+                  -- and dates not in a message is better done by writing a small Haskell utility
+                  -- function wrapping for example 'formattedNumber_'.
               -> ReactElementM eventHandler a -- ^ The children of this element.  All descendents will use the given locale and messages.
               -> ReactElementM eventHandler a
-intlProvider_ locale mmsgs = foreignClass js_intlProvider props
+intlProvider_ locale mmsgs mformats = foreignClass js_intlProvider props
     where
-        props = case mmsgs of
-                    Nothing -> ["locale" @= locale]
-                    Just m -> ["locale" @= locale, property "messages" m]
+        props = catMaybes [ Just ("locale" @= locale)
+                          , (property "messages") <$> mmsgs
+                          , (property "formats" . Object) <$> mformats
+                          ]
 
 --------------------------------------------------------------------------------
 --- Numbers
@@ -401,7 +407,7 @@ type MessageId = T.Text
 -- | A message.
 data Message = Message {
     msgDescription :: T.Text -- ^ A description intended to provide context for translators.
-  , msgDefaultMsg :: T.Text -- ^ The default message written in ICU message syntax.
+  , msgDefaultMsg :: T.Text -- ^ The default message written in <http://formatjs.io/guides/message-syntax/ ICU message syntax>.
 } deriving Show
 
 -- | This is the type stored in the Q monad with qGetQ and qPutQ
@@ -424,9 +430,20 @@ messageToProps i (Message desc m) props = ["id" @= i, "description" @= desc, "de
 --
 -- This will first lookup the 'MessageId' (in this case @num_photos@) in the  @messages@ paramter passed to 'intlProvider_'.
 -- If no messages were passed, 'intlProvider_' was not called, or the 'MessageId' was not found, the default message is used.
+--
+-- In my project, I create a wrapper around 'message' which sets the 'MessageId' as the sha1 hash of
+-- the message.  I did not implement it in react-flux because I did not want to add cryptohash as a
+-- dependency.  For example,
+--
+-- >import Crypto.Hash (hash, SHA1)
+-- >import qualified Data.Text as T
+-- >import qualified Data.Text.Encoding as T
+-- >
+-- >msg :: T.Text -> ExpQ
+-- >msg txt = message (T.pack $ show (hash (T.encodeUtf8 txt) :: Digest SHA1)) txt
 message :: MessageId
-        -> T.Text -- ^ The default message written in ICU message syntax.  This message is used if no translation is found,
-                  -- and is also the message given to the translators.
+        -> T.Text -- ^ The default message written in <http://formatjs.io/guides/message-syntax/ ICU message syntax>.
+                  -- This message is used if no translation is found, and is also the message given to the translators.
         -> ExpQ --Q (TExp ([PropertyOrHandler eventHandler] -> ReactElementM eventHandler ()))
 message ident m = formattedMessage [|js_formatMsg|] ident $ Message "" m
 

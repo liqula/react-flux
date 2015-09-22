@@ -17,7 +17,7 @@ foreign import javascript unsafe
     js_translations :: JSRef
 
 intlSpec :: ReactView ()
-intlSpec = defineView "intl" $ \() -> div_ ["id" $= "intl-spec"] $ intlProvider_ "en-US" (Just js_translations) $
+intlSpec = defineView "intl" $ \() -> div_ ["id" $= "intl-spec"] $ intlProvider_ "en-US" (Just js_translations) Nothing $
     ul_ $ do
         li_ ["id" $= "f-number"] $
             formattedNumber_ [ "value" @= (0.9 :: Double), "style" $= "percent" ]
