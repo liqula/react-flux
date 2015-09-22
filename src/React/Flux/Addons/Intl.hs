@@ -428,7 +428,7 @@ messageToProps i (Message desc m) props = ["id" @= i, "description" @= desc, "de
 -- >        , elementProperty "takenAgo" $ relativeTo_ (UTCTime (fromGregorian 1969 7 20) (2*60*60 + 56*60))
 -- >        ]
 --
--- This will first lookup the 'MessageId' (in this case @num_photos@) in the  @messages@ paramter passed to 'intlProvider_'.
+-- This will first lookup the 'MessageId' (in this case @num_photos@) in the  @messages@ parameter passed to 'intlProvider_'.
 -- If no messages were passed, 'intlProvider_' was not called, or the 'MessageId' was not found, the default message is used.
 --
 -- In my project, I create a wrapper around 'message' which sets the 'MessageId' as the sha1 hash of

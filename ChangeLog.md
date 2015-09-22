@@ -10,7 +10,7 @@
   `FromJSRef`.  Since `Aeson.Value` implements `FromJSRef`, any existing calls to `callback` should still work.
   This change also caused some changes to types in `React.Flux.Internal`.
 
-* Add a function `nestedProperty` to `React.Flux.PropertiesAndEvents` create nested properties.
+* Add a function `nestedProperty` to `React.Flux.PropertiesAndEvents` to create nested properties.
 
 * Support for React 0.14
     * React 0.13 and 0.14 are both supported from the same Haskell code, the differences are handled internally.
@@ -21,8 +21,8 @@
     * The new media events on images and videos don't have direct Haskell equivalents, instead the handlers can be
       created by the new `on` function in `React.Flux.PropertiesAndEvents`.
     * The CSS transitions in `React.Flux.Addons.React` were made simpler by just passing the raw
-      properties.  There were several changes to the possible properties and covering them all from Haskell is not worth
-      it when the properties can easily be created directly.
+      properties.  There were several changes to the possible properties in React 0.14 and covering them all
+      from Haskell is not worth it when the properties can easily be created directly.
 
 * `reactRenderToString` was added to allow executing a react-flux application using node.
 
