@@ -1,5 +1,5 @@
 name:                react-flux
-version:             0.9.4
+version:             1.0.0
 synopsis:            A binding to React based on the Flux application architecture for GHCJS
 category:            Web
 homepage:            https://bitbucket.org/wuzzeb/react-flux
@@ -19,15 +19,15 @@ extra-source-files:
     example/todo/Makefile,
     example/todo/*.hs,
     example/todo/*.html,
-    example/todo/run-in-main.js,
+    example/todo/run-in-node.js,
     example/routing/*.hs,
     example/routing/*.html,
     test/client/*.html,
+    test/client/msgs/*.json,
+    test/client/msgs/*.xml,
     test/spec/react-flux-spec.cabal,
-    test/spec/Spec.hs,
     test/spec/stack.yaml,
-    test/spec/TestClientSpec.hs,
-    test/spec/TodoSpec.hs
+    test/spec/*.hs
 
 source-repository head
     type: mercurial

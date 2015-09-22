@@ -1,4 +1,4 @@
-# 1.0.0 (unreleased)
+# 1.0.0
 
 * Bindings to react-intl (http://formatjs.io/react/) for i18n support.  This is useful even if your app is
   a single language, as it allows easy number, date, relative time, and message formatting like pluralization.
