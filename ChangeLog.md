@@ -2,7 +2,7 @@
 
 * Bindings to react-intl (http://formatjs.io/react/) for i18n support.  This is useful even if your app is
   a single language, as it allows easy number, date, relative time, and message formatting like pluralization.
-  It also supports translations of messages.
+  It also supports multiple locales and translations of messages.
 
 * The type of `callback` has extended to allow arbitrary function properties to be
   passed to foreign classes.  The old `callback` accepted callbacks of type `Aeson.Value -> handler`
