@@ -35,6 +35,14 @@ lifecyclePropsAndStateAre props st = do
     p <- findElem (ById "world")
     getText p `shouldReturn` (T.pack $ "Current props: " ++ props)
 
+scuShouldBe :: [(Int, String)] -> WD ()
+scuShouldBe items = do
+    d <- findElem $ ById "should-component-update"
+    lis <- findElemsFrom d $ ByTag "li"
+    length lis `shouldBe` length items
+    forM_ (zip lis items) $ \(li,(i, s)) ->
+        getText li `shouldReturn` (T.pack $ show i ++ s)
+
 intlSpanShouldBe :: String -> String -> WD ()
 intlSpanShouldBe ident txt = do
     e <- findElem (ById $ T.pack ident)
@@ -220,6 +228,41 @@ testClientSpec filename = session " for the test client" $ using Chrome $ do
             loadLog `shouldReturn` ["Switched to 3"]
             click i1
             loadLog `shouldReturn` ["Switched to 1"]
+
+    describe "should component update" $ do
+
+        it "has the initial data" $ runWD $
+            scuShouldBe [(1, "Hello"), (2, "World"), (3, "!!!")]
+
+        it "increments just the first entry without re-rendering all entries" $ runWD $ do
+            findElem (ById "increment-first-scu") >>= click
+            scuShouldBe [(2, "Hello"), (2, "World"), (3, "!!!")]
+            loadLog `shouldReturn`
+                [ "Component will update"
+                , "current props: 1 Hello"
+                , "new props: 2 Hello"
+                ]
+
+        it "does not update when no change to data" $ runWD $ do
+            findElem (ById "no-change-scu") >>= click
+            scuShouldBe [(2, "Hello"), (2, "World"), (3, "!!!")]
+            loadLog `shouldReturn` []
+
+        it "increments all entries" $ runWD $ do
+            findElem (ById "change-all-scu") >>= click
+            scuShouldBe [(3, "Hello"), (3, "World"), (4, "!!!")]
+            loadLog `shouldReturn`
+                [ "Component will update"
+                , "current props: 2 Hello"
+                , "new props: 3 Hello"
+                , "Component will update"
+                , "current props: 2 World"
+                , "new props: 3 World"
+                , "Component will update"
+                , "current props: 3 !!!"
+                , "new props: 4 !!!"
+                ]
+
 
     {-
     it "inspects the session" $ runWD $ do

@@ -1,11 +1,13 @@
-{-# LANGUAGE OverloadedStrings, TypeFamilies, ScopedTypeVariables #-}
+{-# LANGUAGE OverloadedStrings, TypeFamilies, ScopedTypeVariables, DeriveAnyClass, FlexibleInstances, DeriveGeneric #-}
 module TestClient (testClient) where
 
+import Control.DeepSeq (NFData)
 import Control.Monad
 import Data.Monoid ((<>))
 import Data.Typeable (Typeable)
 import Data.Maybe
 import Debug.Trace
+import GHC.Generics (Generic)
 import React.Flux
 import React.Flux.Lifecycle
 import React.Flux.Internal (toJSString)
@@ -236,6 +238,59 @@ bootstrapSpec = defineView "bootstrap" $ \() -> div_ ["id" $= "bootstrap"] $ do
         bootstrap_ "NavItem" ["eventKey" @= (3 :: Int)] "Item 3"
 
 --------------------------------------------------------------------------------
+--- shouldComponentUpdate
+--------------------------------------------------------------------------------
+
+data ShouldComponentUpdateData = ShouldComponentUpdateData Int String
+    deriving (Typeable, Show)
+
+data ShouldComponentUpdateAction = IncrementAllSCUData
+                                 | IncrementFirstSCUData
+                                 | NoChangeToSCUData
+    deriving (Show, Typeable, Generic, NFData)
+
+instance StoreData [ShouldComponentUpdateData] where
+    type StoreAction [ShouldComponentUpdateData] = ShouldComponentUpdateAction
+    transform NoChangeToSCUData s = return s
+    transform IncrementAllSCUData d = return [ShouldComponentUpdateData (i+1) s | ShouldComponentUpdateData i s <- d]
+    transform IncrementFirstSCUData (ShouldComponentUpdateData i s:xs) = return $ (ShouldComponentUpdateData (i+1) s) : xs
+    transform _ [] = error "Should never happen"
+
+shouldComponentUpdateStore :: ReactStore [ShouldComponentUpdateData]
+shouldComponentUpdateStore = mkStore [ ShouldComponentUpdateData 1 "Hello"
+                                     , ShouldComponentUpdateData 2 "World"
+                                     , ShouldComponentUpdateData 3 "!!!"
+                                     ]
+
+-- | This will log wheenver componentWillUpdate lifecycle event occurs
+logComponentWillUpdate :: ReactView ShouldComponentUpdateData
+logComponentWillUpdate = defineLifecycleView "shouldComponentUpdate spec" () lifecycleConfig
+    { lRender = \() (ShouldComponentUpdateData i s) ->
+                    span_ (elemShow i) <> span_ (elemText s)
+    , lComponentWillUpdate = Just $ \curProps _ (ShouldComponentUpdateData newI newS) () -> do
+          ShouldComponentUpdateData curI curS <- lGetProps curProps
+          outputIO [ "Component will update"
+                   , "current props: " ++ show curI ++ " " ++ curS
+                   , "new props: " ++ show newI ++ " " ++ newS
+                   ]
+    }
+
+shouldComponentUpdateSpec :: ReactView ()
+shouldComponentUpdateSpec = defineControllerView "should component update" shouldComponentUpdateStore $ \ds () -> 
+    div_ ["id" $= "should-component-update"] $ do
+        ul_ $ forM_ (zip ds [(0 :: Int)..]) $ \(su, i)  ->
+            li_ $ viewWithKey logComponentWillUpdate i su mempty
+
+        button_ ["id" $= "no-change-scu", onClick $ \_ _ -> [SomeStoreAction shouldComponentUpdateStore NoChangeToSCUData]]
+            "No change to data"
+
+        button_ ["id" $= "change-all-scu", onClick $ \_ _ -> [SomeStoreAction shouldComponentUpdateStore IncrementAllSCUData]]
+            "Increment all"
+
+        button_ ["id" $= "increment-first-scu", onClick $ \_ _ -> [SomeStoreAction shouldComponentUpdateStore IncrementFirstSCUData]]
+            "Increment first entry's integer"
+
+--------------------------------------------------------------------------------
 --- Main
 --------------------------------------------------------------------------------
 
@@ -260,4 +315,6 @@ testClient = defineLifecycleView "app" "Hello" lifecycleConfig
         view cssTransitions ["A", "B"] mempty
 
         view bootstrapSpec () mempty
+
+        view shouldComponentUpdateSpec () mempty
     }

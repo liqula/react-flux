@@ -128,6 +128,7 @@ executable test-client-13
    build-depends: base
                 , react-flux
                 , time
+                , deepseq
    if impl(ghcjs)
       build-depends: ghcjs-base
 
@@ -144,6 +145,7 @@ executable test-client-14
    build-depends: base
                 , react-flux
                 , time
+                , deepseq
    if impl(ghcjs)
       build-depends: ghcjs-base
 
