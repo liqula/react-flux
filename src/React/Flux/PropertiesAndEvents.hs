@@ -11,6 +11,7 @@ module React.Flux.PropertiesAndEvents (
   , nestedProperty
   , CallbackFunction
   , callback
+  , classNames
 
   -- * Events
   , Event(..)
@@ -86,6 +87,7 @@ import           Control.DeepSeq
 import           System.IO.Unsafe (unsafePerformIO)
 import qualified Data.Text as T
 import qualified Data.Aeson as A
+import qualified Data.HashMap.Strict as M
 
 import           React.Flux.Internal
 import           React.Flux.Store
@@ -183,6 +185,14 @@ instance (FromJSRef a, CallbackFunction handler b) => CallbackFunction handler (
 -- For another example, see the haddock comments in "React.Flux.Addons.Bootstrap".
 callback :: CallbackFunction handler func => String -> func -> PropertyOrHandler handler
 callback name func = CallbackPropertyWithArgumentArray name $ \arr -> applyFromArguments arr 0 func
+
+-- | Set the <https://facebook.github.io/react/docs/class-name-manipulation.html className> property to consist
+-- of all the names which are matched with True, allowing you to easily toggle class names based on
+-- a computation, similar to classSet.
+classNames :: [(T.Text, Bool)] -> PropertyOrHandler handler
+classNames xs = "className" @= T.intercalate "," names
+    where
+        names = M.keys $ M.filter id $ M.fromList xs
 
 ----------------------------------------------------------------------------------------------------
 --- Generic Event

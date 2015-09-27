@@ -197,7 +197,8 @@ testLifecycle_ s = view testLifecycle s $ span_ ["id" $= "child-passed-to-view"]
 
 displayChildren :: ReactView String
 displayChildren = defineView "display children" $ \ident ->
-    span_ ["className" $= "display-children", "id" @= ident] childrenPassedToView
+    span_ [classNames [("display-children", True), ("missing-name", False)], "id" @= ident]
+        childrenPassedToView
 
 displayChildren_ :: String -> ReactElementM handler () -> ReactElementM handler ()
 displayChildren_ = view displayChildren
@@ -228,7 +229,7 @@ bootstrapSpec = defineView "bootstrap" $ \() -> div_ ["id" $= "bootstrap"] $ do
     bootstrap_ "Alert" [ "bsStyle" $= "danger"
                        , callback "onDismiss" $ output ["Closing alert"]
                        ] $
-        p_ "Hello, World!"
+        bdiv_ "row" $ p_ "Hello, World!"
 
     bootstrap_ "Nav" [ "activeKey" @= (1 :: Int)
                      , callback "onSelect" $ \(i :: Int) -> output ["Switched to " ++ show i]

@@ -187,16 +187,19 @@ testClientSpec filename = session " for the test client" $ using Chrome $ do
 
         it "does not display null children" $ runWD $ do
             s <- findElem $ ById "empty-children"
+            s `attr` "class" `shouldReturn` Just "display-children"
             findElemsFrom s (ByCSS "*") `shouldReturn` []
             getText s `shouldReturn` ""
 
         it "displays a single child" $ runWD $ do
             s <- findElem $ ById "single-child-wrapper"
+            s `attr` "class" `shouldReturn` Just "display-children"
             s' <- findElemFrom s $ ByCSS "span#single-child"
             getText s' `shouldReturn` "Single Child!!"
 
         it "displays a child list" $ runWD $ do
             s <- findElem $ ById "multi-child"
+            s `attr` "class" `shouldReturn` Just "display-children"
             c1 <- findElemFrom s $ ByCSS "span#child1"
             getText c1 `shouldReturn` "Child 1"
             c2 <- findElemFrom s $ ByCSS "span#child2"
@@ -212,6 +215,8 @@ testClientSpec filename = session " for the test client" $ using Chrome $ do
 
         it "displays and closes alert" $ runWD $ do
             alert <- findElem $ ByCSS "div#bootstrap div.alert"
+            row <- findElemFrom alert $ ByCSS "div.row"
+            row `attr` "class" `shouldReturn` Just "row"
             (findElemFrom alert (ByTag "p") >>= getText)
                 `shouldReturn` "Hello, World!"
             findElemFrom alert (ByTag "button") >>= click

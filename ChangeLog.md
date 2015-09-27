@@ -1,3 +1,11 @@
+# Unreleased
+
+* Add `classNames` function to `React.Flux.PropertiesAndEvents` to allow easily setting class names
+  based on calculations.
+
+* Add a small utility function `bdiv_` to `React.Flux.Addons.Bootstrap` to create a div with only a list
+  of classes as properties.
+
 # 1.0.0
 
 * Bindings to react-intl (http://formatjs.io/react/) for i18n support.  This is useful even if your app is
