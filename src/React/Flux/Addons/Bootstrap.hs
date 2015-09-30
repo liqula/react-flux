@@ -51,11 +51,11 @@ bootstrap_ _ _ x = x
 #endif
 
 -- | A 'div_' that lets you specify only a list of class names, since a large majority of bootstrap
--- markup is adding class names to divs.  Multiple classes are separated by commas.  If you need to
+-- markup is adding class names to divs.  Multiple classes are separated by spaces.  If you need to
 -- set class names based on computed booleans, use 'classNames' on a normal 'div_' instead.
 --
 -- >bdiv_ "row" $
--- >    bdiv_ "col-md-2,hidden-xs,hidden-sm" $
+-- >    bdiv_ "col-md-2 hidden-xs hidden-sm" $
 -- >        bdiv_ "list-group" $
 -- >            forM_ someList $ \item ->
 -- >                a_ ["className" $= "list-group-item"] ...

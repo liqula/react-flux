@@ -190,7 +190,7 @@ callback name func = CallbackPropertyWithArgumentArray name $ \arr -> applyFromA
 -- of all the names which are matched with True, allowing you to easily toggle class names based on
 -- a computation, similar to classSet.
 classNames :: [(T.Text, Bool)] -> PropertyOrHandler handler
-classNames xs = "className" @= T.intercalate "," names
+classNames xs = "className" @= T.intercalate " " names
     where
         names = M.keys $ M.filter id $ M.fromList xs
 
