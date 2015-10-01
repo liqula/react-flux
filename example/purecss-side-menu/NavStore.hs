@@ -11,11 +11,19 @@ import React.Flux
 import GHCJS.Types (JSRef, JSString)
 import GHCJS.Foreign.Callback (Callback, syncCallback1, OnBlocked(..))
 import GHCJS.Marshal (fromJSRef)
+import qualified Data.JSString as JSString
 
 data NavPageId = Page1
                | Page2
                | Page3
     deriving (Show, Eq, Enum, Bounded, Typeable, Generic, NFData)
+
+-- | The page title (used for `document.title`) and the url (used for the history API and displayed
+-- in the browser location bar).
+pageTitleAndUrl :: NavPageId -> (String, String)
+pageTitleAndUrl Page1 = ("Page 1 Title", "/page1")
+pageTitleAndUrl Page2 = ("Page 2222", "/pages/page2")
+pageTitleAndUrl Page3 = ("Page Three Title", "/page3.html")
 
 allPageIds :: [NavPageId]
 allPageIds = [(minBound :: NavPageId) .. ]
@@ -34,8 +42,10 @@ instance StoreData NavState where
     type StoreAction NavState = NavAction
     transform (ChangePageTo p) _ = do
         historyPushState p
+        setDocTitle p
         return NavState { currentPageId = p, sideMenuOpen = False }
-    transform (BackToPage p) _ =
+    transform (BackToPage p) _ = do
+        setDocTitle p
         return NavState { currentPageId = p, sideMenuOpen = False }
     transform ToggleSideMenu s =
         return $ s { sideMenuOpen = not (sideMenuOpen s) } -- use a lens!
@@ -48,23 +58,34 @@ currentNavPageStore = mkStore (NavState False Page1)
 --------------------------------------------------------------------------
 
 foreign import javascript unsafe
-    "window['history']['pushState']({page: $1}, '', $2)"
+    "window['history']['pushState']({page: $1}, $2)"
     js_historyPushState :: Int -> JSString -> IO ()
 
 historyPushState :: NavPageId -> IO ()
-historyPushState pid = js_historyPushState (fromEnum pid) title
-    where
-        title = case pid of
-                    Page1 -> "/page1"
-                    Page2 -> "/pages/page2"
-                    Page3 -> "/page3.html"
+historyPushState pid = do
+    let (_, url) = pageTitleAndUrl pid
+    js_historyPushState (fromEnum pid) $ JSString.pack url
+
+foreign import javascript unsafe
+    "document['title'] = $1;"
+    js_setDocTitle :: JSString -> IO ()
+
+setDocTitle :: NavPageId -> IO ()
+setDocTitle pid = do
+    let (title, _) = pageTitleAndUrl pid
+    js_setDocTitle $ JSString.pack title
 
 foreign import javascript unsafe
     "window['onpopstate'] = function(e) { $1(e['state'] ? e['state'].page : 0); };"
     js_setOnPopState :: Callback (JSRef -> IO ()) -> IO ()
 
-setOnPopState :: IO ()
-setOnPopState = do
+initHistory :: IO ()
+initHistory = do
+    -- set the document title to match page1
+    let (title, _) = pageTitleAndUrl Page1
+    js_setDocTitle $ JSString.pack title
+
+    -- register a callback for onpopstate event
     c <- syncCallback1 ContinueAsync $ \pageRef -> do
         pageInt <- fromMaybe (error "Unable to parse page") <$> fromJSRef pageRef
         alterStore currentNavPageStore $ BackToPage $ toEnum pageInt

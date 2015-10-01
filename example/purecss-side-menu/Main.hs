@@ -2,9 +2,9 @@ module Main (main) where
 
 import React.Flux
 import App
-import NavStore (setOnPopState)
+import NavStore (initHistory)
 
 main :: IO ()
 main = do
-    setOnPopState
+    initHistory
     reactRender "side-menu-app" myApp ()
