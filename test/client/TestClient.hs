@@ -229,7 +229,7 @@ bootstrapSpec = defineView "bootstrap" $ \() -> div_ ["id" $= "bootstrap"] $ do
     bootstrap_ "Alert" [ "bsStyle" $= "danger"
                        , callback "onDismiss" $ output ["Closing alert"]
                        ] $
-        bdiv_ "row" $ p_ "Hello, World!"
+        p_ "Hello, World!"
 
     bootstrap_ "Nav" [ "activeKey" @= (1 :: Int)
                      , callback "onSelect" $ \(i :: Int) -> output ["Switched to " ++ show i]

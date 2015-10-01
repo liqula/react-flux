@@ -3,11 +3,9 @@
 -- is defined.  You can then use 'bootstrap_' inside your rendering functions.
 module React.Flux.Addons.Bootstrap (
     bootstrap_
-  , bdiv_
 ) where
 
 import React.Flux
-import Data.Text (Text)
 
 #ifdef __GHCJS__
 import GHCJS.Types (JSRef, JSString)
@@ -49,15 +47,3 @@ foreign import javascript unsafe
 bootstrap_ _ _ x = x
 
 #endif
-
--- | A 'div_' that lets you specify only a list of class names, since a large majority of bootstrap
--- markup is adding class names to divs.  Multiple classes are separated by spaces.  If you need to
--- set class names based on computed booleans, use 'classNames' on a normal 'div_' instead.
---
--- >bdiv_ "row" $
--- >    bdiv_ "col-md-2 hidden-xs hidden-sm" $
--- >        bdiv_ "list-group" $
--- >            forM_ someList $ \item ->
--- >                a_ ["className" $= "list-group-item"] ...
-bdiv_ :: Text -> ReactElementM eventHandler a -> ReactElementM eventHandler a
-bdiv_ c = div_ ["className" @= c]

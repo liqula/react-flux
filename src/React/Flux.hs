@@ -85,6 +85,7 @@ module React.Flux (
   , foreignClass
   , module React.Flux.DOM
   , module React.Flux.PropertiesAndEvents
+  , module React.Flux.Combinators
 
   -- * Main
   , reactRender
@@ -101,6 +102,7 @@ import React.Flux.Views
 import React.Flux.DOM
 import React.Flux.Internal
 import React.Flux.PropertiesAndEvents
+import React.Flux.Combinators
 import React.Flux.Store
 
 #ifdef __GHCJS__

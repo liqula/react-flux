@@ -396,36 +396,8 @@ viewWithKey rc key props (ReactElementM child) =
     let (a, childEl) = runWriter child
      in elementToM a $ ViewElement (reactView rc) (Just key) props childEl
 
--- | Create a 'ReactElement' for a class defined in javascript.  For example, if you would like to
--- use <https://github.com/JedWatson/react-select react-select>, you could do so as follows:
---
--- >foreign import javascript unsafe
--- >    "window['Select']"
--- >    js_ReactSelectClass :: JSRef
--- >
--- >reactSelect_ :: [PropertyOrHandler eventHandler] -> ReactElementM eventHandler ()
--- >reactSelect_ props = foreignClass js_ReactSelectClass props mempty
--- >
--- >onSelectChange :: FromJSON a
--- >               => (a -> handler) -- ^ receives the new value and performs an action.
--- >               -> PropertyOrHandler handler
--- >onSelectChange f = callback "onChange" (f . parse)
--- >    where
--- >        parse v =
--- >            case fromJSON v of
--- >                Error err -> error $ "Unable to parse new value for select onChange: " ++ err
--- >                Success e -> e
---
--- This could then be used as part of a rendering function like so:
---
--- >reactSelect_
--- >    [ "name" $= "form-field-name"
--- >    , "value" $= "one"
--- >    , "options" @= [ object [ "value" .= "one", "label" .= "One" ]
--- >                   , object [ "value" .= "two", "label" .= "Two" ]
--- >                   ]
--- >    , onSelectChange dispatchSomething
--- >    ]
+-- | Create a 'ReactElement' for a class defined in javascript.  See
+-- 'React.Flux.Combinators.foreign_' for a convenient wrapper and some examples.
 foreignClass :: JSRef -- ^ The javascript reference to the class
              -> [PropertyOrHandler eventHandler] -- ^ properties and handlers to pass when creating an instance of this class.
              -> ReactElementM eventHandler a -- ^ The child element or elements

@@ -215,8 +215,6 @@ testClientSpec filename = session " for the test client" $ using Chrome $ do
 
         it "displays and closes alert" $ runWD $ do
             alert <- findElem $ ByCSS "div#bootstrap div.alert"
-            row <- findElemFrom alert $ ByCSS "div.row"
-            row `attr` "class" `shouldReturn` Just "row"
             (findElemFrom alert (ByTag "p") >>= getText)
                 `shouldReturn` "Hello, World!"
             findElemFrom alert (ByTag "button") >>= click

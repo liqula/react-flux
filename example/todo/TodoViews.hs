@@ -40,13 +40,12 @@ todoHeader_ = view todoHeader () mempty
 -- inside the rendering function.
 mainSection_ :: TodoState -> ReactElementM ViewEventHandler ()
 mainSection_ st = section_ ["id" $= "main"] $ do
-    input_ [ "id" $= "toggle-all"
-           , "type" $= "checkbox"
-           , "checked" $= if all (todoComplete . snd) $ todoList st then "checked" else ""
-           , onChange $ \_ -> dispatchTodo ToggleAllComplete
-           ]
+    labeledInput_ "toggle-all" "Mark all as complete"
+        [ "type" $= "checkbox"
+        , "checked" $= if all (todoComplete . snd) $ todoList st then "checked" else ""
+        , onChange $ \_ -> dispatchTodo ToggleAllComplete
+        ]
 
-    label_ [ "htmlFor" $= "toggle-all"] "Mark all as complete"
     ul_ [ "id" $= "todo-list" ] $ mapM_ todoItem_ $ todoList st
 
 -- | A view for each todo item.  We specifically use a ReactView here to take advantage of the
@@ -60,7 +59,7 @@ todoItem = defineView "todo item" $ \(todoIdx, todo) ->
         , "key" @= todoIdx
         ] $ do
         
-        div_ [ "className" $= "view"] $ do
+        cldiv_ "view" $ do
             input_ [ "className" $= "toggle"
                    , "type" $= "checkbox"
                    , "checked" @= todoComplete todo
@@ -70,9 +69,7 @@ todoItem = defineView "todo item" $ \(todoIdx, todo) ->
             label_ [ onDoubleClick $ \_ _ -> dispatchTodo $ TodoEdit todoIdx] $
                 elemText $ todoText todo
 
-            button_ [ "className" $= "destroy"
-                    , onClick $ \_ _ -> dispatchTodo $ TodoDelete todoIdx
-                    ] mempty
+            clbutton_ "destroy" (dispatchTodo $ TodoDelete todoIdx) mempty
 
         when (todoIsEditing todo) $
             todoTextInput_ TextInputArgs

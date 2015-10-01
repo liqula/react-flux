@@ -4,16 +4,20 @@
 {-# LANGUAGE UndecidableInstances #-}
 module React.Flux.PropertiesAndEvents (
     PropertyOrHandler
-  , (@=)
-  , ($=)
+
+  -- * Creating Properties
   , property
   , elementProperty
   , nestedProperty
   , CallbackFunction
   , callback
+
+  -- ** Combinators
+  , (@=)
+  , ($=)
   , classNames
 
-  -- * Events
+  -- * Creating Events
   , Event(..)
   , EventTarget(..)
   , eventTargetProp
@@ -23,23 +27,23 @@ module React.Flux.PropertiesAndEvents (
   , capturePhase
   , on
 
-  -- * Keyboard
+  -- ** Keyboard
   , KeyboardEvent(..)
   , onKeyDown
   , onKeyPress
   , onKeyUp
 
-  -- * Focus
+  -- ** Focus
   , FocusEvent(..)
   , onBlur
   , onFocus
 
-  -- * Form
+  -- ** Form
   , onChange
   , onInput
   , onSubmit
 
-  -- * Mouse
+  -- ** Mouse
   , MouseEvent(..)
   , onClick
   , onContextMenu
@@ -60,7 +64,7 @@ module React.Flux.PropertiesAndEvents (
   , onMouseOver
   , onMouseUp
 
-  -- * Touch
+  -- ** Touch
   , initializeTouchEvents
   , Touch(..)
   , TouchEvent(..)
@@ -69,14 +73,14 @@ module React.Flux.PropertiesAndEvents (
   , onTouchMove
   , onTouchStart
 
-  -- * UI
+  -- ** UI
   , onScroll
 
-  -- * Wheel
+  -- ** Wheel
   , WheelEvent(..)
   , onWheel
 
-  -- * Image
+  -- ** Image
   , onLoad
   , onError
 ) where
@@ -110,17 +114,6 @@ class IsJSRef a
 nullRef :: ()
 nullRef = ()
 #endif
-
--- TOOD: change these to take a String next time we bump the major version
-
--- | Create a property.
-(@=) :: A.ToJSON a => T.Text -> a -> PropertyOrHandler handler
-n @= a = Property (T.unpack n) (A.toJSON a)
-
--- | Create a text-valued property.  This is here to avoid problems when OverloadedStrings extension
--- is enabled
-($=) :: T.Text -> T.Text -> PropertyOrHandler handler
-n $= a = Property (T.unpack n) a
 
 -- | Some third-party React classes allow passing React elements as properties.  This function
 -- will first run the given 'ReactElementM' to obtain an element or elements, and then use that
@@ -185,6 +178,19 @@ instance (FromJSRef a, CallbackFunction handler b) => CallbackFunction handler (
 -- For another example, see the haddock comments in "React.Flux.Addons.Bootstrap".
 callback :: CallbackFunction handler func => String -> func -> PropertyOrHandler handler
 callback name func = CallbackPropertyWithArgumentArray name $ \arr -> applyFromArguments arr 0 func
+
+----------------------------------------------------------------------------------------------------
+--- Combinators
+----------------------------------------------------------------------------------------------------
+
+-- | Create a property.
+(@=) :: A.ToJSON a => T.Text -> a -> PropertyOrHandler handler
+n @= a = Property (T.unpack n) (A.toJSON a)
+
+-- | Create a text-valued property.  This is here to avoid problems when OverloadedStrings extension
+-- is enabled
+($=) :: T.Text -> T.Text -> PropertyOrHandler handler
+n $= a = Property (T.unpack n) a
 
 -- | Set the <https://facebook.github.io/react/docs/class-name-manipulation.html className> property to consist
 -- of all the names which are matched with True, allowing you to easily toggle class names based on
