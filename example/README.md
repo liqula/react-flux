@@ -57,9 +57,35 @@ Finally, you might be interested to look at
 contains an [hspec-webdriver](https://hackage.haskell.org/package/hspec-webdriver) spec for the TODO
 example application.
 
+# PureCSS
+
+The second example application shows building a [responsive side
+menu](http://purecss.io/layouts/side-menu/) using [PureCSS](http://purecss.io/).  A similar
+technique with slightly different CSS classes can be used to create any of the menu
+[layouts](http://purecss.io/layouts/).  The code is ogranzied as:
+
+* `NavStore.hs` contains a store which stores the current page being viewed and a boolean if the
+  responsive side menu is open or closed.
+* `Dispatcher.hs` contains a function `changePageTo` which allows changing the page.  In a larger
+  application, `Dispatcher.hs` should also contain functions to dispatch to the other stores
+  containing the actual page data.
+* `PageViews.hs` contains the actual page content.  In a real application, each page should probably
+  be split into its own module and be a controller view for the content store.
+* `App.hs` contains the layout for the entire application, with the navigation bar and header.
+* `Main.hs` renders the application into the DOM.
+
+It is also built with `-fexample`.
+
+~~~
+cabal configure -fexample
+cabal build
+cd example/purecss-side-menu
+firefox index.html
+~~~
+
 # Routing Example
 
-The second example application shows routing with the [web-routes](https://hackage.haskell.org/package/web-routes) package.
+The third example application shows routing with the [web-routes](https://hackage.haskell.org/package/web-routes) package.
 It is also built by passing `-fexample` to cabal.
 
 ~~~
