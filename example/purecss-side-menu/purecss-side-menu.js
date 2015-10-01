@@ -1,0 +1,1 @@
+../../dist/build/purecss-side-menu/purecss-side-menu.jsexe/all.js

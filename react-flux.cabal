@@ -130,6 +130,7 @@ executable purecss-side-menu
    build-depends: base
                 , react-flux
                 , deepseq
+                , ghcjs-base
 
 executable test-client-13
    if !flag(test-client)

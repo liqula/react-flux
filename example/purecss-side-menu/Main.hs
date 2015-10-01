@@ -2,6 +2,9 @@ module Main (main) where
 
 import React.Flux
 import App
+import NavStore (setOnPopState)
 
 main :: IO ()
-main = reactRender "side-menu-app" myApp ()
+main = do
+    setOnPopState
+    reactRender "side-menu-app" myApp ()

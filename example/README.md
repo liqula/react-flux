@@ -74,14 +74,18 @@ technique with slightly different CSS classes can be used to create any of the m
 * `App.hs` contains the layout for the entire application, with the navigation bar and header.
 * `Main.hs` renders the application into the DOM.
 
-It is also built with `-fexample`.
+It is also built with `-fexample`.  It uses the browser [history
+API](https://developer.mozilla.org/en-US/docs/Web/API/History_API) which does not work if you open `index.html` directly from the filesystem.  Instead, the index.html file must be served.
 
 ~~~
 cabal configure -fexample
 cabal build
 cd example/purecss-side-menu
-firefox index.html
+ln -s ../../dist/build/purecss-side-menu/purecss-side-menu.jsexe/all.js purecss-side-menu.js
+python3 -m http.server 8000
 ~~~
+
+Then open your browser to `localhost:8000`.
 
 # Routing Example
 
