@@ -1,5 +1,8 @@
 # Unreleased
 
+* Add a new example [purecss-side-menu](https://bitbucket.org/wuzzeb/react-flux/src/tip/example/purecss-side-menu)
+  showing a responsive side menu built with PureCSS.
+
 * Add `classNames` function to `React.Flux.PropertiesAndEvents` to allow easily setting class names
   based on calculations.
 
