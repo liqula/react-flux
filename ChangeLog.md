@@ -3,8 +3,8 @@
 * Add `classNames` function to `React.Flux.PropertiesAndEvents` to allow easily setting class names
   based on calculations.
 
-* Add a small utility function `bdiv_` to `React.Flux.Addons.Bootstrap` to create a div with only a list
-  of classes as properties.
+* Add a new module `React.Flux.Combinators` which is re-exported by `React.Flux`.  The `Combinators` module
+  contains useful utilities that while not required, make your life a little simpler.
 
 # 1.0.0
 
