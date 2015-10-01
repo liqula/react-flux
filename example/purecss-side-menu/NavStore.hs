@@ -60,7 +60,7 @@ historyPushState pid = js_historyPushState (fromEnum pid) title
                     Page3 -> "/page3.html"
 
 foreign import javascript unsafe
-    "window['onpopstate'] = function(e) { $1(e.state ? e.state.page : 0); };"
+    "window['onpopstate'] = function(e) { $1(e['state'] ? e['state'].page : 0); };"
     js_setOnPopState :: Callback (JSRef -> IO ()) -> IO ()
 
 setOnPopState :: IO ()
