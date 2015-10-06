@@ -1,5 +1,8 @@
 # Unreleased
 
+* Add formatting support for properties to `React.Flux.Addons.Intl`.  These are needed for example to translate
+  the placeholder text for an input element.  This improvement caused a few changes to the types the Internal module.
+
 * Add a new example [purecss-side-menu](https://bitbucket.org/wuzzeb/react-flux/src/tip/example/purecss-side-menu)
   showing a responsive side menu built with PureCSS.
 

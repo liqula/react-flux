@@ -75,6 +75,10 @@ data PropertyOrHandler handler =
       { propertyName :: String
       , propertyVal :: ref
       }
+ | forall ref. ToJSRef ref => PropertyFromContext 
+      { propFromThisName :: String
+      , propFromThisVal :: JSRef -> ref -- ^ will be passed this.context
+      }
  | NestedProperty
       { nestedPropertyName :: String
       , nestedPropertyVals :: [PropertyOrHandler handler]
@@ -94,6 +98,7 @@ data PropertyOrHandler handler =
 
 instance Functor PropertyOrHandler where
     fmap _ (Property name val) = Property name val
+    fmap _ (PropertyFromContext name f) = PropertyFromContext name f
     fmap f (NestedProperty name vals) = NestedProperty name (map (fmap f) vals)
     fmap f (ElementProperty name (ReactElementM mkElem)) =
         ElementProperty name $ ReactElementM $ mapWriter (\((),e) -> ((), fmap f e)) mkElem
@@ -233,13 +238,14 @@ childrenPassedToView = elementToM () ChildrenPassedToView
 -- once the class is re-rendered.
 mkReactElement :: forall eventHandler.
                   (eventHandler -> IO ())
+               -> IO JSRef -- ^ this.context
                -> IO [ReactElementRef] -- ^ this.props.children
                -> ReactElementM eventHandler ()
                -> IO (ReactElementRef, [Callback (JSRef -> IO ())])
 
 #ifdef __GHCJS__
 
-mkReactElement runHandler getPropsChildren = runWriterT . mToElem
+mkReactElement runHandler getContext getPropsChildren = runWriterT . mToElem
     where
         -- Run the ReactElementM monad to create a ReactElementRef.
         mToElem :: ReactElementM eventHandler () -> MkReactElementM ReactElementRef
@@ -261,6 +267,10 @@ mkReactElement runHandler getPropsChildren = runWriterT . mToElem
         addPropOrHandlerToObj :: JSO.Object -> PropertyOrHandler eventHandler -> MkReactElementM ()
         addPropOrHandlerToObj obj (Property n val) = lift $ do
             vRef <- toJSRef val
+            JSO.setProp (toJSString n) vRef obj
+        addPropOrHandlerToObj obj (PropertyFromContext n f) = lift $ do
+            ctx <- getContext
+            vRef <- toJSRef $ f ctx
             JSO.setProp (toJSString n) vRef obj
         addPropOrHandlerToObj obj (NestedProperty n vals) = do
             nested <- lift $ JSO.create

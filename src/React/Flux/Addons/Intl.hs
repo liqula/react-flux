@@ -96,6 +96,7 @@ module React.Flux.Addons.Intl(
   , int_
   , double_
   , formattedNumber_
+  , formattedNumberProp
 
   -- ** Dates and Times
   , DayFormat(..)
@@ -105,18 +106,23 @@ module React.Flux.Addons.Intl(
   , shortDateTime
   , utcTime_
   , formattedDate_
+  , formattedDateProp
 
   -- ** Relative Times
   , relativeTo_
   , formattedRelative_
+  , formattedRelativeProp
 
   -- ** Plural
   , plural_
+  , pluralProp
 
   -- ** Messages
   , MessageId
   , message
   , message'
+  , messageProp
+  , messageProp'
   , htmlMsg
   , htmlMsg'
 
@@ -129,7 +135,8 @@ module React.Flux.Addons.Intl(
 ) where
 
 import Control.Monad (when, forM_)
-import Data.Aeson (Object, Value(Object))
+import Data.Aeson (Object, Value(Object), object, (.=))
+import Data.Aeson.Types (Pair)
 import Data.Char (ord, isPrint)
 import Data.List (sortBy)
 import Data.Maybe (catMaybes, fromMaybe)
@@ -139,6 +146,7 @@ import Data.Time
 import Language.Haskell.TH (runIO, Q, Loc, location, ExpQ)
 import Language.Haskell.TH.Syntax (liftString, qGetQ, qPutQ, reportWarning, Dec)
 import React.Flux
+import React.Flux.Internal (PropertyOrHandler(PropertyFromContext), toJSString)
 import System.IO (withFile, IOMode(..))
 import qualified Data.Aeson as Aeson
 import qualified Data.ByteString as B
@@ -149,7 +157,8 @@ import qualified Data.Text.Encoding as T
 
 #ifdef __GHCJS__
 
-import GHCJS.Types (JSRef)
+import GHCJS.Types (JSRef, JSString)
+import GHCJS.Marshal (ToJSRef(..))
 
 foreign import javascript unsafe
     "$r = ReactIntl['IntlProvider']"
@@ -201,6 +210,19 @@ timeToRef (UTCTime uday time) = js_mkDateTime (fromIntegral year) month day hour
         TimeOfDay hour minute pSec = timeToTimeOfDay time
         (sec, fracSec) = properFraction pSec
         micro = round $ fracSec * 1000000
+
+
+foreign import javascript unsafe
+    "$1['intl'][$2]($3, $4)"
+    js_callContextAPI :: JSRef -> JSString -> JSRef -> JSRef -> IO JSRef
+
+data ContextApiCall a = ContextApiCall String a [Pair] JSRef
+
+instance ToJSRef a => ToJSRef (ContextApiCall a) where
+    toJSRef (ContextApiCall name a b ctx) = do
+        aRef <- toJSRef a
+        bRef <- toJSRef $ object b
+        js_callContextAPI ctx (toJSString name) aRef bRef
 
 #else
 
@@ -274,6 +296,18 @@ double_ d = formattedNumber_ [ "value" @= d ]
 -- <https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/NumberFormat Intl.NumberFormat>.
 formattedNumber_ :: [PropertyOrHandler eventHandler] -> ReactElementM eventHandler ()
 formattedNumber_ props = foreignClass js_formatNumber props mempty
+
+-- | Format a number as a string, and then use it as the value for a property.  'int_', 'double_',
+-- or 'formattedNumber_' should be prefered because as components they can avoid re-rendering when
+-- the number has not changed. 'formattedNumberProp' is needed if the formatted number has to be
+-- a property on another element, such as the placeholder for an input element.
+formattedNumberProp :: ToJSRef num
+                    => String -- ^ the property to set
+                    -> num -- ^ the number to format
+                    -> [Pair] -- ^ any options accepted by
+                              -- <https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/NumberFormat Intl.NumberFormat>
+                    -> PropertyOrHandler handler
+formattedNumberProp name x options = PropertyFromContext name $ ContextApiCall "formatNumber" x options
 
 --------------------------------------------------------------------------------
 -- Date/Time
@@ -371,6 +405,19 @@ formattedDate_ t props = foreignClass js_formatDate (valProp:props) mempty
     where
         valProp = property "value" $ either dayToRef timeToRef t
 
+-- | Format a day or time as a string, and then use it as the value for a property.  'day_',
+-- 'utcTime_', or 'formattedDate_' should be prefered because as components they can avoid re-rendering when
+-- the date has not changed. 'formattedDateProp' is needed if the formatted date has to be
+-- a property on another element, such as the placeholder for an input element.
+formattedDateProp :: String -- ^ the property to set
+                  -> Either Day UTCTime -- ^ the day or time to format
+                  -> [Pair] -- ^ Any options supported by
+                            -- <https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/DateTimeFormat Intl.DateTimeFormat>.
+                  -> PropertyOrHandler eventHandler
+formattedDateProp name (Left day) options =
+    PropertyFromContext name $ ContextApiCall "formatDate" (dayToRef day) options
+formattedDateProp name (Right time) options =
+    PropertyFromContext name $ ContextApiCall "formatTime" (timeToRef time) options
 
 -- | Display the 'UTCTime' as a relative time.  In addition, wrap the display in a HTML5
 -- <https://developer.mozilla.org/en-US/docs/Web/HTML/Element/time time> element.
@@ -386,6 +433,17 @@ relativeTo_ t = time_ [property "dateTime" timeRef] $ foreignClass js_formatRela
 formattedRelative_ :: UTCTime -> [PropertyOrHandler eventHandler] -> ReactElementM eventHandler ()
 formattedRelative_ t props = foreignClass js_formatRelative (property "value" (timeToRef t) : props) mempty
 
+-- | Format a time as a relative time string, and then use it as the value for a property.
+-- 'relativeTo_' or 'formattedRelative_' should be prefered because as components they can avoid re-rendering when
+-- the date has not changed. 'formattedRelativeProp' is needed if the formatted date has to be
+-- a property on another element, such as the placeholder for an input element.
+formattedRelativeProp :: String -- ^ te property to set
+                      -> UTCTime -- ^ the time to format
+                      -> [Pair] -- ^ an object with properties \"units\" and \"style\".  \"units\" accepts values second, minute, hour
+                                -- day, month, or year and \"style\" accepts only the value \"numeric\".
+                      -> PropertyOrHandler eventHandler
+formattedRelativeProp name time options = PropertyFromContext name $ ContextApiCall "formatRelative" (timeToRef time) options
+
 --------------------------------------------------------------------------------
 -- Plural
 --------------------------------------------------------------------------------
@@ -396,6 +454,12 @@ formattedRelative_ t props = foreignClass js_formatRelative (property "value" (t
 -- properties from @other@, @zero@, @one@, @two@, @few@, @many@.
 plural_ :: [PropertyOrHandler eventHandler] -> ReactElementM eventHandler ()
 plural_ props = foreignClass js_formatPlural props mempty
+
+-- | Format a number properly based on pluralization, and then use it as the value for a property.
+-- 'plural_' should be preferred, but 'pluralProp' can be used in places where a component is not
+-- possible such as the placeholder of an input element.
+pluralProp :: ToJSRef val => String -> val -> [Pair] -> PropertyOrHandler eventHandler
+pluralProp name val options = PropertyFromContext name $ ContextApiCall "formatPlural" val options
 
 --------------------------------------------------------------------------------
 -- Messages
@@ -447,6 +511,41 @@ message :: MessageId
         -> ExpQ --Q (TExp ([PropertyOrHandler eventHandler] -> ReactElementM eventHandler ()))
 message ident m = formattedMessage [|js_formatMsg|] ident $ Message "" m
 
+-- | Similar to 'message', but produce an expression of type @['Pair'] -> PropertyOrHandler handler@,
+-- which should be passed the values for the message.  This allows you to format messages in places
+-- where using a component like 'message' is not possible, such as the placeholder of input
+-- elements. 'message' should be prefered since it can avoid re-rendering the formatting if the
+-- value has not changed.
+--
+-- >import Data.Aeson ((.=))
+-- >
+-- >input_ [ "type" $= "numeric"
+-- >       , $(messageProp "placeholder" "ageplaceholder" "Hello {name}, enter your age")
+-- >             [ "name" .= nameFrom storeData ]
+-- >       ]
+messageProp :: String -- ^ the property name to set
+            -> MessageId -- ^ the message identifier
+            -> T.Text -- ^ the default message written in ICU message syntax.
+            -> ExpQ
+messageProp name ident m =
+    formatMessageProp "formatMessage" name ident $ Message "" m
+
+-- | A variant of 'message' which allows you to specify some context for translators.
+message' :: MessageId
+         -> T.Text -- ^ A description indented to provide context for translators
+         -> T.Text -- ^ The default message written in ICU message syntax
+         -> ExpQ --Q (TExp ([PropertyOrHandler eventHandler] -> ReactElementM eventHandler ()))
+message' ident descr m = formattedMessage [|js_formatMsg|] ident $ Message descr m
+
+-- | A varient of 'messageProp' which allows you to specify some context for translators.
+messageProp' :: String -- ^ property to set
+             -> MessageId
+             -> T.Text -- ^ A description intended to provide context for translators
+             -> T.Text -- ^ The default message written in ICU message syntax
+             -> ExpQ
+messageProp' name ident descr m =
+    formatMessageProp "formatMessage" name ident $ Message descr m
+
 -- | Similar to 'message' but use a @FormattedHTMLMessage@ which allows HTML inside the message.  It
 -- is recomended that you instead use 'message' together with 'elementProperty' to include rich text
 -- inside the message.  This splice produces a value of type @[PropertyOrHandler
@@ -456,13 +555,6 @@ htmlMsg :: MessageId
         -> ExpQ
 htmlMsg ident m = formattedMessage [|js_formatHtmlMsg|] ident $ Message "" m
 
--- | A variant of 'message' which allows you to specify some context for translators.
-message' :: MessageId
-         -> T.Text -- ^ A description indented to provide context for translators
-         -> T.Text -- ^ The default message written in ICU message syntax
-         -> ExpQ --Q (TExp ([PropertyOrHandler eventHandler] -> ReactElementM eventHandler ()))
-message' ident descr m = formattedMessage [|js_formatMsg|] ident $ Message descr m
-
 -- | A variant of 'htmlMsg' that allows you to specify some context for translators.
 htmlMsg' :: MessageId
          -> T.Text -- ^ A description intended to provide context for translators
@@ -470,9 +562,8 @@ htmlMsg' :: MessageId
          -> ExpQ
 htmlMsg' ident descr m = formattedMessage [|js_formatHtmlMsg|] ident $ Message descr m
 
--- | Utility function for messages
-formattedMessage :: ExpQ -> MessageId -> Message -> ExpQ --Q (TExp ([PropertyOrHandler eventHandler] -> ReactElementM eventHandler ()))
-formattedMessage cls ident m = do
+recordMessage :: MessageId -> Message -> Q ()
+recordMessage ident m = do
     curLoc <- location
     mmap :: MessageMap <- fromMaybe H.empty <$> qGetQ
     case H.lookup ident mmap of
@@ -485,9 +576,19 @@ formattedMessage cls ident m = do
         _ -> return ()
     qPutQ $ H.insert ident (m, curLoc) mmap
 
+-- | Utility function for messages
+formattedMessage :: ExpQ -> MessageId -> Message -> ExpQ --Q (TExp ([PropertyOrHandler eventHandler] -> ReactElementM eventHandler ()))
+formattedMessage cls ident m = do
+    recordMessage ident m
     let liftText x = [| T.pack $(liftString $ T.unpack x)|]
         liftedMsg = [| Message $(liftText $ msgDescription m) $(liftText $ msgDefaultMsg m) |]
     [|\vals -> foreignClass $cls (messageToProps $(liftText ident) $liftedMsg vals) mempty |]
+
+formatMessageProp :: String -> String -> MessageId -> Message -> ExpQ -- Q (TExp ([Pair] -> PropertyOrHandler eventHandler))
+formatMessageProp func name ident m = do
+    recordMessage ident m
+    let liftedMsg = [| object ["id" .= T.pack $(liftString $ T.unpack ident), "defaultMessage" .= T.pack $(liftString $ T.unpack $ msgDefaultMsg m) ] |]
+    [|\options -> PropertyFromContext $(liftString name) $ ContextApiCall $(liftString func) $liftedMsg options |]
 
 -- | Perform an arbitrary IO action on the accumulated messages at compile time, which usually
 -- should be to write the messages to a file.  Despite producing a value of type @Q [Dec]@,

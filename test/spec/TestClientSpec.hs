@@ -48,6 +48,12 @@ intlSpanShouldBe ident txt = do
     e <- findElem (ById $ T.pack ident)
     getText e `shouldReturn` T.pack txt
 
+intlPlaceholderShouldBe :: String -> String -> WD ()
+intlPlaceholderShouldBe ident txt = do
+    e <- findElem (ById $ T.pack ident)
+    input <- findElemFrom e $ ByTag "input"
+    (input `attr` "placeholder") `shouldReturn` Just (T.pack txt)
+
 -- | Only up to 999,999 since this is just used for the number of days since 1969
 showWithComma :: Integer -> String
 showWithComma i = show x ++ "," ++ show y
@@ -319,3 +325,11 @@ intlSpec filename = session " for the i18n test client" $ using Chrome $ do
         getText htmlMsg' `shouldReturn` "42 is the answer to life, the universe, and everything"
         (findElemFrom htmlMsg' (ByTag "b") >>= getText)
             `shouldReturn` "answer"
+
+    it "displays formatted properties" $ runWD $ do
+        "f-number-prop" `intlPlaceholderShouldBe` "123,456"
+        "f-date-prop" `intlPlaceholderShouldBe` "7/20/1969"
+        "f-time-prop" `intlPlaceholderShouldBe` "Jul 19, 69, 4 PM"
+        "f-plural-prop" `intlPlaceholderShouldBe` "other"
+        "f-msg-prop" `intlPlaceholderShouldBe` "Neil Armstrong took 100 photos"
+        "f-msg-prop-with-descr" `intlPlaceholderShouldBe` "Neil Armstrong took 0 photos"

@@ -41,6 +41,12 @@ function hsreact$mk_class(name, renderCb, checkState, releaseState) {
             return this['props'].hs.root != newProps.hs.root;
         };
     }
+
+    if (typeof ReactIntl != "undefined") {
+        cl['contextTypes'] = {
+            'intl': ReactIntl['intlShape']
+        };
+    }
     
     return cl;
 }

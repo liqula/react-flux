@@ -285,6 +285,10 @@ foreign import javascript unsafe
     js_ReactGetProps :: ReactThis state props -> IO (Export props)
 
 foreign import javascript unsafe
+    "$1['context']"
+    js_ReactGetContext :: ReactThis state props -> IO JSRef
+
+foreign import javascript unsafe
     "hsreact$children_to_array($1['props']['children'])"
     js_ReactGetChildren :: ReactThis state props -> IO JSArray
 
@@ -352,8 +356,9 @@ mkRenderCallback parseState runHandler render = syncCallback2 ContinueAsync $ \t
 
     let getPropsChildren = do childRef <- js_ReactGetChildren this
                               return $ map ReactElementRef $ toList childRef
+        getContext = js_ReactGetContext this
 
-    (element, evtCallbacks) <- mkReactElement (runHandler this) getPropsChildren node
+    (element, evtCallbacks) <- mkReactElement (runHandler this) getContext getPropsChildren node
 
     evtCallbacksRef <- toJSRef $ map jsref evtCallbacks
     js_RenderCbSetResults arg evtCallbacksRef element

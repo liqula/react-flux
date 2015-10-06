@@ -106,7 +106,7 @@ import React.Flux.Combinators
 import React.Flux.Store
 
 #ifdef __GHCJS__
-import GHCJS.Types (JSString, JSRef)
+import GHCJS.Types (JSString, JSRef, nullRef)
 import GHCJS.Marshal (fromJSRef)
 #endif
 
@@ -125,7 +125,7 @@ reactRender :: Typeable props
 #ifdef __GHCJS__
 
 reactRender htmlId rc props = do
-    (e, _) <- mkReactElement id (return []) $ view rc props mempty
+    (e, _) <- mkReactElement id (return nullRef) (return []) $ view rc props mempty
     js_ReactRender e (toJSString htmlId)
 
 foreign import javascript unsafe
@@ -151,7 +151,7 @@ reactRenderToString :: Typeable props
 #ifdef __GHCJS__
 
 reactRenderToString includeStatic rc props = do
-    (e, _) <- mkReactElement id (return []) $ view rc props mempty
+    (e, _) <- mkReactElement id (return nullRef) (return []) $ view rc props mempty
     sRef <- (if includeStatic then js_ReactRenderStaticMarkup else js_ReactRenderToString) e
     --return sRef
     --return $ JSS.unpack sRef
