@@ -1,4 +1,4 @@
-This directory contains two example applications.
+This directory contains three example applications.
 
 # Todo Example
 
