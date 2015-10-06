@@ -194,7 +194,7 @@ n $= a = Property (T.unpack n) a
 
 -- | Set the <https://facebook.github.io/react/docs/class-name-manipulation.html className> property to consist
 -- of all the names which are matched with True, allowing you to easily toggle class names based on
--- a computation, similar to classSet.
+-- a computation.
 classNames :: [(T.Text, Bool)] -> PropertyOrHandler handler
 classNames xs = "className" @= T.intercalate " " names
     where
