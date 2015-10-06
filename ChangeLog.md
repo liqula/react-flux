@@ -1,4 +1,4 @@
-# Unreleased
+# 1.0.1
 
 * Add formatting support for properties to `React.Flux.Addons.Intl`.  These are needed for example to translate
   the placeholder text for an input element.  This improvement caused a few changes to the types the Internal module.

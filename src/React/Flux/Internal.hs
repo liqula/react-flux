@@ -361,7 +361,7 @@ toJSString :: String -> JSString
 toJSString = JSS.pack
 
 #else
-mkReactElement _ _ _ = return (ReactElementRef (), [])
+mkReactElement _ _ _ _ = return (ReactElementRef (), [])
 
 toJSString :: String -> String
 toJSString = id

@@ -146,7 +146,7 @@ import Data.Time
 import Language.Haskell.TH (runIO, Q, Loc, location, ExpQ)
 import Language.Haskell.TH.Syntax (liftString, qGetQ, qPutQ, reportWarning, Dec)
 import React.Flux
-import React.Flux.Internal (PropertyOrHandler(PropertyFromContext), toJSString)
+import React.Flux.Internal (PropertyOrHandler(PropertyFromContext))
 import System.IO (withFile, IOMode(..))
 import qualified Data.Aeson as Aeson
 import qualified Data.ByteString as B
@@ -159,6 +159,7 @@ import qualified Data.Text.Encoding as T
 
 import GHCJS.Types (JSRef, JSString)
 import GHCJS.Marshal (ToJSRef(..))
+import qualified Data.JSString as JSS
 
 foreign import javascript unsafe
     "$r = ReactIntl['IntlProvider']"
@@ -216,13 +217,17 @@ foreign import javascript unsafe
     "$1['intl'][$2]($3, $4)"
     js_callContextAPI :: JSRef -> JSString -> JSRef -> JSRef -> IO JSRef
 
+
 data ContextApiCall a = ContextApiCall String a [Pair] JSRef
 
 instance ToJSRef a => ToJSRef (ContextApiCall a) where
     toJSRef (ContextApiCall name a b ctx) = do
         aRef <- toJSRef a
         bRef <- toJSRef $ object b
-        js_callContextAPI ctx (toJSString name) aRef bRef
+        js_callContextAPI ctx (JSS.pack name) aRef bRef
+
+formatCtx :: ToJSRef a => String -> String -> a -> [Pair] -> PropertyOrHandler handler
+formatCtx name func val options = PropertyFromContext name $ ContextApiCall func val options
 
 #else
 
@@ -254,6 +259,11 @@ dayToRef _ = ()
 
 timeToRef :: UTCTime -> JSRef
 timeToRef _ = ()
+
+class ToJSRef a
+
+formatCtx :: String -> String -> a -> [Pair] -> PropertyOrHandler handler
+formatCtx name _ _ _ = PropertyFromContext name $ \() -> ()
 
 #endif
 
@@ -307,7 +317,7 @@ formattedNumberProp :: ToJSRef num
                     -> [Pair] -- ^ any options accepted by
                               -- <https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/NumberFormat Intl.NumberFormat>
                     -> PropertyOrHandler handler
-formattedNumberProp name x options = PropertyFromContext name $ ContextApiCall "formatNumber" x options
+formattedNumberProp name x options = formatCtx name "formatNumber" x options
 
 --------------------------------------------------------------------------------
 -- Date/Time
@@ -415,9 +425,9 @@ formattedDateProp :: String -- ^ the property to set
                             -- <https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/DateTimeFormat Intl.DateTimeFormat>.
                   -> PropertyOrHandler eventHandler
 formattedDateProp name (Left day) options =
-    PropertyFromContext name $ ContextApiCall "formatDate" (dayToRef day) options
+    formatCtx name "formatDate" (dayToRef day) options
 formattedDateProp name (Right time) options =
-    PropertyFromContext name $ ContextApiCall "formatTime" (timeToRef time) options
+    formatCtx name "formatTime" (timeToRef time) options
 
 -- | Display the 'UTCTime' as a relative time.  In addition, wrap the display in a HTML5
 -- <https://developer.mozilla.org/en-US/docs/Web/HTML/Element/time time> element.
@@ -442,7 +452,7 @@ formattedRelativeProp :: String -- ^ te property to set
                       -> [Pair] -- ^ an object with properties \"units\" and \"style\".  \"units\" accepts values second, minute, hour
                                 -- day, month, or year and \"style\" accepts only the value \"numeric\".
                       -> PropertyOrHandler eventHandler
-formattedRelativeProp name time options = PropertyFromContext name $ ContextApiCall "formatRelative" (timeToRef time) options
+formattedRelativeProp name time options = formatCtx name "formatRelative" (timeToRef time) options
 
 --------------------------------------------------------------------------------
 -- Plural
@@ -459,7 +469,7 @@ plural_ props = foreignClass js_formatPlural props mempty
 -- 'plural_' should be preferred, but 'pluralProp' can be used in places where a component is not
 -- possible such as the placeholder of an input element.
 pluralProp :: ToJSRef val => String -> val -> [Pair] -> PropertyOrHandler eventHandler
-pluralProp name val options = PropertyFromContext name $ ContextApiCall "formatPlural" val options
+pluralProp name val options = formatCtx name "formatPlural" val options
 
 --------------------------------------------------------------------------------
 -- Messages
@@ -588,7 +598,7 @@ formatMessageProp :: String -> String -> MessageId -> Message -> ExpQ -- Q (TExp
 formatMessageProp func name ident m = do
     recordMessage ident m
     let liftedMsg = [| object ["id" .= T.pack $(liftString $ T.unpack ident), "defaultMessage" .= T.pack $(liftString $ T.unpack $ msgDefaultMsg m) ] |]
-    [|\options -> PropertyFromContext $(liftString name) $ ContextApiCall $(liftString func) $liftedMsg options |]
+    [|\options -> formatCtx $(liftString name) $(liftString func) $liftedMsg options |]
 
 -- | Perform an arbitrary IO action on the accumulated messages at compile time, which usually
 -- should be to write the messages to a file.  Despite producing a value of type @Q [Dec]@,

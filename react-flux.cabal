@@ -1,5 +1,5 @@
 name:                react-flux
-version:             1.0.0
+version:             1.0.1
 synopsis:            A binding to React based on the Flux application architecture for GHCJS
 category:            Web
 homepage:            https://bitbucket.org/wuzzeb/react-flux
@@ -130,7 +130,8 @@ executable purecss-side-menu
    build-depends: base
                 , react-flux
                 , deepseq
-                , ghcjs-base
+   if impl(ghcjs)
+      build-depends: ghcjs-base
 
 executable test-client-13
    if !flag(test-client)
