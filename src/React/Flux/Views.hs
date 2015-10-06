@@ -119,7 +119,7 @@ defineControllerView _ _ _ = ReactView (ReactViewRef ())
 -- >
 -- >todoItem :: ReactView (Int, Todo)
 -- >todoItem = defineView "todo item" $ \(todoIdx, todo) ->
--- >    li_ [ "className" @= (unwords $ [ "completed" | todoComplete todo] ++ [ "editing" | todoIsEditing todo ])
+-- >    li_ [ classNames [("completed", todoComplete todo), ("editing", todoIsEditing todo)]
 -- >        , "key" @= todoIdx
 -- >        ] $ do
 -- >        
