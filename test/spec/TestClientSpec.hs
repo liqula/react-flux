@@ -5,7 +5,7 @@ module TestClientSpec (spec) where
 import           Control.Monad
 import           Control.Monad.IO.Class (liftIO)
 import           Data.List
---import           Data.Time
+import           Data.Time
 import qualified Data.Text              as T
 import           System.Directory       (getCurrentDirectory)
 import           Test.Hspec.WebDriver
@@ -21,7 +21,7 @@ shouldBeEvent evt (expectedType, evtBandC, evtPhase) = do
                   , "evtCancelable = " ++ show evtBandC ++ ", "
                   , "evtCurrentTarget = EventTarget, evtDefaultPrevented = False, "
                   , "evtPhase = " ++ show evtPhase ++ ", "
-                  , "evtIsTrusted = False, evtTarget = EventTarget, evtTimestamp = "
+                  , "evtIsTrusted = True, evtTarget = EventTarget, evtTimestamp = "
                   ]
     unless (prefix `isPrefixOf` evt) $
         error $ "Expecting " ++ prefix ++ " but got " ++ evt
@@ -286,7 +286,7 @@ intlSpec filename = session " for the i18n test client" $ using Chrome $ do
         openPage $ "file://" ++ dir ++ "/../client/" ++ filename
 
     it "displays the intl formatted data" $ runWD $ do
-        "f-number" `intlSpanShouldBe` "90%"
+        "f-number" `intlSpanShouldBe` "90.0%"
         "f-int" `intlSpanShouldBe` "100,000"
         "f-double" `intlSpanShouldBe` "40,000.2"
         "f-shortday" `intlSpanShouldBe` "Jul 20, 1969"
@@ -296,14 +296,12 @@ intlSpec filename = session " for the i18n test client" $ using Chrome $ do
         "f-time" `intlSpanShouldBe` "Jul 19, 69, 4:56:00 PM GMT-10"
         "f-plural" `intlSpanShouldBe` "plural other"
 
-        {-
         today <- liftIO (utctDay <$> getCurrentTime)
         let moon = fromGregorian 1969 7 20
             daysAgo = diffDays today moon
             yearsAgo :: Int = round $ realToFrac daysAgo / (365 :: Double) -- is close enough
         "f-relative" `intlSpanShouldBe` (show yearsAgo ++ " years ago")
         "f-relative-days" `intlSpanShouldBe` (showWithComma daysAgo ++ " days ago")
-        -}
 
     it "displays messages" $ runWD $ do
         msg <- findElem $ ById "f-msg"

@@ -63,10 +63,8 @@ intlSpecBody = defineView "intl body" $ \() -> div_ ["id" $= "intl-spec"] $
                     ]
                    ]
 
-        {-
         li_ ["id" $= "f-relative"] $ relativeTo_ step
         li_ ["id" $= "f-relative-days"] $ formattedRelative_ step [ "units" $= "day" ]
-        -}
 
         li_ ["id" $= "f-plural"] $ plural_ [ "value" @= (100 :: Int), "one" $= "plural one", "other" $= "plural other"]
         li_ ["id" $= "f-plural-prop"] $
