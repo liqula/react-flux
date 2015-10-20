@@ -21,7 +21,7 @@
 * The type of `callback` has extended to allow arbitrary function properties to be
   passed to foreign classes.  The old `callback` accepted callbacks of type `Aeson.Value -> handler`
   while the new callback allows functions of any number of arguments, as long as each argument implements
-  `FromJSRef`.  Since `Aeson.Value` implements `FromJSRef`, any existing calls to `callback` should still work.
+  `FromJSVal`.  Since `Aeson.Value` implements `FromJSVal`, any existing calls to `callback` should still work.
   This change also caused some changes to types in `React.Flux.Internal`.
 
 * Add a function `nestedProperty` to `React.Flux.PropertiesAndEvents` to create nested properties.
@@ -44,7 +44,7 @@
 
 * Fix to build with latest ghcjs-base (requires at least aaa4d59117f37d1b9c60a154a9128b3bcc6301cd)
   of ghcjs-base), so you may need to recompile ghcjs and ghcjs-base.
-* Add a function 'property' to create a property from any JSRef, not just Aeson values.
+* Add a function 'property' to create a property from any JSVal, not just Aeson values.
 * Add a function 'elementProperty' to create a property from a ReactElementM, useful for
   interacting with foreign React classes.
 

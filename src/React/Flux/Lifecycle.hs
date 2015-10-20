@@ -50,11 +50,11 @@ import React.Flux.Export
 
 import GHCJS.Foreign (jsNull)
 import GHCJS.Foreign.Callback
-import GHCJS.Types (JSRef, jsref)
+import GHCJS.Types (JSVal, jsval)
 
 #endif
 
-type HTMLElement = JSRef
+type HTMLElement = JSVal
 
 -- | Actions to access the current properties and state.
 data LPropsAndState props state = LPropsAndState
@@ -153,19 +153,19 @@ defineLifecycleView name initialState cfg = unsafePerformIO $ do
     willUnmountCb <- mkLCallback1 (lComponentWillUnmount cfg) $ \f this ->
         f (dom this)
 
-    -- willMountCbRef <- toJSRef willMountCb
-    -- didMountCbRef <- toJSRef didMountCb
-    -- willRecvPropsCbRef <- toJSRef willRecvPropsCb
-    -- willUpdateCbRef  <- toJSRef willUpdateCb
-    -- didUpdateCbRef   <- toJSRef didUpdateCb
-    -- willUnmountCbRef <- toJSRef willUnmountCb
+    -- willMountCbRef <- toJSVal willMountCb
+    -- didMountCbRef <- toJSVal didMountCb
+    -- willRecvPropsCbRef <- toJSVal willRecvPropsCb
+    -- willUpdateCbRef  <- toJSVal willUpdateCb
+    -- didUpdateCbRef   <- toJSVal didUpdateCb
+    -- willUnmountCbRef <- toJSVal willUnmountCb
     ReactView <$> js_makeLifecycleView (toJSString name) initialRef
       renderCb willMountCb didMountCb willRecvPropsCb willUpdateCb didUpdateCb willUnmountCb
 
 mkLCallback1 :: (Typeable props, Typeable state)
              => Maybe (LPropsAndState props state -> f)
              -> (f -> ReactThis state props -> IO ())
-             -> IO JSRef
+             -> IO JSVal
 mkLCallback1 Nothing _ = return jsNull
 mkLCallback1 (Just f) c = do
   cb <- syncCallback1 ThrowWouldBlock $ \thisRef -> do
@@ -174,12 +174,12 @@ mkLCallback1 (Just f) c = do
                             , lGetState = js_ReactGetState this >>= parseExport
                             }
     c (f ps) this
-  return $ jsref cb
+  return $ jsval cb
 
 mkLCallback2 :: (Typeable props, Typeable state)
              => Maybe (LPropsAndState props state -> f)
-             -> (f -> ReactThis state props -> JSRef -> IO ())
-             -> IO JSRef
+             -> (f -> ReactThis state props -> JSVal -> IO ())
+             -> IO JSVal
 mkLCallback2 Nothing _ = return jsNull
 mkLCallback2 (Just f) c = do
   cb <- syncCallback2 ThrowWouldBlock $ \thisRef argRef -> do
@@ -188,7 +188,7 @@ mkLCallback2 (Just f) c = do
                             , lGetState = js_ReactGetState this >>= parseExport
                             }
     c (f ps) this argRef
-  return $ jsref cb
+  return $ jsval cb
 
 #else
 

@@ -13,11 +13,11 @@ import System.IO.Unsafe (unsafePerformIO)
 import React.Flux.Export
 import JavaScript.Array
 import GHCJS.Foreign.Callback
-import GHCJS.Types (JSRef, JSString, IsJSRef, jsref)
-import GHCJS.Marshal (ToJSRef(..))
+import GHCJS.Types (JSVal, JSString, IsJSVal, jsval)
+import GHCJS.Marshal (ToJSVal(..))
 
 #else
-type JSRef = ()
+type JSVal = ()
 #endif
 
 
@@ -273,8 +273,8 @@ defineStatefulView _ _ _ = ReactView (ReactViewRef ())
 
 #ifdef __GHCJS__
 
-newtype ReactThis state props = ReactThis JSRef
-instance IsJSRef (ReactThis state props)
+newtype ReactThis state props = ReactThis JSVal
+instance IsJSVal (ReactThis state props)
 
 foreign import javascript unsafe
     "$1['state'].hs"
@@ -286,7 +286,7 @@ foreign import javascript unsafe
 
 foreign import javascript unsafe
     "$1['context']"
-    js_ReactGetContext :: ReactThis state props -> IO JSRef
+    js_ReactGetContext :: ReactThis state props -> IO JSVal
 
 foreign import javascript unsafe
     "hsreact$children_to_array($1['props']['children'])"
@@ -301,31 +301,31 @@ foreign import javascript unsafe
 
 foreign import javascript unsafe
     "typeof ReactDOM === 'object' ? ReactDOM['findDOMNode']($1) : React['findDOMNode']($1)"
-    js_ReactFindDOMNode :: ReactThis state props -> IO JSRef
+    js_ReactFindDOMNode :: ReactThis state props -> IO JSVal
 
 foreign import javascript unsafe
     "typeof ReactDOM === 'object' ? $1['refs'][$2] : React['findDOMNode']($1['refs'][$2])"
-    js_ReactGetRef :: ReactThis state props -> JSString -> IO JSRef
+    js_ReactGetRef :: ReactThis state props -> JSString -> IO JSVal
 
-newtype RenderCbArg = RenderCbArg JSRef
-instance IsJSRef RenderCbArg
+newtype RenderCbArg = RenderCbArg JSVal
+instance IsJSVal RenderCbArg
 
 foreign import javascript unsafe
     "$1.newCallbacks = $2; $1.elem = $3;"
-    js_RenderCbSetResults :: RenderCbArg -> JSRef -> ReactElementRef -> IO ()
+    js_RenderCbSetResults :: RenderCbArg -> JSVal -> ReactElementRef -> IO ()
 
 foreign import javascript unsafe
     "hsreact$mk_ctrl_view($1, $2, $3)"
     js_createControllerView :: JSString
                             -> ReactStoreRef storeData
-                            -> Callback (JSRef -> JSRef -> IO ())
+                            -> Callback (JSVal -> JSVal -> IO ())
                             -> IO (ReactViewRef props)
 
 -- | Create a view with no state.
 foreign import javascript unsafe
     "hsreact$mk_view($1, $2)"
     js_createView :: JSString
-                  -> Callback (JSRef -> JSRef -> IO ())
+                  -> Callback (JSVal -> JSVal -> IO ())
                   -> IO (ReactViewRef props)
 
 -- | Create a view which tracks its own state.  Similar releasing needs to happen for callbacks and
@@ -334,19 +334,19 @@ foreign import javascript unsafe
     "hsreact$mk_stateful_view($1, $2, $3)"
     js_createStatefulView :: JSString
                           -> Export state
-                          -> Callback (JSRef -> JSRef -> IO ())
+                          -> Callback (JSVal -> JSVal -> IO ())
                           -> IO (ReactViewRef props)
 
 foreign import javascript unsafe
     "hsreact$mk_lifecycle_view($1, $2, $3, $4, $5, $6, $7, $8, $9)"
-    js_makeLifecycleView :: JSString -> Export state -> Callback (JSRef -> JSRef -> IO ())
-                         -> JSRef -> JSRef -> JSRef -> JSRef -> JSRef -> JSRef -> IO (ReactViewRef props)
+    js_makeLifecycleView :: JSString -> Export state -> Callback (JSVal -> JSVal -> IO ())
+                         -> JSVal -> JSVal -> JSVal -> JSVal -> JSVal -> JSVal -> IO (ReactViewRef props)
 
 mkRenderCallback :: Typeable props
                  => (ReactThis state props -> IO state) -- ^ parse state
                  -> (ReactThis state props -> eventHandler -> IO ()) -- ^ execute event args
                  -> (state -> props -> IO (ReactElementM eventHandler ())) -- ^ renderer
-                 -> IO (Callback (JSRef -> JSRef -> IO ()))
+                 -> IO (Callback (JSVal -> JSVal -> IO ()))
 mkRenderCallback parseState runHandler render = syncCallback2 ContinueAsync $ \thisRef argRef -> do
     let this = ReactThis thisRef
         arg = RenderCbArg argRef
@@ -360,7 +360,7 @@ mkRenderCallback parseState runHandler render = syncCallback2 ContinueAsync $ \t
 
     (element, evtCallbacks) <- mkReactElement (runHandler this) getContext getPropsChildren node
 
-    evtCallbacksRef <- toJSRef $ map jsref evtCallbacks
+    evtCallbacksRef <- toJSVal $ map jsval evtCallbacks
     js_RenderCbSetResults arg evtCallbacksRef element
 
 parseExport :: Typeable a => Export a -> IO a
@@ -403,7 +403,7 @@ viewWithKey rc key props (ReactElementM child) =
 
 -- | Create a 'ReactElement' for a class defined in javascript.  See
 -- 'React.Flux.Combinators.foreign_' for a convenient wrapper and some examples.
-foreignClass :: JSRef -- ^ The javascript reference to the class
+foreignClass :: JSVal -- ^ The javascript reference to the class
              -> [PropertyOrHandler eventHandler] -- ^ properties and handlers to pass when creating an instance of this class.
              -> ReactElementM eventHandler a -- ^ The child element or elements
              -> ReactElementM eventHandler a

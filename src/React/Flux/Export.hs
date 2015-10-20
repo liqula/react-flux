@@ -9,7 +9,7 @@ import Unsafe.Coerce
 
 import GHCJS.Types
 
-newtype Export a = Export JSRef
+newtype Export a = Export JSVal
 
 foreign import javascript unsafe
     "hsreact$export($1)"

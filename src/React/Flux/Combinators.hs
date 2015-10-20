@@ -16,11 +16,11 @@ import React.Flux.PropertiesAndEvents
 import React.Flux.Views
 
 #ifdef __GHCJS__
-import GHCJS.Types (JSString, JSRef)
+import GHCJS.Types (JSString, JSVal)
 
 foreign import javascript unsafe
     "$r = window[$1]"
-    js_lookupWindow :: JSString -> JSRef
+    js_lookupWindow :: JSString -> JSVal
 #else
 js_lookupWindow :: a -> ()
 js_lookupWindow _ = ()

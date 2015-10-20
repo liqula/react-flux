@@ -74,7 +74,7 @@
 --
 --        foreign import javascript unsafe
 --          "window[\'myMessages\'] ? window[\'myMessages\'][$1] : null"
---          js_myMessages :: JSString -> JSRef
+--          js_myMessages :: JSString -> JSVal
 --
 --        myApp :: ReactView ()
 --        myApp = defineView "my application" $ \() -> do
@@ -157,54 +157,54 @@ import qualified Data.Text.Encoding as T
 
 #ifdef __GHCJS__
 
-import GHCJS.Types (JSRef, JSString)
-import GHCJS.Marshal (ToJSRef(..))
+import GHCJS.Types (JSVal, JSString)
+import GHCJS.Marshal (ToJSVal(..))
 import qualified Data.JSString as JSS
 
 foreign import javascript unsafe
     "$r = ReactIntl['IntlProvider']"
-    js_intlProvider :: JSRef
+    js_intlProvider :: JSVal
 
 foreign import javascript unsafe
     "$r = ReactIntl['FormattedNumber']"
-    js_formatNumber :: JSRef
+    js_formatNumber :: JSVal
 
 foreign import javascript unsafe
     "$r = ReactIntl['FormattedDate']"
-    js_formatDate :: JSRef
+    js_formatDate :: JSVal
 
 foreign import javascript unsafe
     "$r = ReactIntl['FormattedRelative']"
-    js_formatRelative :: JSRef
+    js_formatRelative :: JSVal
 
 foreign import javascript unsafe
     "$r = ReactIntl['FormattedPlural']"
-    js_formatPlural :: JSRef
+    js_formatPlural :: JSVal
 
 foreign import javascript unsafe
     "$r = ReactIntl['FormattedMessage']"
-    js_formatMsg :: JSRef
+    js_formatMsg :: JSVal
 
 foreign import javascript unsafe
     "$r = ReactIntl['FormattedHTMLMessage']"
-    js_formatHtmlMsg :: JSRef
+    js_formatHtmlMsg :: JSVal
 
 foreign import javascript unsafe
     "$r = (new Date($1, $2-1, $3))"
-    js_mkDate :: Int -> Int -> Int -> JSRef
+    js_mkDate :: Int -> Int -> Int -> JSVal
 
 -- | Convert a day to a javascript Date
-dayToRef :: Day -> JSRef
+dayToRef :: Day -> JSVal
 dayToRef day = js_mkDate (fromIntegral y) m d
     where
         (y, m, d) = toGregorian day
 
 foreign import javascript unsafe
     "$r = (new Date(Date.UTC($1, $2-1, $3, $4, $5, $6, $7)))"
-    js_mkDateTime :: Int -> Int -> Int -> Int -> Int -> Int -> Int -> JSRef
+    js_mkDateTime :: Int -> Int -> Int -> Int -> Int -> Int -> Int -> JSVal
 
 -- | Convert a UTCTime to a javascript date object.
-timeToRef :: UTCTime -> JSRef
+timeToRef :: UTCTime -> JSVal
 timeToRef (UTCTime uday time) = js_mkDateTime (fromIntegral year) month day hour minute sec micro
     where
         (year, month, day) = toGregorian uday
@@ -215,52 +215,52 @@ timeToRef (UTCTime uday time) = js_mkDateTime (fromIntegral year) month day hour
 
 foreign import javascript unsafe
     "$1['intl'][$2]($3, $4)"
-    js_callContextAPI :: JSRef -> JSString -> JSRef -> JSRef -> IO JSRef
+    js_callContextAPI :: JSVal -> JSString -> JSVal -> JSVal -> IO JSVal
 
 
-data ContextApiCall a = ContextApiCall String a [Pair] JSRef
+data ContextApiCall a = ContextApiCall String a [Pair] JSVal
 
-instance ToJSRef a => ToJSRef (ContextApiCall a) where
-    toJSRef (ContextApiCall name a b ctx) = do
-        aRef <- toJSRef a
-        bRef <- toJSRef $ object b
+instance ToJSVal a => ToJSVal (ContextApiCall a) where
+    toJSVal (ContextApiCall name a b ctx) = do
+        aRef <- toJSVal a
+        bRef <- toJSVal $ object b
         js_callContextAPI ctx (JSS.pack name) aRef bRef
 
-formatCtx :: ToJSRef a => String -> String -> a -> [Pair] -> PropertyOrHandler handler
+formatCtx :: ToJSVal a => String -> String -> a -> [Pair] -> PropertyOrHandler handler
 formatCtx name func val options = PropertyFromContext name $ ContextApiCall func val options
 
 #else
 
-type JSRef = ()
+type JSVal = ()
 
-js_intlProvider :: JSRef
+js_intlProvider :: JSVal
 js_intlProvider = ()
 
-js_formatNumber :: JSRef
+js_formatNumber :: JSVal
 js_formatNumber = ()
 
-js_formatDate :: JSRef
+js_formatDate :: JSVal
 js_formatDate = ()
 
-js_formatRelative :: JSRef
+js_formatRelative :: JSVal
 js_formatRelative = ()
 
-js_formatPlural :: JSRef
+js_formatPlural :: JSVal
 js_formatPlural = ()
 
-js_formatMsg :: JSRef
+js_formatMsg :: JSVal
 js_formatMsg = ()
 
-js_formatHtmlMsg :: JSRef
+js_formatHtmlMsg :: JSVal
 js_formatHtmlMsg = ()
 
-dayToRef :: Day -> JSRef
+dayToRef :: Day -> JSVal
 dayToRef _ = ()
 
-timeToRef :: UTCTime -> JSRef
+timeToRef :: UTCTime -> JSVal
 timeToRef _ = ()
 
-class ToJSRef a
+class ToJSVal a
 
 formatCtx :: String -> String -> a -> [Pair] -> PropertyOrHandler handler
 formatCtx name _ _ _ = PropertyFromContext name $ \() -> ()
@@ -269,10 +269,10 @@ formatCtx name _ _ _ = PropertyFromContext name $ \() -> ()
 
 -- | Use the IntlProvider to set the @locale@, @formats@, and @messages@ property.
 intlProvider_ :: String -- ^ the locale to use
-              -> Maybe JSRef
+              -> Maybe JSVal
                   -- ^ A reference to translated messages, which must be an object with keys
                   -- 'MessageId' and value the translated message.  Set this as Nothing if you are not using
-                  -- translated messages, since either @Nothing@ or a null JSRef will cause the messages
+                  -- translated messages, since either @Nothing@ or a null JSVal will cause the messages
                   -- from the source code to be used.
               -> Maybe Object
                   -- ^ An object to use for the @formats@ parameter which allows custom formats.  I
@@ -311,7 +311,7 @@ formattedNumber_ props = foreignClass js_formatNumber props mempty
 -- or 'formattedNumber_' should be prefered because as components they can avoid re-rendering when
 -- the number has not changed. 'formattedNumberProp' is needed if the formatted number has to be
 -- a property on another element, such as the placeholder for an input element.
-formattedNumberProp :: ToJSRef num
+formattedNumberProp :: ToJSVal num
                     => String -- ^ the property to set
                     -> num -- ^ the number to format
                     -> [Pair] -- ^ any options accepted by
@@ -468,7 +468,7 @@ plural_ props = foreignClass js_formatPlural props mempty
 -- | Format a number properly based on pluralization, and then use it as the value for a property.
 -- 'plural_' should be preferred, but 'pluralProp' can be used in places where a component is not
 -- possible such as the placeholder of an input element.
-pluralProp :: ToJSRef val => String -> val -> [Pair] -> PropertyOrHandler eventHandler
+pluralProp :: ToJSVal val => String -> val -> [Pair] -> PropertyOrHandler eventHandler
 pluralProp name val options = formatCtx name "formatPlural" val options
 
 --------------------------------------------------------------------------------

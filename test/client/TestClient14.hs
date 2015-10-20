@@ -4,7 +4,7 @@ module Main (main) where
 import Data.Time
 import React.Flux
 import React.Flux.Addons.Intl
-import GHCJS.Types (JSRef)
+import GHCJS.Types (JSVal)
 import Data.Aeson ((.=))
 
 import TestClient
@@ -15,7 +15,7 @@ import TestClient
 
 foreign import javascript unsafe
     "{'with_trans': 'message from translation {abc}'}"
-    js_translations :: JSRef
+    js_translations :: JSVal
 
 intlSpec :: ReactView ()
 intlSpec = defineView "intl" $ \() ->

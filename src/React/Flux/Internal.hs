@@ -33,35 +33,35 @@ import           JavaScript.Array (JSArray)
 import qualified JavaScript.Array as JSA
 import           GHCJS.Foreign.Callback
 import qualified JavaScript.Object as JSO
-import           GHCJS.Types (JSRef, JSString, IsJSRef, jsref)
-import           GHCJS.Marshal (ToJSRef(..))
+import           GHCJS.Types (JSVal, JSString, IsJSVal, jsval)
+import           GHCJS.Marshal (ToJSVal(..))
 import           GHCJS.Foreign (jsNull)
 import           React.Flux.Export
 #else
 import Data.Text (Text)
 type Callback a = ()
-type JSRef = ()
-class ToJSRef a
-instance ToJSRef Value
-instance ToJSRef Text
-instance ToJSRef ()
-class IsJSRef a
-type JSArray = JSRef
+type JSVal = ()
+class ToJSVal a
+instance ToJSVal Value
+instance ToJSVal Text
+instance ToJSVal ()
+class IsJSVal a
+type JSArray = JSVal
 #endif
 
 -- type JSObject a = JSO.Object a
 
 -- | This type is for the return value of @React.createClass@
-newtype ReactViewRef props = ReactViewRef { reactViewRef :: JSRef }
-instance IsJSRef (ReactViewRef props)
+newtype ReactViewRef props = ReactViewRef { reactViewRef :: JSVal }
+instance IsJSVal (ReactViewRef props)
 
 -- | This type is for the return value of @React.createElement@
-newtype ReactElementRef = ReactElementRef { reactElementRef :: JSRef }
-instance IsJSRef ReactElementRef
+newtype ReactElementRef = ReactElementRef { reactElementRef :: JSVal }
+instance IsJSVal ReactElementRef
 
 -- | The first parameter of an event handler registered with React.
-newtype HandlerArg = HandlerArg JSRef
-instance IsJSRef HandlerArg
+newtype HandlerArg = HandlerArg JSVal
+instance IsJSVal HandlerArg
 
 instance Show HandlerArg where
     show _ = "HandlerArg"
@@ -71,13 +71,13 @@ instance Show HandlerArg where
 -- The combination of all properties and event handlers are used to create the javascript object
 -- passed as the second argument to @React.createElement@.
 data PropertyOrHandler handler =
-   forall ref. ToJSRef ref => Property
+   forall ref. ToJSVal ref => Property
       { propertyName :: String
       , propertyVal :: ref
       }
- | forall ref. ToJSRef ref => PropertyFromContext 
+ | forall ref. ToJSVal ref => PropertyFromContext 
       { propFromThisName :: String
-      , propFromThisVal :: JSRef -> ref -- ^ will be passed this.context
+      , propFromThisVal :: JSVal -> ref -- ^ will be passed this.context
       }
  | NestedProperty
       { nestedPropertyName :: String
@@ -105,20 +105,20 @@ instance Functor PropertyOrHandler where
     fmap f (CallbackPropertyWithArgumentArray name h) = CallbackPropertyWithArgumentArray name (fmap f . h)
     fmap f (CallbackPropertyWithSingleArgument name h) = CallbackPropertyWithSingleArgument name (f . h)
 
--- | Create a property from anything that can be converted to a JSRef
-property :: ToJSRef val => String -> val -> PropertyOrHandler handler
+-- | Create a property from anything that can be converted to a JSVal
+property :: ToJSVal val => String -> val -> PropertyOrHandler handler
 property = Property
 
 -- | Keys in React can either be strings or integers
 class ReactViewKey key where
-    toKeyRef :: key -> IO JSRef
+    toKeyRef :: key -> IO JSVal
 
 #if __GHCJS__
 instance ReactViewKey String where
     toKeyRef = return . unsafeCoerce . toJSString
 
 instance ReactViewKey Int where
-    toKeyRef i = toJSRef i
+    toKeyRef i = toJSVal i
 #else
 instance ReactViewKey String where
     toKeyRef = const $ return ()
@@ -238,10 +238,10 @@ childrenPassedToView = elementToM () ChildrenPassedToView
 -- once the class is re-rendered.
 mkReactElement :: forall eventHandler.
                   (eventHandler -> IO ())
-               -> IO JSRef -- ^ this.context
+               -> IO JSVal -- ^ this.context
                -> IO [ReactElementRef] -- ^ this.props.children
                -> ReactElementM eventHandler ()
-               -> IO (ReactElementRef, [Callback (JSRef -> IO ())])
+               -> IO (ReactElementRef, [Callback (JSVal -> IO ())])
 
 #ifdef __GHCJS__
 
@@ -260,22 +260,22 @@ mkReactElement runHandler getContext getPropsChildren = runWriterT . mToElem
                 [x] -> return x
                 xs -> lift $ do
                     emptyObj <- JSO.create
-                    let arr = jsref $ JSA.fromList $ map reactElementRef xs
+                    let arr = jsval $ JSA.fromList $ map reactElementRef xs
                     js_ReactCreateElementName "div" emptyObj arr
 
         -- add the property or handler to the javascript object
         addPropOrHandlerToObj :: JSO.Object -> PropertyOrHandler eventHandler -> MkReactElementM ()
         addPropOrHandlerToObj obj (Property n val) = lift $ do
-            vRef <- toJSRef val
+            vRef <- toJSVal val
             JSO.setProp (toJSString n) vRef obj
         addPropOrHandlerToObj obj (PropertyFromContext n f) = lift $ do
             ctx <- getContext
-            vRef <- toJSRef $ f ctx
+            vRef <- toJSVal $ f ctx
             JSO.setProp (toJSString n) vRef obj
         addPropOrHandlerToObj obj (NestedProperty n vals) = do
             nested <- lift $ JSO.create
             mapM_ (addPropOrHandlerToObj nested) vals
-            lift $ JSO.setProp (toJSString n) (jsref nested) obj
+            lift $ JSO.setProp (toJSString n) (jsval nested) obj
         addPropOrHandlerToObj obj (ElementProperty name rM) = do
             ReactElementRef ref <- mToElem rM
             lift $ JSO.setProp (toJSString name) ref obj
@@ -292,7 +292,7 @@ mkReactElement runHandler getContext getPropsChildren = runWriterT . mToElem
             cb <- lift $ syncCallback1 ContinueAsync $ \ref ->
                 runHandler $ func $ HandlerArg ref
             tell [cb]
-            lift $ JSO.setProp (toJSString name) (jsref cb) obj
+            lift $ JSO.setProp (toJSString name) (jsval cb) obj
 
         -- call React.createElement
         createElement :: ReactElement eventHandler -> MkReactElementM [ReactElementRef]
@@ -307,7 +307,7 @@ mkReactElement runHandler getContext getPropsChildren = runWriterT . mToElem
             let children = case map reactElementRef childNodes of
                              [] -> jsNull
                              [x] -> x
-                             xs -> jsref $ JSA.fromList xs
+                             xs -> jsval $ JSA.fromList xs
             e <- lift $ case fName f of
                 Left s -> js_ReactCreateElementName (toJSString s) obj children
                 Right ref -> js_ReactCreateForeignElement ref obj children
@@ -319,7 +319,7 @@ mkReactElement runHandler getContext getPropsChildren = runWriterT . mToElem
             let children = case map reactElementRef childNodes of
                              [] -> jsNull
                              [x] -> x
-                             xs -> jsref $ JSA.fromList xs
+                             xs -> jsval $ JSA.fromList xs
 
             e <- lift $ case mkey of
                 Just key -> do
@@ -328,7 +328,7 @@ mkReactElement runHandler getContext getPropsChildren = runWriterT . mToElem
                 Nothing -> js_ReactCreateClass rc propsE children
             return [e]
 
-type MkReactElementM a = WriterT [Callback (JSRef -> IO ())] IO a
+type MkReactElementM a = WriterT [Callback (JSVal -> IO ())] IO a
 
 foreign import javascript unsafe
     "React['createElement']($1)"
@@ -336,23 +336,23 @@ foreign import javascript unsafe
 
 foreign import javascript unsafe
     "React['createElement']($1, $2, $3)"
-    js_ReactCreateElementName :: JSString -> JSO.Object -> JSRef -> IO ReactElementRef
+    js_ReactCreateElementName :: JSString -> JSO.Object -> JSVal -> IO ReactElementRef
 
 foreign import javascript unsafe
     "React['createElement']($1, $2, $3)"
-    js_ReactCreateForeignElement :: ReactViewRef a -> JSO.Object -> JSRef -> IO ReactElementRef
+    js_ReactCreateForeignElement :: ReactViewRef a -> JSO.Object -> JSVal -> IO ReactElementRef
 
 foreign import javascript unsafe
     "React['createElement']($1, {hs:$2}, $3)"
-    js_ReactCreateClass :: ReactViewRef a -> Export props -> JSRef -> IO ReactElementRef
+    js_ReactCreateClass :: ReactViewRef a -> Export props -> JSVal -> IO ReactElementRef
 
 foreign import javascript unsafe
     "React['createElement']($1, {key: $2, hs:$3}, $4)"
-    js_ReactCreateKeyedElement :: ReactViewRef a -> JSRef -> Export props -> JSRef -> IO ReactElementRef
+    js_ReactCreateKeyedElement :: ReactViewRef a -> JSVal -> Export props -> JSVal -> IO ReactElementRef
 
 foreign import javascript unsafe
     "hsreact$mk_arguments_callback($1)"
-    js_CreateArgumentsCallback :: Callback (JSRef -> IO ()) -> IO JSRef
+    js_CreateArgumentsCallback :: Callback (JSVal -> IO ()) -> IO JSVal
 
 js_ReactCreateContent :: String -> ReactElementRef
 js_ReactCreateContent = ReactElementRef . unsafeCoerce . toJSString

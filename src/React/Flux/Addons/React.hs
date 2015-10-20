@@ -19,7 +19,7 @@ import GHC.Generics (Generic)
 import React.Flux
 
 #ifdef __GHCJS__
-import GHCJS.Types (JSRef, JSString)
+import GHCJS.Types (JSVal, JSString)
 #endif
 
 -- | The <https://facebook.github.io/react/docs/animation.html ReactCSSTransitionGroup> element.
@@ -34,7 +34,7 @@ cssTransitionGroup props children = foreignClass js_CSSTransitionGroup props chi
 
 foreign import javascript unsafe
     "React['addons']['CSSTransitionGroup']"
-    js_CSSTransitionGroup :: JSRef
+    js_CSSTransitionGroup :: JSVal
 
 #else
 cssTransitionGroup _ x = x

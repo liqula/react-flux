@@ -101,16 +101,16 @@ import           React.Flux.Views (ViewEventHandler, StatefulViewEventHandler)
 import           Data.Maybe (fromMaybe)
 
 import           GHCJS.Foreign (fromJSBool)
-import           GHCJS.Marshal (FromJSRef(..))
-import           GHCJS.Types (JSRef, nullRef, JSString, IsJSRef)
+import           GHCJS.Marshal (FromJSVal(..))
+import           GHCJS.Types (JSVal, nullRef, JSString, IsJSVal)
 import           JavaScript.Array as JSA
 
 #else
-type JSRef = ()
+type JSVal = ()
 type JSString = String
 type JSArray = ()
-class FromJSRef a
-class IsJSRef a
+class FromJSVal a
+class IsJSVal a
 nullRef :: ()
 nullRef = ()
 #endif
@@ -136,7 +136,7 @@ nestedProperty :: String -> [PropertyOrHandler handler] -> PropertyOrHandler han
 nestedProperty = NestedProperty
 
 -- | A class which is used to implement <https://wiki.haskell.org/Varargs variable argument functions>.
--- Any function where each argument implements 'FromJSRef' and the result is either
+-- Any function where each argument implements 'FromJSVal' and the result is either
 -- 'ViewEventHandler' or 'StatefulViewEventHandler' is an instance of this class.
 class CallbackFunction handler a | a -> handler  where
     applyFromArguments :: JSArray -> Int -> a -> IO handler
@@ -147,10 +147,10 @@ instance CallbackFunction ViewEventHandler ViewEventHandler where
 instance CallbackFunction (StatefulViewEventHandler s) (StatefulViewEventHandler s) where
     applyFromArguments _ _ h = return h
 
-instance (FromJSRef a, CallbackFunction handler b) => CallbackFunction handler (a -> b) where
+instance (FromJSVal a, CallbackFunction handler b) => CallbackFunction handler (a -> b) where
 #if __GHCJS__
     applyFromArguments args k f = do
-        ma <- fromJSRef $ if k >= JSA.length args then nullRef else JSA.index k args
+        ma <- fromJSVal $ if k >= JSA.length args then nullRef else JSA.index k args
         a <- maybe (error "Unable to decode callback argument") return ma
         applyFromArguments args (k+1) $ f a
 #else
@@ -162,11 +162,11 @@ instance (FromJSRef a, CallbackFunction handler b) => CallbackFunction handler (
 -- the handlers below.
 --
 -- The function @func@ can be any function, as long as each argument to the function is an instance
--- of 'FromJSRef' and the result of the function is @handler@.  Internally, 'callback' creates a
+-- of 'FromJSVal' and the result of the function is @handler@.  Internally, 'callback' creates a
 -- javascript function which accesses the @arguments@ javascript object and then matches entries in
 -- @arguments@ to the parameters of @func@.  If @func@ has more parameters than the javascript
 -- @arguments@ object, a javascript null is used for the conversion.  Since the 'Maybe' instance of
--- 'FromJSRef' converts a null reference to 'Nothing', you can exploit this to create
+-- 'FromJSVal' converts a null reference to 'Nothing', you can exploit this to create
 -- variable-argument javascript callbacks.
 --
 -- For example, all three of the following functions could be passed as @func@ inside a view.
@@ -206,14 +206,14 @@ classNames xs = "className" @= T.intercalate " " names
 
 -- | A reference to the object that dispatched the event.
 -- <https://developer.mozilla.org/en-US/docs/Web/API/Event/target>
-newtype EventTarget = EventTarget JSRef
-instance IsJSRef EventTarget
+newtype EventTarget = EventTarget JSVal
+instance IsJSVal EventTarget
 
 instance Show (EventTarget) where
     show _ = "EventTarget"
 
 -- | Access a property in an event target
-eventTargetProp :: FromJSRef val => EventTarget -> String -> val
+eventTargetProp :: FromJSVal val => EventTarget -> String -> val
 eventTargetProp (EventTarget ref) key = ref .: toJSString key
 
 -- | Every event in React is a synthetic event, a cross-browser wrapper around the native event.
@@ -240,7 +240,7 @@ data Event = Event
 -- >           ]
 --
 -- In this case, @val@ would coorespond to the javascript expression @evt.target.value@.
-target :: FromJSRef val => Event -> String -> val
+target :: FromJSVal val => Event -> String -> val
 target e s = eventTargetProp (evtTarget e) s
 
 parseEvent :: HandlerArg -> Event
@@ -309,11 +309,11 @@ instance NFData FakeEventStoreAction where
 
 foreign import javascript unsafe
     "$1['preventDefault']();"
-    js_preventDefault :: JSRef -> IO ()
+    js_preventDefault :: JSVal -> IO ()
 
 foreign import javascript unsafe
     "$1['stopPropagation']();"
-    js_stopProp :: JSRef -> IO ()
+    js_stopProp :: JSVal -> IO ()
 
 #else
 
@@ -560,7 +560,7 @@ instance Show TouchEvent where
     show (TouchEvent t1 t2 t3 _ t4 t5 t6 t7)
         = show (t1, t2, t3, t4, t5, t6, t7)
 
-parseTouch :: JSRef -> Touch
+parseTouch :: JSVal -> Touch
 parseTouch o = Touch
     { touchIdentifier = o .: "identifier"
     , touchTarget = EventTarget $ js_getProp o "target"
@@ -572,7 +572,7 @@ parseTouch o = Touch
     , touchPageY = o .: "pageY"
     }
 
-parseTouchList :: JSRef -> JSString -> [Touch]
+parseTouchList :: JSVal -> JSString -> [Touch]
 parseTouchList obj key = unsafePerformIO $ do
     let arr = js_getArrayProp obj key
         len = arrayLength arr
@@ -653,49 +653,49 @@ onError = on "onError"
 
 foreign import javascript unsafe
     "$1[$2]"
-    js_getProp :: JSRef -> JSString -> JSRef
+    js_getProp :: JSVal -> JSString -> JSVal
 
 foreign import javascript unsafe
     "$1[$2]"
-    js_getArrayProp :: JSRef -> JSString -> JSArray
+    js_getArrayProp :: JSVal -> JSString -> JSArray
 
 -- | Access a property from an object.  Since event objects are immutable, we can use
 -- unsafePerformIO without worry.
-(.:) :: FromJSRef b => JSRef -> JSString -> b
+(.:) :: FromJSVal b => JSVal -> JSString -> b
 obj .: key = fromMaybe (error "Unable to decode event target") $ unsafePerformIO $
-    fromJSRef $ js_getProp obj key
+    fromJSVal $ js_getProp obj key
 
 foreign import javascript unsafe
     "$1['getModifierState']($2)"
-    js_GetModifierState :: JSRef -> JSString -> JSRef
+    js_GetModifierState :: JSVal -> JSString -> JSVal
 
-getModifierState :: JSRef -> String -> Bool
+getModifierState :: JSVal -> String -> Bool
 getModifierState ref = fromJSBool . js_GetModifierState ref . toJSString
 
 arrayLength :: JSArray -> Int
 arrayLength = JSA.length
 
-arrayIndex :: Int -> JSArray -> JSRef
+arrayIndex :: Int -> JSArray -> JSVal
 arrayIndex = JSA.index
 
 #else
 
-js_getProp :: a -> String -> JSRef
+js_getProp :: a -> String -> JSVal
 js_getProp _ _ = ()
 
-js_getArrayProp :: a -> String -> JSRef
+js_getArrayProp :: a -> String -> JSVal
 js_getArrayProp _ _ = ()
 
-(.:) :: JSRef -> String -> b
+(.:) :: JSVal -> String -> b
 _ .: _ = undefined
 
-getModifierState :: JSRef -> String -> Bool
+getModifierState :: JSVal -> String -> Bool
 getModifierState _ _ = False
 
 arrayLength :: JSArray -> Int
 arrayLength _ = 0
 
-arrayIndex :: Int -> JSArray -> JSRef
+arrayIndex :: Int -> JSArray -> JSVal
 arrayIndex _ _ = ()
 
 #endif

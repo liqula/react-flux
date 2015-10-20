@@ -8,9 +8,9 @@ import Data.Typeable (Typeable)
 import GHC.Generics (Generic)
 import React.Flux
 
-import GHCJS.Types (JSRef, JSString)
+import GHCJS.Types (JSVal, JSString)
 import GHCJS.Foreign.Callback (Callback, syncCallback1, OnBlocked(..))
-import GHCJS.Marshal (fromJSRef)
+import GHCJS.Marshal (fromJSVal)
 import qualified Data.JSString as JSString
 
 data NavPageId = Page1
@@ -77,7 +77,7 @@ setDocTitle pid = do
 
 foreign import javascript unsafe
     "window['onpopstate'] = function(e) { $1(e['state'] ? e['state'].page : 0); };"
-    js_setOnPopState :: Callback (JSRef -> IO ()) -> IO ()
+    js_setOnPopState :: Callback (JSVal -> IO ()) -> IO ()
 
 initHistory :: IO ()
 initHistory = do
@@ -87,6 +87,6 @@ initHistory = do
 
     -- register a callback for onpopstate event
     c <- syncCallback1 ContinueAsync $ \pageRef -> do
-        pageInt <- fromMaybe (error "Unable to parse page") <$> fromJSRef pageRef
+        pageInt <- fromMaybe (error "Unable to parse page") <$> fromJSVal pageRef
         alterStore currentNavPageStore $ BackToPage $ toEnum pageInt
     js_setOnPopState c

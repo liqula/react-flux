@@ -28,7 +28,7 @@ import qualified Web.Routes as WR
 import           Control.Monad (liftM)
 import qualified Data.JSString as JSS
 import           GHCJS.Foreign.Callback
-import           GHCJS.Types (JSString, JSRef)
+import           GHCJS.Types (JSString, JSVal)
 import           Unsafe.Coerce
 
 #endif
@@ -37,7 +37,7 @@ import           Unsafe.Coerce
 
 foreign import javascript unsafe
   "window.onhashchange = function() {$1(location.hash.toString());}"
-  js_attachtLocationHashCb :: (Callback (JSRef -> IO ())) -> IO ()
+  js_attachtLocationHashCb :: (Callback (JSVal -> IO ())) -> IO ()
 
 foreign import javascript unsafe
   "window.location.hash = $1"

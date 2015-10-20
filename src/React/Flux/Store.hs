@@ -16,16 +16,16 @@ import Data.Typeable (Typeable)
 import System.IO.Unsafe (unsafePerformIO)
 
 #ifdef __GHCJS__
-import GHCJS.Types (JSRef, isNull, IsJSRef)
+import GHCJS.Types (JSVal, isNull, IsJSVal)
 import React.Flux.Export (Export, export)
 #else
-type JSRef = ()
-class IsJSRef a
+type JSVal = ()
+class IsJSVal a
 #endif
 
 -- | This type is used to represent the foreign javascript object part of the store.
-newtype ReactStoreRef storeData = ReactStoreRef JSRef
-instance IsJSRef (ReactStoreRef storeData)
+newtype ReactStoreRef storeData = ReactStoreRef JSVal
+instance IsJSVal (ReactStoreRef storeData)
 
 -- | A store contains application state, receives actions from the dispatcher, and notifies
 -- controller-views to re-render themselves.  You can have multiple stores; it should be the case

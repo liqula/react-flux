@@ -14,8 +14,8 @@ import React.Flux.Internal (toJSString)
 import React.Flux.Addons.React
 import React.Flux.Addons.Bootstrap
 
-import GHCJS.Types (JSRef, JSString)
-import GHCJS.Marshal (fromJSRef)
+import GHCJS.Types (JSVal, JSString)
+import GHCJS.Marshal (fromJSVal)
 
 foreign import javascript unsafe
     "(function(x) { \
@@ -135,13 +135,13 @@ logPandS ps = do
 
 foreign import javascript unsafe
     "$1.id"
-    js_domGetId :: JSRef -> IO JSRef
+    js_domGetId :: JSVal -> IO JSVal
 
 logDOM :: LDOM -> IO ()
 logDOM dom = do
-    this <- lThis dom >>= js_domGetId >>= fromJSRef
-    x <- lRef dom "refSt" >>= js_domGetId >>= fromJSRef
-    y <- lRef dom "refProps" >>= js_domGetId >>= fromJSRef
+    this <- lThis dom >>= js_domGetId >>= fromJSVal
+    x <- lRef dom "refSt" >>= js_domGetId >>= fromJSVal
+    y <- lRef dom "refProps" >>= js_domGetId >>= fromJSVal
     outputIO [ "this id = " ++ fromMaybe "Nothing" this
              , "refStr id = " ++ fromMaybe "Nothing" x
              , "refProps id = " ++ fromMaybe "Nothing" y

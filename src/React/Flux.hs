@@ -106,8 +106,8 @@ import React.Flux.Combinators
 import React.Flux.Store
 
 #ifdef __GHCJS__
-import GHCJS.Types (JSString, JSRef, nullRef)
-import GHCJS.Marshal (fromJSRef)
+import GHCJS.Types (JSString, JSVal, nullRef)
+import GHCJS.Marshal (fromJSVal)
 #endif
 
 ----------------------------------------------------------------------------------------------------
@@ -155,16 +155,16 @@ reactRenderToString includeStatic rc props = do
     sRef <- (if includeStatic then js_ReactRenderStaticMarkup else js_ReactRenderToString) e
     --return sRef
     --return $ JSS.unpack sRef
-    mtxt <- fromJSRef sRef
+    mtxt <- fromJSVal sRef
     maybe (error "Unable to convert string return to Text") return mtxt
 
 foreign import javascript unsafe
     "(typeof ReactDOM === 'object' ? ReactDOM : React)['renderToString']($1)"
-    js_ReactRenderToString :: ReactElementRef -> IO JSRef
+    js_ReactRenderToString :: ReactElementRef -> IO JSVal
 
 foreign import javascript unsafe
     "(typeof ReactDOM === 'object' ? ReactDOM : React)['renderToStaticMarkup']($1)"
-    js_ReactRenderStaticMarkup :: ReactElementRef -> IO JSRef
+    js_ReactRenderStaticMarkup :: ReactElementRef -> IO JSVal
 
 #else
 

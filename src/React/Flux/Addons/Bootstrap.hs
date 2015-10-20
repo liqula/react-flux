@@ -8,7 +8,7 @@ module React.Flux.Addons.Bootstrap (
 import React.Flux
 
 #ifdef __GHCJS__
-import GHCJS.Types (JSRef, JSString)
+import GHCJS.Types (JSVal, JSString)
 import React.Flux.Internal (toJSString)
 #endif
 
@@ -40,7 +40,7 @@ bootstrap_ n = foreignClass (js_ReactBootstrap $ toJSString n)
 
 foreign import javascript unsafe
     "window['ReactBootstrap'][$1]"
-    js_ReactBootstrap :: JSString -> JSRef
+    js_ReactBootstrap :: JSString -> JSVal
 
 #else
 
