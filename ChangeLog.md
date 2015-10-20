@@ -1,3 +1,10 @@
+# Unreleased
+
+* Update to build with latest ghcjs master.  The breaking change was
+  https://github.com/ghcjs/ghcjs-base/commit/968dff527c2be2d3d4815e437ad9b2931ea1f35d
+  which renamed JSRef to JSVal.  Therefore, react-flux no longer builds with ghcjs versions without
+  this commit.
+
 # 1.0.1
 
 * Add formatting support for properties to `React.Flux.Addons.Intl`.  These are needed for example to translate
