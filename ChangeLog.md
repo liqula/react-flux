@@ -1,4 +1,4 @@
-# Unreleased
+# 1.0.2
 
 * Update to build with latest ghcjs master.  The breaking change was
   https://github.com/ghcjs/ghcjs-base/commit/968dff527c2be2d3d4815e437ad9b2931ea1f35d
