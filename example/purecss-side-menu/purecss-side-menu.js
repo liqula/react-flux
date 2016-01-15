@@ -1,1 +1,1 @@
-../../dist/build/purecss-side-menu/purecss-side-menu.jsexe/all.js
+../../js-build/install-root/bin/purecss-side-menu.jsexe/all.js

@@ -8,28 +8,45 @@ GHCJS work very well together.
 
 The [haddocks](https://hackage.haskell.org/package/react-flux) contain the documentation.
 
-# Build
+# Using in your own project
 
-This package requires GHC 7.10.2 and the improved-base branch of ghcjs.
-I followed the instructions in the [ghcjs wiki](https://github.com/ghcjs/ghcjs/wiki/GHCJS-with-GHC-7.10)
-to install the improved-base branch.  Once ghcjs is installed, I use the following to build react-flux:
+I use stack to build my frontend which uses react-flux.  I set up stack and
+ghcjs using [these
+instructions](http://docs.haskellstack.org/en/stable/ghcjs.html).  Note that
+react-flux requires GHCJS master (a.k.a. improved base).  At the moment I want
+to use GHC 7.10.3 and no ghcjs snapshot uses lts-4.1 and GHC 7.10.3, so I am
+building ghcjs manually.  So what I do is [install ghcjs from
+git](https://github.com/ghcjs/ghcjs) using the following.  (Once the ghcjs
+snapshots have caught up I will transition to using them and have stack install
+ghcjs instead of installing ghcjs manually.)
 
 ~~~
-echo "compiler: ghcjs" > cabal.config
-cabal configure
-cabal build
+$ git clone https://github.com/ghcjs/ghcjs.git
+$ cabal install ./ghcjs
+$ ghcjs-boot --dev
 ~~~
+
+After this, in my application which depends on react-flux, I use the following `stack.yaml`:
+
+~~~
+resolver: lts-4.1
+compiler: ghcjs-0.2.0_ghc-7.10.3
+packages:
+    - .
+extra-deps:
+    - react-flux-1.0.3
+~~~
+
 
 # Example Applications
 
 The source contains some [example applications](https://bitbucket.org/wuzzeb/react-flux/src/tip/example).
-To try out the TODO example, execute
+To try out the TODO example, clone the repository, set up ghcjs manually as in the previous section, and then execute:
 
 ~~~
-cabal configure -fexample
-cabal build
-cd example/todo
+stack build
 make
+cd example/todo
 firefox todo.html
 ~~~
 
@@ -38,28 +55,29 @@ the example applications, see the [README](https://bitbucket.org/wuzzeb/react-fl
 
 # Test Suite
 
-To run the test suite, first you must build both the example applications and the test-client.  (The
-test-client is a react-flux application which contains code for everything not contained in the todo
-example.)
+To run the test suite, first you must build both the example applications and
+the test-client using ghcjs.  (The test-client is a react-flux application
+which contains code for everything not contained in the todo example.)  This is
+the first `stack build` below.  Then, you must build the test suite, which is a
+haskell application using
+[hspec-webdriver](https://hackage.haskell.org/package/hspec-webdriver).  This
+must be built using GHC (not GHCJS), so there is a separate `stack.yaml` file
+in the `test/spec` directory.  In summary, run the following commands:
 
-~~~
-echo "compiler: ghcjs" > cabal.config
-cabal configure -fexample -ftest-client
-cabal build
+~~~ {.bash}
+stack build
+make
+cd test/spec
+stack build
 ~~~
 
-The above builds the TODO application and the test client.
 Next, install [selenium-server-standalone](http://www.seleniumhq.org/download/) (also from
-[npm](https://www.npmjs.com/package/selenium-server-standalone-jar)).  Then, build the
-[hspec-webdriver](https://hackage.haskell.org/package/hspec-webdriver) test suite using GHC (not
-GHCJS).  I use stack for this, although you can use cabal too if you like.  Also, at the moment, the prerelease
-of the react-intl library must be installed from npm.
+[npm](https://www.npmjs.com/package/selenium-server-standalone-jar)). Also, at the moment, the beta
+version of the react-intl library must be installed from npm.
 
 ~~~
 cd test/client
-npm install react-intl@next
-cd ../spec
-stack build
+npm install react-intl@v2.0.0-beta-2
 ~~~
 
 Finally, start selenium-server-standalone and execute the test suite.  Make sure you also have
@@ -67,6 +85,7 @@ closure installed, since the test suite will compress the todo app before testin
 started from the `test/spec` directory, otherwise it does not find the correct javascript files.
 
 ~~~
+cd test/spec
 stack exec react-flux-spec
 ~~~
 

@@ -227,7 +227,7 @@ testClientSpec filename = session " for the test client" $ using Chrome $ do
             loadLog `shouldReturn` ["Closing alert"]
 
         it "switchs nav items" $ runWD $ do
-            navUl <- findElem $ ByCSS "div#bootstrap nav > ul"
+            navUl <- findElem $ ByCSS "div#bootstrap ul"
             i1 <- findElemFrom navUl $ ByCSS "li:first-child a"
             i2 <- findElemFrom navUl $ ByCSS "li:nth-child(2) a"
             i3 <- findElemFrom navUl $ ByCSS "li:nth-child(3) a"
@@ -286,7 +286,7 @@ intlSpec filename = session " for the i18n test client" $ using Chrome $ do
         openPage $ "file://" ++ dir ++ "/../client/" ++ filename
 
     it "displays the intl formatted data" $ runWD $ do
-        "f-number" `intlSpanShouldBe` "90.0%"
+        "f-number" `intlSpanShouldBe` "90%"
         "f-int" `intlSpanShouldBe` "100,000"
         "f-double" `intlSpanShouldBe` "40,000.2"
         "f-shortday" `intlSpanShouldBe` "Jul 20, 1969"
@@ -300,7 +300,7 @@ intlSpec filename = session " for the i18n test client" $ using Chrome $ do
         let moon = fromGregorian 1969 7 20
             daysAgo = diffDays today moon
             yearsAgo :: Int = round $ realToFrac daysAgo / (365 :: Double) -- is close enough
-        "f-relative" `intlSpanShouldBe` (show yearsAgo ++ " years ago")
+        "f-relative" `intlSpanShouldBe` (show (yearsAgo-1) ++ " years ago")
         "f-relative-days" `intlSpanShouldBe` (showWithComma daysAgo ++ " days ago")
 
     it "displays messages" $ runWD $ do

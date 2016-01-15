@@ -1,3 +1,8 @@
-resolver: lts-3.0
+resolver: lts-4.1
+compiler: ghcjs-0.2.0_ghc-7.10.3
 packages:
-- '.'
+    - .
+flags:
+    react-flux:
+        example: true
+        test-client: true
