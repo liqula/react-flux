@@ -8,15 +8,16 @@ license-file:        LICENSE
 author:              John Lenz <wuzzeb@gmail.com>
 maintainer:          John Lenz <wuzzeb@gmail.com>
 build-type:          Simple
+description:         See the README below.
 cabal-version:       >=1.10
 
 extra-source-files:
     ChangeLog.md,
     README.md,
+    Makefile,
     example/README.md,
     example/css/*.css,
     example/css/bg.png,
-    example/todo/Makefile,
     example/todo/*.hs,
     example/todo/*.html,
     example/todo/run-in-node.js,

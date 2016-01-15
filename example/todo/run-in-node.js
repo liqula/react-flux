@@ -1,2 +1,2 @@
 React = require("react");
-require("../../dist/build/todo-node/todo-node.jsexe/all.js");
+require("../../js-build/install-root/bin/todo-node.jsexe/all.js");

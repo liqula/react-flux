@@ -14,30 +14,20 @@ at `TodoDispatcher.hs` and `TodoViews.hs`.  Finally, you can look at `TodoCompon
 
 ### Build
 
-To build, you must pass the `-fexample` flag to cabal.
-
-~~~
-cabal configure -fexample
-cabal build
-~~~
+To build, run `stack build` followed by `make` in the top-level directory.  The makefile sets up a symbolic
+link to the stack output directory and also compresses the resulting javascript using closure.
 
 ### TODO in the browser
 
-A result of this build is a file `dist/build/todo/todo.jsexe/all.js`.  There is a file
-`example/todo/todo-dev.html` which loads this `all.js` file directly from the `dist` directory, so you
+A result of the build is in the directory `js-build/install-root/bin/todo.jsexe`.  There is a file
+`example/todo/todo-dev.html` which loads this `all.js` file from this directory, so you
 can open `todo-dev.html` after building.
 
-But to deploy a react-flux application, you should minimize it since the size of `all.js` is 1.8
-mebibytes.  To do so, there is a `Makefile` which calls closure.  So if you have closure installed
-on your path, you can execute
-
-~~~
-cd example/todo
-make
-~~~
-
-This produces a file `js-build/todo.min.js` which is only 500 kibibytes which when compressed with
-gzip is 124 kibibytes.  You can then open `example/todo/todo.html` which loads this minimized javascript.
+But to deploy a react-flux application, you should minimize it since the size
+of `all.js` is 1.8 mebibytes.  To do so, the `Makefile` calls closure to
+produce a file `js-build/todo.min.js`.  Then the `todo.html` references this
+minimized javascript file, which is only 500 kibibytes which when compressed
+with gzip is 124 kibibytes.
 
 ### TODO in node
 
@@ -46,7 +36,7 @@ it renders it to a string and then displays it.  To execute this, run
 
 ~~~
 cd example/todo
-npm install react@0.13.3
+npm install react@0.14.6
 node run-in-node.js
 ~~~
 
@@ -74,14 +64,15 @@ technique with slightly different CSS classes can be used to create any of the m
 * `App.hs` contains the layout for the entire application, with the navigation bar and header.
 * `Main.hs` renders the application into the DOM.
 
-It is also built with `-fexample`.  It uses the browser [history
-API](https://developer.mozilla.org/en-US/docs/Web/API/History_API) which does not work if you open `index.html` directly from the filesystem.  Instead, the index.html file must be served.
+It uses the browser [history
+API](https://developer.mozilla.org/en-US/docs/Web/API/History_API) which might
+not work if you open `index.html` directly from the filesystem (depends on
+browser settings).  Instead, the index.html file can be served and the history
+API always works.
 
 ~~~
-cabal configure -fexample
-cabal build
 cd example/purecss-side-menu
-ln -s ../../dist/build/purecss-side-menu/purecss-side-menu.jsexe/all.js purecss-side-menu.js
+ln -s ../../js-build/install-root/bin/purecss-side-menu.jsexe/all.js purecss-side-menu.js
 python3 -m http.server 8000
 ~~~
 
@@ -90,11 +81,3 @@ Then open your browser to `localhost:8000`.
 # Routing Example
 
 The third example application shows routing with the [web-routes](https://hackage.haskell.org/package/web-routes) package.
-It is also built by passing `-fexample` to cabal.
-
-~~~
-cabal configure -fexample
-cabal build
-cd example/routing
-firefox route-example.html
-~~~
