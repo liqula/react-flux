@@ -3,10 +3,10 @@
 -- be used for formatting and pluralization even if you intend to present your application in a single
 -- language and locale.
 --
--- These bindings are for the 2.0 version of ReactIntl which is currently just a
--- pre-release, and due to how react-flux works, it also requires React 0.14.  For temporary documentation,
+-- These bindings are for the 2.0 version of ReactIntl which is currently in beta (I am currently
+-- using v2.0.0-beta-2).  For temporary documentation,
 -- see <https://github.com/yahoo/react-intl/issues/162 issue62>.  Because this is a binding to a
--- pre-release, the API below might change!  I consider it unlikely, but if a change is required I will
+-- beta, the API below might change!  I consider it unlikely, but if a change is required I will
 -- violate the PVP and not increment the major number, just the minor number.
 --
 -- To use these bindings, you need to provide the @ReactIntl@ variable.  In the browser you can just

@@ -19,7 +19,7 @@ foreign import javascript unsafe
 
 intlSpec :: ReactView ()
 intlSpec = defineView "intl" $ \() ->
-    intlProvider_ "en-US" (Just js_translations) Nothing $
+    intlProvider_ "en" (Just js_translations) Nothing $
         view intlSpecBody () mempty
 
 intlSpecBody :: ReactView ()
