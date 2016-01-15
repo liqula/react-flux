@@ -1,3 +1,9 @@
+# 1.0.3
+
+* I switched to using stack to build, and updated the documentation to explain how to use stack.  It is
+  still possible to use cabal but I suggest using stack.  There is no functionality change in this release,
+  just updated documentation.
+
 # 1.0.2
 
 * Update to build with latest ghcjs master.  The breaking change was
