@@ -1,4 +1,4 @@
-resolver: lts-4.1
+resolver: lts-5.5
 compiler: ghcjs-0.2.0_ghc-7.10.3
 packages:
     - .
