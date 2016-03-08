@@ -36,7 +36,7 @@
 --
 -- >React = require("react");
 -- >ReactDOM = require("react-dom");
--- >require("../../dist/build/todo-node/todo-node.jsexe/all.js");
+-- >require("../../js-build/install-root/bin/todo-node.jsexe/all.js");
 --
 -- __Testing__:  I use the following approach to test my react-flux application.  First, I use unit
 -- testing to test the dispatcher and store 'transform' functions.  Since the dispatcher and the
