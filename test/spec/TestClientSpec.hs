@@ -56,9 +56,10 @@ intlPlaceholderShouldBe ident txt = do
 
 -- | Only up to 999,999 since this is just used for the number of days since 1969
 showWithComma :: Integer -> String
-showWithComma i = show x ++ "," ++ show y
+showWithComma i = show x ++ "," ++ replicate (3-length y') '0' ++ y'
     where
         (x, y) = divMod i 1000
+        y' = show y
 
 spec :: Spec
 spec = do
@@ -300,8 +301,8 @@ intlSpec filename = session " for the i18n test client" $ using Chrome $ do
         let moon = fromGregorian 1969 7 20
             daysAgo = diffDays today moon
             yearsAgo :: Int = round $ realToFrac daysAgo / (365 :: Double) -- is close enough
-        "f-relative" `intlSpanShouldBe` (show (yearsAgo-1) ++ " years ago")
-        "f-relative-days" `intlSpanShouldBe` (showWithComma daysAgo ++ " days ago")
+        "f-relative" `intlSpanShouldBe` (show (yearsAgo) ++ " years ago")
+        "f-relative-days" `intlSpanShouldBe` (showWithComma (daysAgo+1) ++ " days ago")
 
     it "displays messages" $ runWD $ do
         msg <- findElem $ ById "f-msg"
