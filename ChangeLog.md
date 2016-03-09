@@ -1,3 +1,14 @@
+# 1.0.4
+
+* Add helper functions `ajax` and `jsonAjax` to `React.Flux.Combinators` to assist with sending
+  a request to the backend and turning the response into actions.  See the haddocks for more
+  information.
+
+* Everything in react-flux is working with no changes against React 15 release candidate 1, although
+  react-bootstrap is currently not compatible (https://github.com/react-bootstrap/react-bootstrap/issues/1686).
+
+* Everything in `React.Flux.Addons.Intl` is working with no changes with react-intl 2.0 release candidate 1.
+
 # 1.0.3
 
 * I switched to using stack to build, and updated the documentation to explain how to use stack.  It is
