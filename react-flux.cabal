@@ -52,6 +52,7 @@ library
               jsbits/store.js
               jsbits/export.js
               jsbits/callback.js
+              jsbits/ajax.js
 
   exposed-modules: React.Flux
                    React.Flux.DOM
