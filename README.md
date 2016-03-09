@@ -72,12 +72,12 @@ stack build
 ~~~
 
 Next, install [selenium-server-standalone](http://www.seleniumhq.org/download/) (also from
-[npm](https://www.npmjs.com/package/selenium-server-standalone-jar)). Also, at the moment, the beta
-version of the react-intl library must be installed from npm.
+[npm](https://www.npmjs.com/package/selenium-server-standalone-jar)). Also, at the moment, the
+release candiate of the react-intl library must be installed from npm.
 
 ~~~
 cd test/client
-npm install react-intl@v2.0.0-beta-2
+npm install react-intl@v2.0.0-rc-1
 ~~~
 
 Finally, start selenium-server-standalone and execute the test suite.  Make sure you also have
