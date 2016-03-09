@@ -16,29 +16,27 @@ module React.Flux.Combinators (
   , ajax
 ) where
 
+import Data.Aeson
 import Data.Monoid ((<>))
+import Data.Text (Text)
+import Data.Typeable (Typeable)
+import GHC.Generics (Generic)
 import React.Flux.DOM
 import React.Flux.Internal
 import React.Flux.PropertiesAndEvents
+import React.Flux.Store
 import React.Flux.Views
-import Data.Text (Text)
 
 #ifdef __GHCJS__
-import GHCJS.Types (JSString, JSVal)
+import Control.Arrow ((***))
+import Control.DeepSeq (deepseq)
 import GHCJS.Foreign.Callback
 import GHCJS.Marshal (ToJSVal(..), toJSVal_aeson, FromJSVal(..))
-import Data.Aeson (ToJSON, FromJSON, fromJSON, Result(..))
-import Data.Typeable (Typeable)
-import GHC.Generics (Generic)
-import Control.DeepSeq (deepseq)
-import Control.Arrow ((***))
+import GHCJS.Types (JSString, JSVal)
 import qualified Data.Text as T
-import qualified Data.Text.Encoding as T
-import qualified Data.JSString as JSS
 import qualified Data.JSString.Text as JSS
 
 import React.Flux.Export
-import React.Flux.Store (executeAction, SomeStoreAction)
 
 foreign import javascript unsafe
     "$r = window[$1]"
@@ -150,7 +148,7 @@ data AjaxRequest = AjaxRequest
   , reqURI :: JSString
   , reqHeaders :: [(JSString, JSString)]
   , reqBody :: JSVal
-  } deriving (Typeable, Generic, ToJSVal)
+  } deriving (Typeable, Generic)
 
 -- | The response after @XMLHttpRequest@ indicates that the @readyState@ is done.
 data AjaxResponse = AjaxResponse
@@ -160,8 +158,9 @@ data AjaxResponse = AjaxResponse
                              --   such as response headers.
   } deriving (Typeable, Generic)
 
+#ifdef __GHCJS__
 -- | GHCJS panics if we export the function directly, so wrap it in a data struct
-data HandlerWrapper = HandlerWrapper { unwrapHandler :: AjaxResponse -> IO [SomeStoreAction] }
+data HandlerWrapper = HandlerWrapper (AjaxResponse -> IO [SomeStoreAction])
     deriving Typeable
 
 -- | This is broken out as a separate function because if the code is inlined (either manually or by
@@ -171,6 +170,7 @@ useHandler r (HandlerWrapper h) = do
     actions <- h r
     actions `deepseq` mapM_ executeAction actions
 {-# NOINLINE useHandler #-} -- if this is inlined, there is a bug in ghcjs
+#endif
 
 -- | If you are going to use 'ajax' or 'jsonAjax', you must call 'initAjax' once from your main
 -- function.  The call should appear before the call to 'reactRender'.
@@ -283,8 +283,8 @@ jsonAjax method uri headers body handler = do
     ajax req $ \resp ->
         if respStatus resp == 200
             then do
-                json <- js_JSONParse $ respResponseText resp
-                mv <- fromJSVal json
+                j <- js_JSONParse $ respResponseText resp
+                mv <- fromJSVal j
                 case mv of
                     Nothing -> handler $ Left (500, "Unable to convert response body")
                     Just v -> case fromJSON v of
@@ -292,7 +292,7 @@ jsonAjax method uri headers body handler = do
                         Error e -> handler $ Left (500, T.pack e)
             else handler $ Left (respStatus resp, JSS.textFromJSString $ respResponseText resp)
 #else
-jsonAjax _ _ _ _ = return ()
+jsonAjax _ _ _ _ _ = return ()
 #endif
 
 #ifdef __GHCJS__
@@ -323,4 +323,6 @@ foreign import javascript unsafe
 foreign import javascript unsafe
     "h$release($1)"
     js_release :: Export HandlerWrapper -> IO ()
+
+instance ToJSVal AjaxRequest
 #endif

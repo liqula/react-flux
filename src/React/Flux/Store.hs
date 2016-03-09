@@ -95,7 +95,8 @@ class Typeable storeData => StoreData storeData where
     -- re-rendered until the transform is complete.  Therefore, if you need to perform some longer
     -- action, you should fork a thread from inside 'transform'.  The thread can then call 'alterStore'
     -- with another action with the result of its computation.  This is very common to communicate with
-    -- the backend using AJAX.
+    -- the backend using AJAX.  Indeed, the 'React.Flux.Combinators.jsonAjax' utility function
+    -- implements exactly this strategy since it is so common.
     --
     -- Note that if the transform throws an exception, the transform will be aborted and the old
     -- store data will be kept unchanged.  The exception will then be thrown from 'alterStore'.
