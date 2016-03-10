@@ -1,3 +1,7 @@
+# 1.0.5
+
+* Fix a bug in the `jsonAjax` implementation: the request body was not properly JSON encoded.
+
 # 1.0.4
 
 * Add helper functions `ajax` and `jsonAjax` to `React.Flux.Combinators` to assist with sending

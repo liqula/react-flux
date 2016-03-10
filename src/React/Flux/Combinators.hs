@@ -227,7 +227,7 @@ ajax _ _ = return ()
 -- >    type StoreAction MyStore = MyStoreAction
 -- >
 -- >    transform (LaunchTheMissiles t) s = do
--- >        jsonAjax "PUT" "/launch-the-missiles" [] t $ \case ->
+-- >        jsonAjax "PUT" "/launch-the-missiles" [] t $ \case
 -- >            Left (_, msg) -> return [SomeStoreAction myStore $ UnableToLaunchMissiles msg]
 -- >            Right traj -> return [SomeStoreAction myStore $ MissilesLaunched traj]
 -- >        return s { launchUpdate = UpdatePending ("Requesting missle launch against " ++ T.pack (show t)) }
@@ -257,7 +257,8 @@ ajax _ _ = return ()
 jsonAjax :: (ToJSON body, FromJSON response)
          => Text -- ^ the method
          -> Text -- ^ the URI
-         -> [(Text, Text)] -- ^ the headers
+         -> [(Text, Text)] -- ^ the headers.  In addition to these headers, 'jsonAjax' adds two headers:
+                           -- @Content-Type: application/json@ and @Accept: application/json@.
          -> body -- ^ the body
          -> (Either (Int, Text) response -> IO [SomeStoreAction])
             -- ^ Once @XMLHttpRequest@ changes the @readyState@ to done this handler will be
@@ -273,11 +274,12 @@ jsonAjax :: (ToJSON body, FromJSON response)
          -> IO ()
 #ifdef __GHCJS__
 jsonAjax method uri headers body handler = do
-    bodyRef <- toJSVal_aeson body
+    bodyRef <- toJSVal_aeson body >>= js_JSONstringify
+    let extraHeaders = [("Content-Type", "application/json"), ("Accept", "application/json")]
     let req = AjaxRequest
               { reqMethod = JSS.textToJSString method
               , reqURI = JSS.textToJSString uri
-              , reqHeaders = map (JSS.textToJSString *** JSS.textToJSString) headers
+              , reqHeaders = extraHeaders ++ map (JSS.textToJSString *** JSS.textToJSString) headers
               , reqBody = bodyRef
               }
     ajax req $ \resp ->
@@ -307,6 +309,10 @@ foreign import javascript unsafe
 foreign import javascript unsafe
     "JSON['parse']($1)"
     js_JSONParse :: JSString -> IO JSVal
+
+foreign import javascript unsafe
+    "JSON['stringify']($1)"
+    js_JSONstringify :: JSVal -> IO JSVal
 
 foreign import javascript unsafe
     "$1.hs"
