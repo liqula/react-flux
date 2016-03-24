@@ -223,7 +223,7 @@ type StatefulViewEventHandler state = state -> ([SomeStoreAction], Maybe state)
 -- >
 -- >todoTextInput_ :: TextInputArgs -> ReactElementM eventHandler ()
 -- >todoTextInput_ args = view todoTextInput args mempty
-defineStatefulView :: (Typeable state, Typeable props)
+defineStatefulView :: (Typeable state, NFData state, Typeable props)
                => String -- ^ A name for this view, used only for debugging/console logging
                -> state -- ^ The initial state
                -> (state -> props -> ReactElementM (StatefulViewEventHandler state) ()) -- ^ The rendering function
@@ -238,7 +238,7 @@ defineStatefulView name initial buildNode = unsafePerformIO $ do
     ReactView <$> js_createStatefulView (toJSString name) initialRef renderCb
 
 -- | Transform a stateful view event handler to a raw event handler
-runStateViewHandler :: Typeable state
+runStateViewHandler :: (Typeable state, NFData state)
                     => ReactThis state props -> StatefulViewEventHandler state -> IO ()
 runStateViewHandler this handler = do
     st <- js_ReactGetState this >>= parseExport
@@ -248,7 +248,7 @@ runStateViewHandler this handler = do
     case mNewState of
         Nothing -> return ()
         Just newState -> do
-            newStateRef <- export newState
+            newStateRef <- newState `deepseq` export newState
             js_ReactUpdateAndReleaseState this newStateRef
 
     -- nothing above here should block, so the handler callback should still be running syncronous,

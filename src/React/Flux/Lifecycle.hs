@@ -41,6 +41,7 @@ import Data.Typeable (Typeable)
 import React.Flux.Internal
 import React.Flux.Views
 import React.Flux.DOM (div_)
+import Control.DeepSeq (NFData)
 
 #ifdef __GHCJS__
 import Control.Monad.Writer
@@ -111,7 +112,7 @@ lifecycleConfig = LifecycleViewConfig
 -- >            { lRender = \state props -> ...
 -- >            , lComponentWillMount = \propsAndState setStateFn -> ...
 -- >            }
-defineLifecycleView :: (Typeable props, Typeable state)
+defineLifecycleView :: (Typeable props, Typeable state, NFData state)
               => String -> state -> LifecycleViewConfig props state -> ReactView props
 
 #ifdef __GHCJS__
