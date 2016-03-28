@@ -144,10 +144,10 @@ class CallbackFunction handler a | a -> handler  where
 instance CallbackFunction ViewEventHandler ViewEventHandler where
     applyFromArguments _ _ h = return h
 
-instance CallbackFunction (StatefulViewEventHandler s) (StatefulViewEventHandler s) where
+instance {-# OVERLAPPING #-} CallbackFunction (StatefulViewEventHandler s) (StatefulViewEventHandler s) where
     applyFromArguments _ _ h = return h
 
-instance (FromJSVal a, CallbackFunction handler b) => CallbackFunction handler (a -> b) where
+instance {-# OVERLAPPABLE #-} (FromJSVal a, CallbackFunction handler b) => CallbackFunction handler (a -> b) where
 #if __GHCJS__
     applyFromArguments args k f = do
         ma <- fromJSVal $ if k >= JSA.length args then nullRef else JSA.index k args
