@@ -49,13 +49,13 @@ type JSString = String
 #endif
 
 -- | A wrapper around 'foreignClass' that looks up the class on the `window`.  I use it for several
--- third-party react components.  For example, with <https://github.com/rackt/react-modal
--- react-modal>, assuming `window.Modal` contains the definition of the classes,
+-- third-party react components.  For example, with <https://github.com/reactjs/react-modal react-modal>,
+-- assuming `window.ReactModal` contains the definition of the class,
 --
--- >foreign_ "Modal" [ "isOpen" @= isModelOpen myProps
--- >                 , callback "onRequestClose" $ dispatch closeModel
--- >                 , "style" @= Aeson.object [ "overlay" @= Aeson.object ["left" $= "50%", "right" $= "50%"]]
--- >                 ] $ do
+-- >foreign_ "ReactModal" [ "isOpen" @= isModelOpen myProps
+-- >                      , callback "onRequestClose" $ dispatch closeModel
+-- >                      , "style" @= Aeson.object [ "overlay" @= Aeson.object ["left" $= "50%", "right" $= "50%"]]
+-- >                      ] $ do
 -- >    h1_ "Hello, World!"
 -- >    p_ "...."
 --
