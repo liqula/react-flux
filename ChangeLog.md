@@ -1,3 +1,11 @@
+# 1.0.6
+
+* Fix a rare bug in stateful view event handlers: occasionally deepseq was not called and so there
+  was a race between react reusing the event and the haskell code extracting data from the event.
+* Add overlapping pragmas to the Callback instances, making the `callback` function easier to use
+  without requiring explicit type signatures.  This change is backwards compatible.
+* Some minor documentation updates.
+
 # 1.0.5
 
 * Fix a bug in the `jsonAjax` implementation: the request body was not properly JSON encoded.
