@@ -3,12 +3,12 @@ module React.Flux.Views where
 
 import Control.Monad.Writer
 import Data.Typeable (Typeable)
+import Control.DeepSeq
 
 import React.Flux.Store
 import React.Flux.Internal
 
 #ifdef __GHCJS__
-import Control.DeepSeq
 import System.IO.Unsafe (unsafePerformIO)
 import React.Flux.Export
 import JavaScript.Array

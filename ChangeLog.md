@@ -1,3 +1,7 @@
+# 1.0.7
+
+* Fix the build when building with GHC instead of GHCJS (an import was incorrectly protected by CPP)
+
 # 1.0.6
 
 * Fix a rare bug in stateful view event handlers: occasionally deepseq was not called and so there
