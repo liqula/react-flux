@@ -32,13 +32,55 @@ function hsreact$mk_class(name, renderCb, checkState, releaseState) {
         },
         _currentCallbacks: []
     };
+
+    //Checks if the javascript representations of two haskell values are the same.
+    //This can't check equality but just checks if the javascript object has not been
+    //changed.  We have special support for tuples of size 2 and 3, where we do check if the individual components of
+    //the tuple are equal.
+    var areValuesSame = function(obj1, obj2) {
+        if (obj1 == obj2) { //use two equal signs to test if the objects are the same
+            return true;
+
+        } else {
+
+            //check tuples of size two and 3.
+            //
+            //Tuples of size 2 are stored as
+            //  { d1: first value
+            //  , d2: second value
+            //  , f: constructor function
+            //  }
+            //
+            //Tuples of size 3 are stored as
+            //  { d1: first value
+            //  , d2: { d1: second value
+            //        , d2: third value
+            //        }
+            //  , f: constructor function
+            //  }
+            var obj1_f = (obj1['f'] || {})['name'];
+            var obj2_f = (obj2['f'] || {})['name'];
+
+            if (obj1_f === "h$ghczmprimZCGHCziTupleziZLz2cUZR_con_e" && obj1_f === obj2_f) {
+                //pair
+                return obj1['d1'] == obj2['d1'] && obj1['d2'] == obj2['d2']; //use two equal signs to test if the objects are the same
+
+            } else if (obj1_f === "h$ghczmprimZCGHCziTupleziZLz2cUz2cUZR_con_e" && obj1_f === obj2_f) {
+                var obj1_d2 = obj1['d2'] || {};
+                var obj2_d2 = obj2['d2'] || {};
+                return obj1['d1'] == obj2['d1'] && obj1_d2['d1'] == obj2_d2['d1'] && obj1_d2['d2'] == obj2_d2['d2'];
+            } else {
+                return false;
+            }
+        }
+    };
     if (checkState) {
         cl['shouldComponentUpdate'] = function(newProps, newState) {
-            return this['props'].hs.root != newProps.hs.root || this['state'].hs.root != newState.hs.root;
+            return !areValuesSame(this['props'].hs.root, newProps.hs.root) || !areValuesSame(this['state'].hs.root, newState.hs.root);
         };
     } else {
         cl['shouldComponentUpdate'] = function(newProps, newState) {
-            return this['props'].hs.root != newProps.hs.root;
+            return !areValuesSame(this['props'].hs.root, newProps.hs.root);
         };
     }
 

@@ -5,7 +5,7 @@ all: js-build/install-root js-build/todo.min.js
 
 js-build/install-root: $(INSTALL_ROOT)
 	mkdir -p js-build
-	ln -s $(INSTALL_ROOT) js-build/install-root
+	ln -sf $(INSTALL_ROOT) js-build/install-root
 
 js-build/todo.min.js: js-build/todo.js
 	closure --compilation_level=ADVANCED_OPTIMIZATIONS js-build/todo.js > js-build/todo.min.js

@@ -35,13 +35,31 @@ lifecyclePropsAndStateAre props st = do
     p <- findElem (ById "world")
     getText p `shouldReturn` (T.pack $ "Current props: " ++ props)
 
-scuShouldBe :: [(Int, String)] -> WD ()
-scuShouldBe items = do
-    d <- findElem $ ById "should-component-update"
+scuShouldBe :: String -> [String] -> WD ()
+scuShouldBe ident items = do
+    d <- findElem $ ById $ T.pack ident
     lis <- findElemsFrom d $ ByTag "li"
     length lis `shouldBe` length items
-    forM_ (zip lis items) $ \(li,(i, s)) ->
-        getText li `shouldReturn` (T.pack $ show i ++ s)
+    forM_ (zip lis items) $ \(li,i) ->
+        getText li `shouldReturn` T.pack i
+
+scuSingleShouldBe :: [String] -> WD ()
+scuSingleShouldBe = scuShouldBe "should-component-update-single"
+
+scuPairShouldBe :: [String] -> WD ()
+scuPairShouldBe = scuShouldBe "should-component-update-pair"
+
+scuTripleShouldBe :: [String] -> WD ()
+scuTripleShouldBe = scuShouldBe "should-component-update-triple"
+
+scuSingleLogMsg :: String -> String -> [String]
+scuSingleLogMsg current new = ["Component will update single", "current props: " ++ current, "new props: " ++ new]
+
+scuPairLogMsg :: String -> String -> [String]
+scuPairLogMsg current new = ["Component will update for pair input view", "current props: " ++ current, "new props: " ++ new]
+
+scuTripleLogMsg :: String -> String -> [String]
+scuTripleLogMsg current new = ["Component will update for triple input view", "current props: " ++ current, "new props: " ++ new]
 
 intlSpanShouldBe :: String -> String -> WD ()
 intlSpanShouldBe ident txt = do
@@ -241,37 +259,140 @@ testClientSpec filename = session " for the test client" $ using Chrome $ do
 
     describe "should component update" $ do
 
-        it "has the initial data" $ runWD $
-            scuShouldBe [(1, "Hello"), (2, "World"), (3, "!!!")]
-
-        it "increments just the first entry without re-rendering all entries" $ runWD $ do
-            findElem (ById "increment-first-scu") >>= click
-            scuShouldBe [(2, "Hello"), (2, "World"), (3, "!!!")]
-            loadLog `shouldReturn`
-                [ "Component will update"
-                , "current props: 1 Hello"
-                , "new props: 2 Hello"
-                ]
+        it "has the initial data" $ runWD $ do
+            scuSingleShouldBe ["1Quick Ben", "5Karsa", "9Anomander Rake"]
+            scuPairShouldBe ["1Quick Ben2Whiskeyjack", "5Karsa6Tehol", "9Anomander Rake10Iskaral Pust"]
+            scuTripleShouldBe ["1Quick Ben2Whiskeyjack3Fiddler", "5Karsa6Tehol7Tayschrenn", "9Anomander Rake10Iskaral Pust11Dujek"]
 
         it "does not update when no change to data" $ runWD $ do
             findElem (ById "no-change-scu") >>= click
-            scuShouldBe [(2, "Hello"), (2, "World"), (3, "!!!")]
+            scuSingleShouldBe ["1Quick Ben", "5Karsa", "9Anomander Rake"]
+            scuPairShouldBe ["1Quick Ben2Whiskeyjack", "5Karsa6Tehol", "9Anomander Rake10Iskaral Pust"]
+            scuTripleShouldBe ["1Quick Ben2Whiskeyjack3Fiddler", "5Karsa6Tehol7Tayschrenn", "9Anomander Rake10Iskaral Pust11Dujek"]
             loadLog `shouldReturn` []
 
-        it "increments all entries" $ runWD $ do
-            findElem (ById "change-all-scu") >>= click
-            scuShouldBe [(3, "Hello"), (3, "World"), (4, "!!!")]
-            loadLog `shouldReturn`
-                [ "Component will update"
-                , "current props: 2 Hello"
-                , "new props: 3 Hello"
-                , "Component will update"
-                , "current props: 2 World"
-                , "new props: 3 World"
-                , "Component will update"
-                , "current props: 3 !!!"
-                , "new props: 4 !!!"
-                ]
+        describe "Changing the first scu" $ do
+
+            it "increments just the head of the list without re-rendering all entries" $ runWD $ do
+                findElem (ById "increment-first-scuSCU1") >>= click
+                scuSingleShouldBe ["2Quick Ben", "5Karsa", "9Anomander Rake"]
+                scuPairShouldBe ["2Quick Ben2Whiskeyjack", "5Karsa6Tehol", "9Anomander Rake10Iskaral Pust"]
+                scuTripleShouldBe ["2Quick Ben2Whiskeyjack3Fiddler", "5Karsa6Tehol7Tayschrenn", "9Anomander Rake10Iskaral Pust11Dujek"]
+                loadLog `shouldReturn` concat
+                    [ scuSingleLogMsg "1 Quick Ben"
+                                      "2 Quick Ben"
+                    , scuPairLogMsg "1 Quick Ben 2 Whiskeyjack"
+                                    "2 Quick Ben 2 Whiskeyjack"
+                    , scuTripleLogMsg "1 Quick Ben 2 Whiskeyjack 3 Fiddler"
+                                      "2 Quick Ben 2 Whiskeyjack 3 Fiddler"
+                    ]
+
+
+            it "increments all entries" $ runWD $ do
+                findElem (ById "change-all-scu-SCU1") >>= click
+                scuSingleShouldBe ["3Quick Ben", "6Karsa", "10Anomander Rake"]
+                scuPairShouldBe ["3Quick Ben2Whiskeyjack", "6Karsa6Tehol", "10Anomander Rake10Iskaral Pust"]
+                scuTripleShouldBe ["3Quick Ben2Whiskeyjack3Fiddler", "6Karsa6Tehol7Tayschrenn", "10Anomander Rake10Iskaral Pust11Dujek"]
+                loadLog `shouldReturn` concat
+                    [ scuSingleLogMsg "2 Quick Ben"
+                                      "3 Quick Ben"
+                    , scuSingleLogMsg "5 Karsa"
+                                      "6 Karsa"
+                    , scuSingleLogMsg "9 Anomander Rake"
+                                      "10 Anomander Rake"
+                    , scuPairLogMsg   "2 Quick Ben 2 Whiskeyjack"
+                                      "3 Quick Ben 2 Whiskeyjack"
+                    , scuPairLogMsg   "5 Karsa 6 Tehol"
+                                      "6 Karsa 6 Tehol"
+                    , scuPairLogMsg   "9 Anomander Rake 10 Iskaral Pust"
+                                      "10 Anomander Rake 10 Iskaral Pust"
+                    , scuTripleLogMsg "2 Quick Ben 2 Whiskeyjack 3 Fiddler"
+                                      "3 Quick Ben 2 Whiskeyjack 3 Fiddler"
+                    , scuTripleLogMsg "5 Karsa 6 Tehol 7 Tayschrenn"
+                                      "6 Karsa 6 Tehol 7 Tayschrenn"
+                    , scuTripleLogMsg "9 Anomander Rake 10 Iskaral Pust 11 Dujek"
+                                      "10 Anomander Rake 10 Iskaral Pust 11 Dujek"
+                    ]
+
+        describe "Changing the second scu" $ do
+
+            it "increments just the head of the list without re-rendering all entries" $ runWD $ do
+                findElem (ById "increment-first-scuSCU2") >>= click
+                scuSingleShouldBe ["3Quick Ben", "6Karsa", "10Anomander Rake"] -- unchanged
+                scuPairShouldBe ["3Quick Ben3Whiskeyjack", "6Karsa6Tehol", "10Anomander Rake10Iskaral Pust"]
+                scuTripleShouldBe ["3Quick Ben3Whiskeyjack3Fiddler", "6Karsa6Tehol7Tayschrenn", "10Anomander Rake10Iskaral Pust11Dujek"]
+                loadLog `shouldReturn` concat
+                    [ scuPairLogMsg "3 Quick Ben 2 Whiskeyjack"
+                                    "3 Quick Ben 3 Whiskeyjack"
+                    , scuTripleLogMsg "3 Quick Ben 2 Whiskeyjack 3 Fiddler"
+                                      "3 Quick Ben 3 Whiskeyjack 3 Fiddler"
+                    ]
+
+
+            it "increments all entries" $ runWD $ do
+                findElem (ById "change-all-scu-SCU2") >>= click
+                scuSingleShouldBe ["3Quick Ben", "6Karsa", "10Anomander Rake"] -- unchanged
+                scuPairShouldBe ["3Quick Ben4Whiskeyjack", "6Karsa7Tehol", "10Anomander Rake11Iskaral Pust"]
+                scuTripleShouldBe ["3Quick Ben4Whiskeyjack3Fiddler", "6Karsa7Tehol7Tayschrenn", "10Anomander Rake11Iskaral Pust11Dujek"]
+                loadLog `shouldReturn` concat
+                    [ scuPairLogMsg   "3 Quick Ben 3 Whiskeyjack"
+                                      "3 Quick Ben 4 Whiskeyjack"
+                    , scuPairLogMsg   "6 Karsa 6 Tehol"
+                                      "6 Karsa 7 Tehol"
+                    , scuPairLogMsg   "10 Anomander Rake 10 Iskaral Pust"
+                                      "10 Anomander Rake 11 Iskaral Pust"
+                    , scuTripleLogMsg "3 Quick Ben 3 Whiskeyjack 3 Fiddler"
+                                      "3 Quick Ben 4 Whiskeyjack 3 Fiddler"
+                    , scuTripleLogMsg "6 Karsa 6 Tehol 7 Tayschrenn"
+                                      "6 Karsa 7 Tehol 7 Tayschrenn"
+                    , scuTripleLogMsg "10 Anomander Rake 10 Iskaral Pust 11 Dujek"
+                                      "10 Anomander Rake 11 Iskaral Pust 11 Dujek"
+                    ]
+
+        describe "Changing the third scu" $ do
+
+            it "increments just the head of the list without re-rendering all entries" $ runWD $ do
+                findElem (ById "increment-first-scuSCU3") >>= click
+                scuSingleShouldBe ["3Quick Ben", "6Karsa", "10Anomander Rake"] -- unchanged
+                scuPairShouldBe ["3Quick Ben4Whiskeyjack", "6Karsa7Tehol", "10Anomander Rake11Iskaral Pust"] -- unchanged
+                scuTripleShouldBe ["3Quick Ben4Whiskeyjack4Fiddler", "6Karsa7Tehol7Tayschrenn", "10Anomander Rake11Iskaral Pust11Dujek"]
+                loadLog `shouldReturn` concat
+                    [ scuTripleLogMsg "3 Quick Ben 4 Whiskeyjack 3 Fiddler"
+                                      "3 Quick Ben 4 Whiskeyjack 4 Fiddler"
+                    ]
+
+
+            it "increments all entries" $ runWD $ do
+                findElem (ById "change-all-scu-SCU3") >>= click
+                scuSingleShouldBe ["3Quick Ben", "6Karsa", "10Anomander Rake"] -- unchanged
+                scuPairShouldBe ["3Quick Ben4Whiskeyjack", "6Karsa7Tehol", "10Anomander Rake11Iskaral Pust"] -- unchanged
+                scuTripleShouldBe ["3Quick Ben4Whiskeyjack5Fiddler", "6Karsa7Tehol8Tayschrenn", "10Anomander Rake11Iskaral Pust12Dujek"]
+                loadLog `shouldReturn` concat
+                    [ scuTripleLogMsg "3 Quick Ben 4 Whiskeyjack 4 Fiddler"
+                                      "3 Quick Ben 4 Whiskeyjack 5 Fiddler"
+                    , scuTripleLogMsg "6 Karsa 7 Tehol 7 Tayschrenn"
+                                      "6 Karsa 7 Tehol 8 Tayschrenn"
+                    , scuTripleLogMsg "10 Anomander Rake 11 Iskaral Pust 11 Dujek"
+                                      "10 Anomander Rake 11 Iskaral Pust 12 Dujek"
+                    ]
+
+        describe "changing the fourth scu" $ do
+
+            it "increments just the head of the list" $ runWD $ do
+                findElem (ById "increment-first-scuSCU4") >>= click
+                -- unchanged
+                scuSingleShouldBe ["3Quick Ben", "6Karsa", "10Anomander Rake"] -- unchanged
+                scuPairShouldBe ["3Quick Ben4Whiskeyjack", "6Karsa7Tehol", "10Anomander Rake11Iskaral Pust"] -- unchanged
+                scuTripleShouldBe ["3Quick Ben4Whiskeyjack5Fiddler", "6Karsa7Tehol8Tayschrenn", "10Anomander Rake11Iskaral Pust12Dujek"]
+                loadLog `shouldReturn` []
+
+            it "increments all entries" $ runWD $ do
+                findElem (ById "change-all-scu-SCU4") >>= click
+                -- unchanged
+                scuSingleShouldBe ["3Quick Ben", "6Karsa", "10Anomander Rake"] -- unchanged
+                scuPairShouldBe ["3Quick Ben4Whiskeyjack", "6Karsa7Tehol", "10Anomander Rake11Iskaral Pust"] -- unchanged
+                scuTripleShouldBe ["3Quick Ben4Whiskeyjack5Fiddler", "6Karsa7Tehol8Tayschrenn", "10Anomander Rake11Iskaral Pust12Dujek"]
+                loadLog `shouldReturn` []
 
 
     {-

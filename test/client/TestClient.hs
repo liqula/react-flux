@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings, TypeFamilies, ScopedTypeVariables, DeriveAnyClass, FlexibleInstances, DeriveGeneric #-}
+{-# LANGUAGE OverloadedStrings, TypeFamilies, ScopedTypeVariables, DeriveAnyClass, FlexibleInstances, DeriveGeneric, BangPatterns #-}
 module TestClient (testClient) where
 
 import Control.DeepSeq (NFData)
@@ -245,51 +245,117 @@ bootstrapSpec = defineView "bootstrap" $ \() -> div_ ["id" $= "bootstrap"] $ do
 data ShouldComponentUpdateData = ShouldComponentUpdateData Int String
     deriving (Typeable, Show)
 
-data ShouldComponentUpdateAction = IncrementAllSCUData
-                                 | IncrementFirstSCUData
+-- | The data in the store is four 'ShouldComponentUpdateData's.  The reason is we test
+-- views with tuples of size up to 3, and so we want 4 entries in the store to be able to
+-- test editing the store but not changing anything that is passed to a view, to test that
+-- the shouldComponentUpdate function is working properly.
+data ShouldComponentUpdate = ShouldComponentUpdate {
+    scu1 :: !ShouldComponentUpdateData -- ^ passed to all three views
+  , scu2 :: !ShouldComponentUpdateData -- ^ only passed to the pair view
+  , scu3 :: !ShouldComponentUpdateData -- ^ only passed to the triple view
+  , scu4 :: !ShouldComponentUpdateData -- ^ not passed to any view
+} deriving (Typeable, Show)
+
+data SCUIndex = SCU1 | SCU2 | SCU3 | SCU4
+    deriving (Show, Eq, Typeable, Generic, NFData, Bounded, Enum)
+
+data ShouldComponentUpdateAction = IncrementAllSCUData SCUIndex
+                                 | IncrementFirstSCUData SCUIndex
                                  | NoChangeToSCUData
-    deriving (Show, Typeable, Generic, NFData)
+    deriving (Show, Typeable, Generic, NFData) 
 
-instance StoreData [ShouldComponentUpdateData] where
-    type StoreAction [ShouldComponentUpdateData] = ShouldComponentUpdateAction
-    transform NoChangeToSCUData s = return s
-    transform IncrementAllSCUData d = return [ShouldComponentUpdateData (i+1) s | ShouldComponentUpdateData i s <- d]
-    transform IncrementFirstSCUData (ShouldComponentUpdateData i s:xs) = return $ (ShouldComponentUpdateData (i+1) s) : xs
-    transform _ [] = error "Should never happen"
+toggleSCU :: ShouldComponentUpdateData -> ShouldComponentUpdateData
+toggleSCU (ShouldComponentUpdateData i s) = ShouldComponentUpdateData (i+1) s
 
-shouldComponentUpdateStore :: ReactStore [ShouldComponentUpdateData]
-shouldComponentUpdateStore = mkStore [ ShouldComponentUpdateData 1 "Hello"
-                                     , ShouldComponentUpdateData 2 "World"
-                                     , ShouldComponentUpdateData 3 "!!!"
-                                     ]
+instance StoreData [ShouldComponentUpdate] where
+    type StoreAction [ShouldComponentUpdate] = ShouldComponentUpdateAction
+    transform _ [] = error "Will never happen"
+    transform action ds@(first:rest) =
+        pure $ case action of 
+            NoChangeToSCUData -> ds
+            (IncrementAllSCUData SCU1) -> [ShouldComponentUpdate (toggleSCU s1) s2 s3 s4 | ShouldComponentUpdate s1 s2 s3 s4 <- ds]
+            (IncrementAllSCUData SCU2) -> [ShouldComponentUpdate s1 (toggleSCU s2) s3 s4  | ShouldComponentUpdate s1 s2 s3 s4 <- ds]
+            (IncrementAllSCUData SCU3) -> [ShouldComponentUpdate s1 s2 (toggleSCU s3) s4 | ShouldComponentUpdate s1 s2 s3 s4 <- ds]
+            (IncrementAllSCUData SCU4) -> [ShouldComponentUpdate s1 s2 s3 (toggleSCU s4) | ShouldComponentUpdate s1 s2 s3 s4 <- ds]
+            (IncrementFirstSCUData SCU1) -> first { scu1 = toggleSCU $ scu1 first } : rest
+            (IncrementFirstSCUData SCU2) -> first { scu2 = toggleSCU $ scu2 first } : rest
+            (IncrementFirstSCUData SCU3) -> first { scu3 = toggleSCU $ scu3 first } : rest
+            (IncrementFirstSCUData SCU4) -> first { scu4 = toggleSCU $ scu4 first } : rest
+
+shouldComponentUpdateStore :: ReactStore [ShouldComponentUpdate]
+shouldComponentUpdateStore = mkStore
+        [ ShouldComponentUpdate (mkS 1 "Quick Ben") (mkS 2 "Whiskeyjack") (mkS 3 "Fiddler") (mkS 4 "Kellanved")
+        , ShouldComponentUpdate (mkS 5 "Karsa") (mkS 6 "Tehol") (mkS 7 "Tayschrenn") (mkS 8 "Kruppe")
+        , ShouldComponentUpdate (mkS 9 "Anomander Rake") (mkS 10 "Iskaral Pust") (mkS 11 "Dujek") (mkS 12 "Tavore")
+        ]
+    where
+        mkS = ShouldComponentUpdateData
 
 -- | This will log wheenver componentWillUpdate lifecycle event occurs
 logComponentWillUpdate :: ReactView ShouldComponentUpdateData
-logComponentWillUpdate = defineLifecycleView "shouldComponentUpdate spec" () lifecycleConfig
+logComponentWillUpdate = defineLifecycleView "shouldComponentUpdate single spec" () lifecycleConfig
     { lRender = \() (ShouldComponentUpdateData i s) ->
                     span_ (elemShow i) <> span_ (elemText s)
     , lComponentWillUpdate = Just $ \curProps _ (ShouldComponentUpdateData newI newS) () -> do
           ShouldComponentUpdateData curI curS <- lGetProps curProps
-          outputIO [ "Component will update"
+          outputIO [ "Component will update single"
                    , "current props: " ++ show curI ++ " " ++ curS
                    , "new props: " ++ show newI ++ " " ++ newS
                    ]
     }
 
+logComp1_ :: ShouldComponentUpdateData -> Int -> ReactElementM handler ()
+logComp1_ !sc i = viewWithKey logComponentWillUpdate i sc mempty
+
+logComponentWillUpdatePair :: ReactView (ShouldComponentUpdateData, ShouldComponentUpdateData)
+logComponentWillUpdatePair = defineLifecycleView "shouldComponentUpdate pair spec" () lifecycleConfig
+    { lRender = \() (ShouldComponentUpdateData i1 s1, ShouldComponentUpdateData i2 s2) ->
+                    span_ (elemShow i1) <> span_ (elemText s1) <> span_ (elemShow i2) <> span_ (elemText s2)
+    , lComponentWillUpdate = Just $ \curProps _ (ShouldComponentUpdateData newI1 newS1, ShouldComponentUpdateData newI2 newS2) () -> do
+          (ShouldComponentUpdateData curI1 curS1, ShouldComponentUpdateData curI2 curS2) <- lGetProps curProps
+          outputIO [ "Component will update for pair input view"
+                   , "current props: " ++ show curI1 ++ " " ++ curS1 ++ " " ++ show curI2 ++ " " ++ curS2
+                   , "new props: " ++ show newI1 ++ " " ++ newS1 ++ " " ++ show newI2 ++ " " ++ newS2
+                   ]
+    }
+
+logComp2_ :: ShouldComponentUpdateData -> ShouldComponentUpdateData -> Int -> ReactElementM handler ()
+logComp2_ !sc1 !sc2 i = viewWithKey logComponentWillUpdatePair i (sc1, sc2) mempty
+
+logComponentWillUpdateTriple :: ReactView (ShouldComponentUpdateData, ShouldComponentUpdateData, ShouldComponentUpdateData)
+logComponentWillUpdateTriple = defineLifecycleView "shouldComponentUpdate triple spec" () lifecycleConfig
+    { lRender = \() (ShouldComponentUpdateData i1 s1, ShouldComponentUpdateData i2 s2, ShouldComponentUpdateData i3 s3) ->
+                    span_ (elemShow i1) <> span_ (elemText s1) <> span_ (elemShow i2) <> span_ (elemText s2) <> span_ (elemShow i3) <> span_ (elemText s3)
+    , lComponentWillUpdate = Just $ \curProps _
+        (ShouldComponentUpdateData newI1 newS1, ShouldComponentUpdateData newI2 newS2, ShouldComponentUpdateData newI3 newS3) () -> do
+            (ShouldComponentUpdateData curI1 curS1, ShouldComponentUpdateData curI2 curS2, ShouldComponentUpdateData curI3 curS3) <- lGetProps curProps
+            outputIO [ "Component will update for triple input view"
+                     , "current props: " ++ show curI1 ++ " " ++ curS1 ++ " " ++ show curI2 ++ " " ++ curS2 ++ " " ++ show curI3 ++ " " ++ curS3
+                     , "new props: " ++ show newI1 ++ " " ++ newS1 ++ " " ++ show newI2 ++ " " ++ newS2 ++ " " ++ show newI3 ++ " " ++ newS3
+                     ]
+    }
+
+logComp3_ :: ShouldComponentUpdateData -> ShouldComponentUpdateData -> ShouldComponentUpdateData -> Int -> ReactElementM handler ()
+logComp3_ !sc1 !sc2 !sc3 i = viewWithKey logComponentWillUpdateTriple i (sc1, sc2, sc3) mempty
+
 shouldComponentUpdateSpec :: ReactView ()
 shouldComponentUpdateSpec = defineControllerView "should component update" shouldComponentUpdateStore $ \ds () -> 
     div_ ["id" $= "should-component-update"] $ do
-        ul_ $ forM_ (zip ds [(0 :: Int)..]) $ \(su, i)  ->
-            li_ $ viewWithKey logComponentWillUpdate i su mempty
+        ul_ ["id" $= "should-component-update-single"] $ forM_ (zip ds [(0 :: Int)..]) $ \(d,i)  ->
+            li_ $ logComp1_ (scu1 d) i
+        ul_ ["id" $= "should-component-update-pair"]  $ forM_ (zip ds [(0 :: Int)..]) $ \(d,i)  ->
+            li_ $ logComp2_ (scu1 d) (scu2 d) i
+        ul_ ["id" $= "should-component-update-triple"]  $ forM_ (zip ds [(0 :: Int)..]) $ \(d, i)  ->
+            li_ $ logComp3_ (scu1 d) (scu2 d) (scu3 d) i
 
         button_ ["id" $= "no-change-scu", onClick $ \_ _ -> [SomeStoreAction shouldComponentUpdateStore NoChangeToSCUData]]
             "No change to data"
 
-        button_ ["id" $= "change-all-scu", onClick $ \_ _ -> [SomeStoreAction shouldComponentUpdateStore IncrementAllSCUData]]
-            "Increment all"
-
-        button_ ["id" $= "increment-first-scu", onClick $ \_ _ -> [SomeStoreAction shouldComponentUpdateStore IncrementFirstSCUData]]
-            "Increment first entry's integer"
+        forM_ [minBound..maxBound] $ \idx -> do
+            button_ ["id" @= ("change-all-scu-" ++ show idx), onClick $ \_ _ -> [SomeStoreAction shouldComponentUpdateStore $ IncrementAllSCUData idx]] $
+                elemText $ "Increment all " ++ show idx
+            button_ ["id" @=("increment-first-scu" ++ show idx), onClick $ \_ _ -> [SomeStoreAction shouldComponentUpdateStore $ IncrementFirstSCUData idx]] $
+                elemText $ "Increment first entry's integer" ++ show idx
 
 --------------------------------------------------------------------------------
 --- Main
