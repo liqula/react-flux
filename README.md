@@ -34,7 +34,7 @@ compiler: ghcjs-0.2.0_ghc-7.10.3
 packages:
     - .
 extra-deps:
-    - react-flux-1.0.3
+    - react-flux-(version)
 ~~~
 
 
