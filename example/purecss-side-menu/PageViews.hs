@@ -17,7 +17,7 @@ page1 = defineView "page 1" $ \() -> div_ $ do
             clbutton_ "pure-button" (changePageTo Page2) "Change to page 2"
             "Also, try reducing the browser width to see the responsive menu."
         p_ $ do
-            "You must load this file from a server.  If you did not, no page changes will work.  Use for example "
+            "You must load this file from a server.  If you did not, page changes might not work depending on your browser security settings (some features don't always work for file URLs).  Use for example "
             code_ "python3 -m http.server 8000"
             " or "
             code_ "python2 -m SimpleHTTPServer 8000"
