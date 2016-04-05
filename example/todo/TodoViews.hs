@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings, BangPatterns #-}
 -- | The views for the TODO app
 module TodoViews where
 
@@ -82,7 +82,7 @@ todoItem = defineView "todo item" $ \(todoIdx, todo) ->
 
 -- | A combinator for a todo item to use inside rendering functions
 todoItem_ :: (Int, Todo) -> ReactElementM eventHandler ()
-todoItem_ todo = viewWithKey todoItem (fst todo) todo mempty
+todoItem_ !todo = viewWithKey todoItem (fst todo) todo mempty
 
 -- | A view for the footer, taking the entire state as the properties.  This could alternatively
 -- been modeled as a controller-view, attaching directly to the store.
@@ -104,4 +104,4 @@ todoFooter = defineView "footer" $ \(TodoState todos) ->
 
 -- | A render combinator for the footer
 todoFooter_ :: TodoState -> ReactElementM eventHandler ()
-todoFooter_ s = view todoFooter s mempty
+todoFooter_ !s = view todoFooter s mempty

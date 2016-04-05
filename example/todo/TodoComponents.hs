@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings, BangPatterns #-}
 
 -- | The division between a view and a component is arbitrary, but for me components are pieces that
 -- are re-used many times for different purposes.  In the TODO app, there is one component for the
@@ -47,4 +47,4 @@ todoTextInput = defineStatefulView "todo text input" "" $ \curText args ->
 
 -- | A combinator suitible for use inside rendering functions.
 todoTextInput_ :: TextInputArgs -> ReactElementM eventHandler ()
-todoTextInput_ args = view todoTextInput args mempty
+todoTextInput_ !args = view todoTextInput args mempty

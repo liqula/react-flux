@@ -147,7 +147,7 @@ defineControllerView _ _ _ = ReactView (ReactViewRef ())
 -- >                }
 -- >
 -- >todoItem_ :: (Int, Todo) -> ReactElementM eventHandler ()
--- >todoItem_ todo = viewWithKey todoItem (fst todo) todo mempty
+-- >todoItem_ !todo = viewWithKey todoItem (fst todo) todo mempty
 defineView :: Typeable props
        => String -- ^ A name for this view, used only for debugging/console logging
        -> (props -> ReactElementM ViewEventHandler ()) -- ^ The rendering function
@@ -222,7 +222,7 @@ type StatefulViewEventHandler state = state -> ([SomeStoreAction], Maybe state)
 -- >        ]
 -- >
 -- >todoTextInput_ :: TextInputArgs -> ReactElementM eventHandler ()
--- >todoTextInput_ args = view todoTextInput args mempty
+-- >todoTextInput_ !args = view todoTextInput args mempty
 defineStatefulView :: (Typeable state, NFData state, Typeable props)
                => String -- ^ A name for this view, used only for debugging/console logging
                -> state -- ^ The initial state
