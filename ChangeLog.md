@@ -1,3 +1,15 @@
+# Unreleased
+
+* React-flux has used the shouldComponentUpdate lifetime method to prevent re-rendering in some cases,
+  but it was finicky and sometimes wouldn't work (not a correctness bug, just a missed performance
+  improvement).  I now better understand when it works and does not work, and edited the documentation
+  to explain this and what you can do in your own code (primarily add bang patterns to force thunks).
+  The new documentation is at the end of the main module page.
+
+* The shouldComponentUpdate lifetime method now knows about view props which are tuples of size two or
+  three, and will be able to skip re-rendering as long as each component of the tuple is unchanged
+  (and is not a thunk).
+
 # 1.0.7
 
 * Fix the build when building with GHC instead of GHCJS (an import was incorrectly protected by CPP)
