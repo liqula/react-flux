@@ -91,6 +91,10 @@ module React.Flux.Addons.Intl(
     intlProvider_
 
   -- * Formatting
+  , IntlProperty
+  , iprop
+  , dayProp
+  , timeProp
   
   -- ** Numbers
   , int_
@@ -136,7 +140,6 @@ module React.Flux.Addons.Intl(
 
 import Control.Monad (when, forM_)
 import Data.Aeson (Object, Value(Object), object, (.=))
-import Data.Aeson.Types (Pair)
 import Data.Char (ord, isPrint)
 import Data.List (sortBy)
 import Data.Maybe (catMaybes, fromMaybe)
@@ -154,12 +157,13 @@ import qualified Data.ByteString.Lazy as BL
 import qualified Data.HashMap.Strict as H
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
+import qualified JavaScript.Object as JSO
+import Debug.Trace (trace)
 
 #ifdef __GHCJS__
 
 import GHCJS.Types (JSVal, JSString)
 import GHCJS.Marshal (ToJSVal(..))
-import qualified Data.JSString as JSS
 
 foreign import javascript unsafe
     "$r = ReactIntl['IntlProvider']"
@@ -205,30 +209,18 @@ foreign import javascript unsafe
 
 -- | Convert a UTCTime to a javascript date object.
 timeToRef :: UTCTime -> JSVal
-timeToRef (UTCTime uday time) = js_mkDateTime (fromIntegral year) month day hour minute sec micro
+timeToRef u@(UTCTime uday time) = 
+        trace ("converting time " ++ show u ++ " with " ++ show (year, month, day, hour, minute, sec, micro)) $
+        js_mkDateTime (fromIntegral year) month day hour minute sec micro
     where
         (year, month, day) = toGregorian uday
         TimeOfDay hour minute pSec = timeToTimeOfDay time
         (sec, fracSec) = properFraction pSec
-        micro = round $ fracSec * 1000000
-
+        micro = round $ fracSec * (10^6) --pico is 10^12, microsecond is 10^6
 
 foreign import javascript unsafe
     "$1['intl'][$2]($3, $4)"
-    js_callContextAPI :: JSVal -> JSString -> JSVal -> JSVal -> IO JSVal
-
-
-data ContextApiCall a = ContextApiCall String a [Pair] JSVal
-
-instance ToJSVal a => ToJSVal (ContextApiCall a) where
-    toJSVal (ContextApiCall name a b ctx) = do
-        aRef <- toJSVal a
-        bRef <- toJSVal $ object b
-        js_callContextAPI ctx (JSS.pack name) aRef bRef
-
-formatCtx :: ToJSVal a => String -> String -> a -> [Pair] -> PropertyOrHandler handler
-formatCtx name func val options = PropertyFromContext name $ ContextApiCall func val options
-
+    js_callContextAPI :: JSVal -> JSString -> JSVal -> JSO.Object -> IO JSVal
 #else
 
 type JSVal = ()
@@ -261,11 +253,41 @@ timeToRef :: UTCTime -> JSVal
 timeToRef _ = ()
 
 class ToJSVal a
-
-formatCtx :: String -> String -> a -> [Pair] -> PropertyOrHandler handler
-formatCtx name _ _ _ = PropertyFromContext name $ \() -> ()
-
 #endif
+
+
+data IntlProperty = forall ref. ToJSVal ref => IntlProperty JSString ref
+
+iprop :: ToJSVal v => JSString -> v -> IntlProperty
+iprop = IntlProperty
+
+dayProp :: JSString -> Day -> IntlProperty
+dayProp n d = IntlProperty n (dayToRef d)
+
+timeProp :: JSString -> UTCTime -> IntlProperty
+timeProp n t = IntlProperty n (timeToRef t)
+
+#ifdef __GHCJS__
+data ContextApiCall a = ContextApiCall JSString a [IntlProperty] JSVal
+
+instance ToJSVal a => ToJSVal (ContextApiCall a) where
+    toJSVal (ContextApiCall name a props ctx) = do
+        aRef <- toJSVal a
+        propsObj <- JSO.create
+        forM_ props $ \(IntlProperty n p) -> do
+            pRef <- toJSVal p
+            JSO.setProp n pRef propsObj
+        js_callContextAPI ctx name aRef propsObj
+
+formatCtx :: ToJSVal a => String -> JSString -> a -> [IntlProperty] -> PropertyOrHandler handler
+formatCtx name func val options = PropertyFromContext name $ ContextApiCall func val options
+
+#else
+formatCtx :: String -> String -> a -> [IntlProperty] -> PropertyOrHandler handler
+formatCtx name _ _ _ = PropertyFromContext name $ \() -> ()
+#endif
+
+
 
 -- | Use the IntlProvider to set the @locale@, @formats@, and @messages@ property.
 intlProvider_ :: String -- ^ the locale to use
@@ -314,8 +336,8 @@ formattedNumber_ props = foreignClass js_formatNumber props mempty
 formattedNumberProp :: ToJSVal num
                     => String -- ^ the property to set
                     -> num -- ^ the number to format
-                    -> [Pair] -- ^ any options accepted by
-                              -- <https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/NumberFormat Intl.NumberFormat>
+                    -> [IntlProperty] -- ^ any options accepted by
+                                      -- <https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/NumberFormat Intl.NumberFormat>
                     -> PropertyOrHandler handler
 formattedNumberProp name x options = formatCtx name "formatNumber" x options
 
@@ -421,8 +443,8 @@ formattedDate_ t props = foreignClass js_formatDate (valProp:props) mempty
 -- a property on another element, such as the placeholder for an input element.
 formattedDateProp :: String -- ^ the property to set
                   -> Either Day UTCTime -- ^ the day or time to format
-                  -> [Pair] -- ^ Any options supported by
-                            -- <https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/DateTimeFormat Intl.DateTimeFormat>.
+                  -> [IntlProperty] -- ^ Any options supported by
+                                    -- <https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/DateTimeFormat Intl.DateTimeFormat>.
                   -> PropertyOrHandler eventHandler
 formattedDateProp name (Left day) options =
     formatCtx name "formatDate" (dayToRef day) options
@@ -449,8 +471,8 @@ formattedRelative_ t props = foreignClass js_formatRelative (property "value" (t
 -- a property on another element, such as the placeholder for an input element.
 formattedRelativeProp :: String -- ^ te property to set
                       -> UTCTime -- ^ the time to format
-                      -> [Pair] -- ^ an object with properties \"units\" and \"style\".  \"units\" accepts values second, minute, hour
-                                -- day, month, or year and \"style\" accepts only the value \"numeric\".
+                      -> [IntlProperty] -- ^ an object with properties \"units\" and \"style\".  \"units\" accepts values second, minute, hour
+                                        -- day, month, or year and \"style\" accepts only the value \"numeric\".
                       -> PropertyOrHandler eventHandler
 formattedRelativeProp name time options = formatCtx name "formatRelative" (timeToRef time) options
 
@@ -468,7 +490,7 @@ plural_ props = foreignClass js_formatPlural props mempty
 -- | Format a number properly based on pluralization, and then use it as the value for a property.
 -- 'plural_' should be preferred, but 'pluralProp' can be used in places where a component is not
 -- possible such as the placeholder of an input element.
-pluralProp :: ToJSVal val => String -> val -> [Pair] -> PropertyOrHandler eventHandler
+pluralProp :: ToJSVal val => String -> val -> [IntlProperty] -> PropertyOrHandler eventHandler
 pluralProp name val options = formatCtx name "formatPlural" val options
 
 --------------------------------------------------------------------------------
@@ -521,7 +543,7 @@ message :: MessageId
         -> ExpQ --Q (TExp ([PropertyOrHandler eventHandler] -> ReactElementM eventHandler ()))
 message ident m = formattedMessage [|js_formatMsg|] ident $ Message "" m
 
--- | Similar to 'message', but produce an expression of type @['Pair'] -> PropertyOrHandler handler@,
+-- | Similar to 'message', but produce an expression of type @['IntlProperty'] -> PropertyOrHandler handler@,
 -- which should be passed the values for the message.  This allows you to format messages in places
 -- where using a component like 'message' is not possible, such as the placeholder of input
 -- elements. 'message' should be prefered since it can avoid re-rendering the formatting if the
@@ -594,7 +616,7 @@ formattedMessage cls ident m = do
         liftedMsg = [| Message $(liftText $ msgDescription m) $(liftText $ msgDefaultMsg m) |]
     [|\vals -> foreignClass $cls (messageToProps $(liftText ident) $liftedMsg vals) mempty |]
 
-formatMessageProp :: String -> String -> MessageId -> Message -> ExpQ -- Q (TExp ([Pair] -> PropertyOrHandler eventHandler))
+formatMessageProp :: String -> String -> MessageId -> Message -> ExpQ -- Q (TExp ([IntlProperty] -> PropertyOrHandler eventHandler))
 formatMessageProp func name ident m = do
     recordMessage ident m
     let liftedMsg = [| object ["id" .= T.pack $(liftString $ T.unpack ident), "defaultMessage" .= T.pack $(liftString $ T.unpack $ msgDefaultMsg m) ] |]

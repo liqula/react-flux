@@ -10,6 +10,13 @@
   three, and will be able to skip re-rendering as long as each component of the tuple is unchanged
   (and is not a thunk).
 
+* `React.Flux.Addons.Intl` now uses a new type `IntlProperty` defined in the module instead of using
+  the pair type from aeson.  This allows passing arbitrary JSVals to i18n functions instead of just
+  aeson values.  This causes API breakage in `formattedNumberProp`, `formattedDateProp`, `pluralProp`,
+  `messageProp`, and `messageProp'`.
+
+TODO: remove trace message from Addons.Intl
+
 # 1.0.7
 
 * Fix the build when building with GHC instead of GHCJS (an import was incorrectly protected by CPP)

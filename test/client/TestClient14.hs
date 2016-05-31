@@ -5,7 +5,6 @@ import Data.Time
 import React.Flux
 import React.Flux.Addons.Intl
 import GHCJS.Types (JSVal)
-import Data.Aeson ((.=))
 
 import TestClient
 
@@ -55,11 +54,11 @@ intlSpecBody = defineView "intl body" $ \() -> div_ ["id" $= "intl-spec"] $
                 ]
         li_ ["id" $= "f-time-prop"] $
             input_ [formattedDateProp "placeholder" (Right step)
-                    [ "year" .= ("2-digit" :: String)
-                    , "month" .= ("short" :: String)
-                    , "day" .= ("2-digit" :: String)
-                    , "hour" .= ("numeric" :: String)
-                    , "timeZone" .= ("Pacific/Tahiti" :: String)
+                    [ "year" `iprop` ("2-digit" :: String)
+                    , "month" `iprop` ("short" :: String)
+                    , "day" `iprop` ("2-digit" :: String)
+                    , "hour" `iprop` ("numeric" :: String)
+                    , "timeZone" `iprop` ("Pacific/Tahiti" :: String)
                     ]
                    ]
 
@@ -68,7 +67,7 @@ intlSpecBody = defineView "intl body" $ \() -> div_ ["id" $= "intl-spec"] $
 
         li_ ["id" $= "f-plural"] $ plural_ [ "value" @= (100 :: Int), "one" $= "plural one", "other" $= "plural other"]
         li_ ["id" $= "f-plural-prop"] $
-            input_ [pluralProp "placeholder" (100 :: Int) ["one" .= ("plural one" :: String), "other" .= ("plural other" :: String)]]
+            input_ [pluralProp "placeholder" (100 :: Int) ["one" `iprop` ("plural one" :: String), "other" `iprop` ("plural other" :: String)]]
 
         li_ ["id" $= "f-msg"] $
             $(message "photos" "{name} took {numPhotos, plural, =0 {no photos} =1 {one photo} other {# photos}} {takenAgo}.")
@@ -79,8 +78,8 @@ intlSpecBody = defineView "intl body" $ \() -> div_ ["id" $= "intl-spec"] $
 
         li_ ["id" $= "f-msg-prop"] $
             input_ [ $(messageProp "placeholder" "photosprop" "{name} took {numPhotos, plural, =0 {no photos} =1 {one photo} other {# photos}}")
-                [ "name" .= ("Neil Armstrong" :: String)
-                , "numPhotos" .= (100 :: Int)
+                [ "name" `iprop` ("Neil Armstrong" :: String)
+                , "numPhotos" `iprop` (100 :: Int)
                 ]
             ]
 
@@ -95,8 +94,8 @@ intlSpecBody = defineView "intl body" $ \() -> div_ ["id" $= "intl-spec"] $
 
         li_ ["id" $= "f-msg-prop-with-descr"] $
             input_ [$(messageProp' "placeholder" "photosprop2" "How many photos?" "{name} took {numPhotos, number} photos")
-                        [ "name" .= ("Neil Armstrong" :: String)
-                        , "numPhotos" .= (0 :: Int)
+                        [ "name" `iprop` ("Neil Armstrong" :: String)
+                        , "numPhotos" `iprop` (0 :: Int)
                         ]
                    ]
 
