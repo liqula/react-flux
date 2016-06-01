@@ -8,6 +8,7 @@ module React.Flux.Combinators (
   , faIcon_
   , foreign_
   , labeledInput_
+  , style
   -- * Ajax
   , initAjax
   , jsonAjax
@@ -137,6 +138,11 @@ labeledInput_ ident lbl props = label_ ["htmlFor" @= ident] lbl <> input_ (("id"
 -- >faIcon_ "refresh fa-spin" -- produces <i class="fa fa-refresh fa-spin">
 faIcon_ :: String -> ReactElementM handler ()
 faIcon_ cl = i_ ["className" @= ("fa fa-" ++ cl)] mempty
+
+-- | A simple combinator to easily write <https://facebook.github.io/react/tips/inline-styles.html inline styles>
+-- on elements.
+style :: [(Text,Text)] -> PropertyOrHandler handler
+style = nestedProperty "style" . map (uncurry (@=))
 
 --------------------------------------------------------------------------------
 --- Ajax

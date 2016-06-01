@@ -22,6 +22,8 @@
   a view to a JavaScript function, which is useful to embed a Haskell application into a larger JavaScript
   React application.
 
+* Add a `style` combinator to easily write inline styles on elements.
+
 TODO: remove trace message from Addons.Intl
 
 # 1.0.7
