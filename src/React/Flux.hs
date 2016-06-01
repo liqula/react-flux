@@ -38,6 +38,12 @@
 -- >ReactDOM = require("react-dom");
 -- >require("../../js-build/install-root/bin/todo-node.jsexe/all.js");
 --
+-- __React Native__: This module also works with <https://facebook.github.io/react-native/ React-Native>
+-- to create a standalone native applications.  When combined with <http://electron.atom.io/ electron>,
+-- you can even create standalone desktop applications.  The workflow is to use 'reactRender' the
+-- same as web deployment but use the resulting JavaScript file in react-native and/or electron.
+-- <https://github.com/jyrimatti/hseverywhere Jyrimatti has an example using react-native>.
+--
 -- __Testing__:  I use the following approach to test my react-flux application.  First, I use unit
 -- testing to test the dispatcher and store 'transform' functions.  Since the dispatcher and the
 -- store transform are just data manipulation, existing Haskell tools like hspec, QuickCheck,
