@@ -257,6 +257,10 @@ testClientSpec filename = session " for the test client" $ using Chrome $ do
             click i1
             loadLog `shouldReturn` ["Switched to 1"]
 
+    it "renders a callback returning a view" $ runWD $ do
+        e <- findElem $ ById "callback-view-props-test"
+        getText e `shouldReturn` "Props are 5 and Hello World"
+
     describe "should component update" $ do
 
         it "has the initial data" $ runWD $ do

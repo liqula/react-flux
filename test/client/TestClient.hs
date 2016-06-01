@@ -358,6 +358,32 @@ shouldComponentUpdateSpec = defineControllerView "should component update" shoul
                 elemText $ "Increment first entry's integer" ++ show idx
 
 --------------------------------------------------------------------------------
+--- Callback returning view
+--------------------------------------------------------------------------------
+
+data CallbackViewProps = CallbackViewProps Int String
+    deriving (Show, Typeable)
+
+callbackArgsToProps :: Int -> String -> ReturnProps CallbackViewProps
+callbackArgsToProps i s = ReturnProps $ CallbackViewProps i s
+
+callbackViewTest :: ReactView CallbackViewProps
+callbackViewTest = defineView "callback view props test" $ \(CallbackViewProps i s) ->
+    p_ [ "id" $= "callback-view-props-test"] $
+        elemText $ "Props are " ++ show i ++ " and " ++ s
+
+foreign import javascript unsafe
+    "React['createClass']({'displayName':'callback wrapper', 'render': function() { \
+    \ return React['createElement']('div', {}, [React.createElement('p', {}, 'From Callback'), this.props.foo(5, 'Hello World')]); \
+    \ }})"
+    js_createWrapperClass :: JSVal
+
+callbackViewWrapper :: ReactView ()
+callbackViewWrapper = defineView "callback view wrapper" $ \() ->
+    div_ ["id" $= "callback-view-wrapper"] $
+        foreignClass js_createWrapperClass [ callbackViewWithProps "foo" callbackViewTest callbackArgsToProps ] mempty
+
+--------------------------------------------------------------------------------
 --- Main
 --------------------------------------------------------------------------------
 
@@ -384,4 +410,6 @@ testClient = defineLifecycleView "app" "Hello" lifecycleConfig
         view bootstrapSpec () mempty
 
         view shouldComponentUpdateSpec () mempty
+
+        view callbackViewWrapper () mempty
     }

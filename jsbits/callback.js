@@ -15,7 +15,7 @@ function hsreact$wrap_callback_returning_element(f) {
             args[i] = arguments[i];
         }
         var ret = {};
-        f(args);
+        f(ret, args);
         return ret.elem;
     };
 }
