@@ -20,6 +20,8 @@ import qualified JavaScript.Array as JSA
 
 #else
 type JSVal = ()
+type JSArray = ()
+class FromJSVal a
 #endif
 
 
@@ -421,8 +423,16 @@ foreignClass _ _ x = x
 #endif
 
 -- | A class which is used to implement <https://wiki.haskell.org/Varargs variable argument functions>.
+-- These variable argument functions are used to convert from a JavaScript
+-- <https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Functions/arguments arguments array>
+-- to a Haskell value of type @props@.
+--
 -- Any function where each argument implements 'FromJSVal' and the result is 'ReturnProps' is an
--- instance of this class.
+-- instance of this class.  Entries from the JavaScript arguments array are matched one-by-one to
+-- the arguments before 'ReturnProps' value.  If the Haskell function has more parameters than the
+-- javascript @arguments@ object, a javascript null is used for the conversion.  Since the 'Maybe'
+-- instance of 'FromJSVal' converts null references to 'Nothing', you can exploit this to handle
+-- arguments not given to the JavaScript function.
 class ArgumentsToProps props a | a -> props where
     returnViewFromArguments :: JSArray -> Int -> a -> IO props
 
@@ -444,44 +454,55 @@ instance (FromJSVal a, ArgumentsToProps props b) => ArgumentsToProps props (a ->
 
 -- | Export a Haskell view to a JavaScript function.  This allows you to embed a Haskell react-flux
 -- application into a larger existing JavaScript React application.  If you want to use JavaScript
--- classes in your Haskell application, you should instead use 'foreign_' and 'foreignClass'.
+-- classes in your Haskell application, you should instead use 'React.Flux.Combinators.foreign_' and 'foreignClass'.
 --
 -- The way this works is as follows:
 --
 -- 1. You create a Haskell function which translates the javascript arguments of into a Haskell
--- value of type `ReturnProps props`.  This is a variable-argument function using the 'ArgumentsToProps' class.
+-- value of type @ReturnProps props@.  This is a variable-argument function using the 'ArgumentsToProps' class.
 -- For example,
+--
+--       @
 --       data MyProps = MyProps { theInt :: Int, theString :: String }
 --       myArgsToProps :: Int -> String -> ReturnProps MyProps
 --       myArgsToProps i s = ReturnProps $ MyProps i s
+--       @
 --
 -- 2. You create a view which receives these properties and renders itself.  This view will not
 -- receive any children.
+--
+--       @
 --       myView :: ReactView MyProps
---       myView = defineView "my view" $ \myProps -> ...
+--       myView = defineView "my view" $ \\myProps -> ...
+--       @
 --
 -- 3. You can then use 'exportViewToJavaScript' to create a JavaScript function.  When this
 -- JavaScript function is executed, the JavaScript arguments are converted to the props,
 -- the view is rendered using the props, and the resulting React element is returned from the
 -- JavaScript function.
 --
+--       @
 --       foreign import javascript unsafe
---           "window['myHaskellView'] = $1;"
+--           "window[\'myHaskellView\'] = $1;"
 --           js_setMyView :: JSVal -> IO ()
 --
 --       exportMyView :: IO ()
 --       exportMyView = exportViewToJavaScript myView myArgsToProps >>= js_setMyView
+--       @
 --
--- `exportMyView` should be called from your main function.  After executing `exportMyView` runs,
--- the `window.myHaskellView` property will be a javascript function.  Calling that javascript
--- function with two arguments will return a React element which can be used in a JavaScript React
--- class rendering function.
+--       @exportMyView@ should be called from your main function.  After executing @exportMyView@,
+--       the @window.myHaskellView@ property will be a javascript function.
+--
+-- 4. Call the javascript function with two arguments to return a React element which can be used
+-- in a JavaScript React class rendering function.
 -- 
+--       @
 --       var myJsView = React.createClass({
 --           render: function() {
---               return <div>{window.myHaskellView(5, "Hello World")}</div>;
+--               return \<div\>{window.myHaskellView(5, "Hello World")}\</div\>;
 --           }
 --       };
+--       @
 exportViewToJavaScript :: (Typeable props, ArgumentsToProps props func) => ReactView props -> func -> IO JSVal
 exportViewToJavaScript v func = do
     (_callbackToRelease, wrappedCb) <- exportViewToJs (reactView v) (\arr -> returnViewFromArguments arr 0 func)

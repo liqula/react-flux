@@ -15,6 +15,13 @@
   aeson values.  This causes API breakage in `formattedNumberProp`, `formattedDateProp`, `pluralProp`,
   `messageProp`, and `messageProp'`.
 
+* Ability to export react views to JavaScript.  `callbackViewWithProps` inside `React.Flux.PropertiesAndEvents`
+  allows you to create a javascript function which returns a renderable and then pass that JavaScript
+  function to a foreign JavaScript class.  This is useful for example for fixed-data-table and ReactNative's
+  ListView among others.  Secondly, `exportViewToJavaScript` from `React.Flux` allows just exporting
+  a view to a JavaScript function, which is useful to embed a Haskell application into a larger JavaScript
+  React application.
+
 TODO: remove trace message from Addons.Intl
 
 # 1.0.7

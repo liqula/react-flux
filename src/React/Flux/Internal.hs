@@ -40,7 +40,6 @@ import           GHCJS.Foreign (jsNull)
 import           React.Flux.Export
 #else
 import Data.Text (Text)
-type Callback a = ()
 type JSVal = ()
 class ToJSVal a
 instance ToJSVal Value

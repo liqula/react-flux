@@ -195,29 +195,42 @@ callbackView name v = CallbackPropertyReturningView name (const $ return ()) (re
 -- as follows:
 --
 -- 1. You create a Haskell function which translates the javascript arguments of the callback into a Haskell
--- value of type `ReturnProps props`.  This is a variable-argument function using the 'ArgumentsToProps' class.
+-- value of type @ReturnProps props@.  This is a variable-argument function using the 'ArgumentsToProps' class.
 -- For example,
+--
+--       @
 --       data MyProps = MyProps { theInt :: Int, theString :: String }
 --       myArgsToProps :: Int -> String -> ReturnProps MyProps
 --       myArgsToProps i s = ReturnProps $ MyProps i s
+--       @
 --
 -- 2. You create a view which receives these properties and renders itself.  This view will not
 -- receive any children.
+--
+--       @
 --       myView :: ReactView MyProps
---       mYView = defineView "my view" $ \myProps -> ...
+--       mYView = defineView "my view" $ \\myProps -> ...
+--       @
 --
 -- 3. You can then use 'callbackViewWithProps' to create a property which is a JavaScript function.
 -- When this JavaScript function is executed, the JavaScript arguments are converted to the props,
 -- the view is rendered using the props, and the resulting React element is returned from the
 -- JavaScript function.
 --
+--       @
 --       someOtherView :: ReactView ()
---       someOtherView = defineView "some other view" $ \() ->
+--       someOtherView = defineView "some other view" $ \\() ->
 --           div_ $
 --              foreignClass_ "theForeginThing"
---                  [ callbackViewWithProps "theprop" myView myArgsToProps
+--                  [ callbackViewWithProps "the_propname_to_pass_to_theForeignThing" myView myArgsToProps
 --                  , "hello" $= "world"
 --                  ] mempty
+--      @
+--
+--      @theForeignThing@ React class will receive a property called
+--      @the_propname_to_pass_to_theForeignThing@.  The value of this property is a JavaScript
+--      function which when executed will convert the arguments to @props@, render the view, and
+--      return the resulting React element.
 callbackViewWithProps :: (Typeable props, ArgumentsToProps props func) => String -> ReactView props -> func -> PropertyOrHandler handler
 callbackViewWithProps name v func = CallbackPropertyReturningView name (\arr -> returnViewFromArguments arr 0 func) (reactView v)
 

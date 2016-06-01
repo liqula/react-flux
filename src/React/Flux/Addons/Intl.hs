@@ -157,13 +157,13 @@ import qualified Data.ByteString.Lazy as BL
 import qualified Data.HashMap.Strict as H
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
-import qualified JavaScript.Object as JSO
 import Debug.Trace (trace)
 
 #ifdef __GHCJS__
 
 import GHCJS.Types (JSVal, JSString)
 import GHCJS.Marshal (ToJSVal(..))
+import qualified JavaScript.Object as JSO
 
 foreign import javascript unsafe
     "$r = ReactIntl['IntlProvider']"
@@ -253,6 +253,8 @@ timeToRef :: UTCTime -> JSVal
 timeToRef _ = ()
 
 class ToJSVal a
+instance ToJSVal JSVal
+type JSString = ()
 #endif
 
 
