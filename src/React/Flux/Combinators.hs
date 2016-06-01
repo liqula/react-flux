@@ -103,7 +103,7 @@ cldiv_ cl = div_ ["className" @= cl]
 
 -- | A 'button_' with the given class names and `onClick` handler.
 --
--- >clbutton_ ["pure-button button-success"] (dispatch LaunchTheMissiles) $ do
+-- >clbutton_ "pure-button button-success" (dispatch LaunchTheMissiles) $ do
 -- >    faIcon_ "rocket"
 -- >    "Launch the missiles!"
 clbutton_ :: String  -- ^ class names separated by spaces
