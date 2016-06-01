@@ -216,7 +216,7 @@ timeToRef u@(UTCTime uday time) =
         (year, month, day) = toGregorian uday
         TimeOfDay hour minute pSec = timeToTimeOfDay time
         (sec, fracSec) = properFraction pSec
-        micro = round $ fracSec * (10^6) --pico is 10^12, microsecond is 10^6
+        micro = round $ fracSec * 1000000 --pico is 10^12, microsecond is 10^6
 
 foreign import javascript unsafe
     "$1['intl'][$2]($3, $4)"

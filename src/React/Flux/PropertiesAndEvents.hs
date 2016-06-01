@@ -11,6 +11,10 @@ module React.Flux.PropertiesAndEvents (
   , nestedProperty
   , CallbackFunction
   , callback
+  , callbackView
+  , ArgumentsToProps
+  , ReturnProps(..)
+  , callbackViewWithProps
 
   -- ** Combinators
   , (@=)
@@ -89,13 +93,14 @@ import           Control.Monad (forM)
 import           Control.Concurrent.MVar (newMVar)
 import           Control.DeepSeq
 import           System.IO.Unsafe (unsafePerformIO)
+import           Data.Typeable (Typeable)
 import qualified Data.Text as T
 import qualified Data.Aeson as A
 import qualified Data.HashMap.Strict as M
 
 import           React.Flux.Internal
 import           React.Flux.Store
-import           React.Flux.Views (ViewEventHandler, StatefulViewEventHandler)
+import           React.Flux.Views (ReactView(..), ViewEventHandler, StatefulViewEventHandler)
 
 #ifdef __GHCJS__
 import           Data.Maybe (fromMaybe)
@@ -178,6 +183,65 @@ instance {-# OVERLAPPABLE #-} (FromJSVal a, CallbackFunction handler b) => Callb
 -- For another example, see the haddock comments in "React.Flux.Addons.Bootstrap".
 callback :: CallbackFunction handler func => String -> func -> PropertyOrHandler handler
 callback name func = CallbackPropertyWithArgumentArray name $ \arr -> applyFromArguments arr 0 func
+
+-- | Create a zero-argument callback property.  When this callback function is executed, it
+-- will render the given view and return the resulting React element.  If you need to 
+-- create a callback which expects arguments, use 'callbackViewWithProps' instead.
+callbackView :: String -> ReactView () -> PropertyOrHandler handler
+callbackView name v = CallbackPropertyReturningView name (const $ return ()) (reactView v)
+
+-- | A class which is used to implement <https://wiki.haskell.org/Varargs variable argument functions>.
+-- Any function where each argument implements 'FromJSVal' and the result is 'ReturnProps' is an
+-- instance of this class.
+class ArgumentsToProps props a | a -> props where
+    returnViewFromArguments :: JSArray -> Int -> a -> IO props
+
+-- | A type needed to make GHC happy when solving for instances of 'ArgumentsToProps'.
+newtype ReturnProps props = ReturnProps props
+
+instance ArgumentsToProps props (ReturnProps props) where
+    returnViewFromArguments _ _ (ReturnProps v) = return v
+
+instance (FromJSVal a, ArgumentsToProps props b) => ArgumentsToProps props (a -> b) where
+#if __GHCJS__
+    returnViewFromArguments args k f = do
+        ma <- fromJSVal $ if k >= JSA.length args then nullRef else JSA.index k args
+        a <- maybe (error "Unable to decode callback argument") return ma
+        returnViewFromArguments args (k+1) $ f a
+#else
+    returnViewFromArguments _ _ _ = error "Not supported in GHC"
+#endif
+
+-- | Create a callback that when called will render a view.  This is useful for interacting with third-party React classes that expect
+-- a property which is a function which when called returns a React element.   The way this works is
+-- as follows:
+--
+-- 1. You create a Haskell function which translates the javascript arguments of the callback into a Haskell
+-- value of type `ReturnProps props`.  This is a variable-argument function using the 'ArgumentsToProps' class.
+-- For example,
+--       data MyProps = MyProps { theInt :: Int, theString :: String }
+--       myArgsToProps :: Int -> String -> ReturnProps MyProps
+--       myArgsToProps i s = ReturnProps $ MyProps i s
+--
+-- 2. You create a view which receives these properties and renders itself.  This view will not
+-- receive any children.
+--       myView :: ReactView MyProps
+--       mYView = defineView "my view" $ \myProps -> ...
+--
+-- 3. You can then use 'callbackViewWithProps' to create a property which is a JavaScript function.
+-- When this JavaScript function is executed, the JavaScript arguments are converted to the props,
+-- the view is rendered using the props, and the resulting React element is returned from the
+-- JavaScript function.
+--
+--       someOtherView :: ReactView ()
+--       someOtherView = defineView "some other view" $ \() ->
+--           div_ $
+--              foreignClass_ "theForeginThing"
+--                  [ callbackViewWithProps "theprop" myView myArgsToProps
+--                  , "hello" $= "world"
+--                  ] mempty
+callbackViewWithProps :: (Typeable props, ArgumentsToProps props func) => String -> ReactView props -> func -> PropertyOrHandler handler
+callbackViewWithProps name v func = CallbackPropertyReturningView name (\arr -> returnViewFromArguments arr 0 func) (reactView v)
 
 ----------------------------------------------------------------------------------------------------
 --- Combinators

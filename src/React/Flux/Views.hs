@@ -13,7 +13,7 @@ import System.IO.Unsafe (unsafePerformIO)
 import React.Flux.Export
 import JavaScript.Array
 import GHCJS.Foreign.Callback
-import GHCJS.Types (JSVal, JSString, IsJSVal, jsval)
+import GHCJS.Types (JSVal, JSString, IsJSVal)
 import GHCJS.Marshal (ToJSVal(..))
 
 #else
@@ -360,7 +360,7 @@ mkRenderCallback parseState runHandler render = syncCallback2 ContinueAsync $ \t
 
     (element, evtCallbacks) <- mkReactElement (runHandler this) getContext getPropsChildren node
 
-    evtCallbacksRef <- toJSVal $ map jsval evtCallbacks
+    evtCallbacksRef <- toJSVal evtCallbacks
     js_RenderCbSetResults arg evtCallbacksRef element
 
 parseExport :: Typeable a => Export a -> IO a

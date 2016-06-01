@@ -95,6 +95,11 @@ data PropertyOrHandler handler =
       { csPropertyName :: String
       , csFunc :: HandlerArg -> handler
       }
+ | forall props. Typeable props => CallbackPropertyReturningView
+      { cretPropertyName :: String
+      , cretArgToProp :: JSArray -> IO props
+      , cretView :: ReactViewRef props
+      }
 
 instance Functor PropertyOrHandler where
     fmap _ (Property name val) = Property name val
@@ -104,6 +109,7 @@ instance Functor PropertyOrHandler where
         ElementProperty name $ ReactElementM $ mapWriter (\((),e) -> ((), fmap f e)) mkElem
     fmap f (CallbackPropertyWithArgumentArray name h) = CallbackPropertyWithArgumentArray name (fmap f . h)
     fmap f (CallbackPropertyWithSingleArgument name h) = CallbackPropertyWithSingleArgument name (f . h)
+    fmap _ (CallbackPropertyReturningView name f v) = CallbackPropertyReturningView name f v
 
 -- | Create a property from anything that can be converted to a JSVal
 property :: ToJSVal val => String -> val -> PropertyOrHandler handler
@@ -233,6 +239,8 @@ childrenPassedToView = elementToM () ChildrenPassedToView
 -- mkReactElement has two versions
 ----------------------------------------------------------------------------------------------------
 
+type CallbackToRelease = JSVal
+
 -- | Execute a ReactElementM to create a javascript React element and a list of callbacks attached
 -- to nodes within the element.  These callbacks will need to be released with 'releaseCallback'
 -- once the class is re-rendered.
@@ -241,7 +249,7 @@ mkReactElement :: forall eventHandler.
                -> IO JSVal -- ^ this.context
                -> IO [ReactElementRef] -- ^ this.props.children
                -> ReactElementM eventHandler ()
-               -> IO (ReactElementRef, [Callback (JSVal -> IO ())])
+               -> IO (ReactElementRef, [CallbackToRelease])
 
 #ifdef __GHCJS__
 
@@ -284,15 +292,26 @@ mkReactElement runHandler getContext getPropsChildren = runWriterT . mToElem
             cb <- lift $ syncCallback1 ContinueAsync $ \argref -> do
                 handler <- func $ unsafeCoerce argref
                 runHandler handler
-            tell [cb]
+            tell [jsval cb]
             wrappedCb <- lift $ js_CreateArgumentsCallback cb
             lift $ JSO.setProp (toJSString name) wrappedCb obj
         addPropOrHandlerToObj obj (CallbackPropertyWithSingleArgument name func) = do
             -- this will be released by the render function of the class (jsbits/class.js)
             cb <- lift $ syncCallback1 ContinueAsync $ \ref ->
                 runHandler $ func $ HandlerArg ref
-            tell [cb]
+            tell [jsval cb]
             lift $ JSO.setProp (toJSString name) (jsval cb) obj
+
+        addPropOrHandlerToObj obj (CallbackPropertyReturningView name toProps v) = do
+            -- this will be released by the render function of the class
+            cb <- lift $ syncCallback2 ContinueAsync $ \ret argref -> do
+                props <- toProps $ unsafeCoerce argref
+                propsE <- export props -- this will be released inside the lifetime events for the class
+                e <- js_ReactCreateClass v propsE jsNull
+                js_setElemReturnFromCallback ret e
+            tell [jsval cb]
+            wrappedCb <- lift $ js_wrapCallbackReturningElement cb
+            lift $ JSO.setProp (toJSString name) wrappedCb obj
 
         -- call React.createElement
         createElement :: ReactElement eventHandler -> MkReactElementM [ReactElementRef]
@@ -328,7 +347,7 @@ mkReactElement runHandler getContext getPropsChildren = runWriterT . mToElem
                 Nothing -> js_ReactCreateClass rc propsE children
             return [e]
 
-type MkReactElementM a = WriterT [Callback (JSVal -> IO ())] IO a
+type MkReactElementM a = WriterT [CallbackToRelease] IO a
 
 foreign import javascript unsafe
     "React['createElement']($1)"
@@ -353,6 +372,14 @@ foreign import javascript unsafe
 foreign import javascript unsafe
     "hsreact$mk_arguments_callback($1)"
     js_CreateArgumentsCallback :: Callback (JSVal -> IO ()) -> IO JSVal
+
+foreign import javascript unsafe
+    "hsreact$wrap_callback_returning_element($1)"
+    js_wrapCallbackReturningElement :: Callback (JSVal -> JSVal -> IO ()) -> IO JSVal
+
+foreign import javascript unsafe
+    "$1.elem = $2"
+    js_setElemReturnFromCallback :: JSVal -> ReactElementRef -> IO ()
 
 js_ReactCreateContent :: String -> ReactElementRef
 js_ReactCreateContent = ReactElementRef . unsafeCoerce . toJSString
