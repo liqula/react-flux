@@ -18,6 +18,7 @@ module React.Flux.Internal(
   , elementToM
   , mkReactElement
   , toJSString
+  , exportViewToJs
 ) where
 
 import           Data.String (IsString(..))
@@ -303,14 +304,8 @@ mkReactElement runHandler getContext getPropsChildren = runWriterT . mToElem
             lift $ JSO.setProp (toJSString name) (jsval cb) obj
 
         addPropOrHandlerToObj obj (CallbackPropertyReturningView name toProps v) = do
-            -- this will be released by the render function of the class
-            cb <- lift $ syncCallback2 ContinueAsync $ \ret argref -> do
-                props <- toProps $ unsafeCoerce argref
-                propsE <- export props -- this will be released inside the lifetime events for the class
-                e <- js_ReactCreateClass v propsE jsNull
-                js_setElemReturnFromCallback ret e
-            tell [jsval cb]
-            wrappedCb <- lift $ js_wrapCallbackReturningElement cb
+            (cb, wrappedCb) <- lift $ exportViewToJs v toProps
+            tell [cb]
             lift $ JSO.setProp (toJSString name) wrappedCb obj
 
         -- call React.createElement
@@ -387,10 +382,24 @@ js_ReactCreateContent = ReactElementRef . unsafeCoerce . toJSString
 toJSString :: String -> JSString
 toJSString = JSS.pack
 
+
+exportViewToJs :: Typeable props => ReactViewRef props -> (JSArray -> IO props) -> IO (CallbackToRelease, JSVal)
+exportViewToJs view toProps = do
+    cb <- syncCallback2 ContinueAsync $ \ret argref -> do
+        props <- toProps $ unsafeCoerce argref
+        propsE <- export props -- this will be released inside the lifetime events for the class
+        e <- js_ReactCreateClass view propsE jsNull
+        js_setElemReturnFromCallback ret e
+    wrappedCb <- js_wrapCallbackReturningElement cb
+    return (jsval cb, wrappedCb)
+
 #else
 mkReactElement _ _ _ _ = return (ReactElementRef (), [])
 
 toJSString :: String -> String
 toJSString = id
+
+exportViewToJs :: Typeable props => ReactViewRef props -> (JSArray -> IO props) -> IO (CallbackToRelease, JSVal)
+exportViewToJs _ _ = return ((), ())
 
 #endif

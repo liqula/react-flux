@@ -100,7 +100,7 @@ import qualified Data.HashMap.Strict as M
 
 import           React.Flux.Internal
 import           React.Flux.Store
-import           React.Flux.Views (ReactView(..), ViewEventHandler, StatefulViewEventHandler)
+import           React.Flux.Views (ReactView(..), ViewEventHandler, StatefulViewEventHandler, ArgumentsToProps(..), ReturnProps(..))
 
 #ifdef __GHCJS__
 import           Data.Maybe (fromMaybe)
@@ -189,28 +189,6 @@ callback name func = CallbackPropertyWithArgumentArray name $ \arr -> applyFromA
 -- create a callback which expects arguments, use 'callbackViewWithProps' instead.
 callbackView :: String -> ReactView () -> PropertyOrHandler handler
 callbackView name v = CallbackPropertyReturningView name (const $ return ()) (reactView v)
-
--- | A class which is used to implement <https://wiki.haskell.org/Varargs variable argument functions>.
--- Any function where each argument implements 'FromJSVal' and the result is 'ReturnProps' is an
--- instance of this class.
-class ArgumentsToProps props a | a -> props where
-    returnViewFromArguments :: JSArray -> Int -> a -> IO props
-
--- | A type needed to make GHC happy when solving for instances of 'ArgumentsToProps'.
-newtype ReturnProps props = ReturnProps props
-
-instance ArgumentsToProps props (ReturnProps props) where
-    returnViewFromArguments _ _ (ReturnProps v) = return v
-
-instance (FromJSVal a, ArgumentsToProps props b) => ArgumentsToProps props (a -> b) where
-#if __GHCJS__
-    returnViewFromArguments args k f = do
-        ma <- fromJSVal $ if k >= JSA.length args then nullRef else JSA.index k args
-        a <- maybe (error "Unable to decode callback argument") return ma
-        returnViewFromArguments args (k+1) $ f a
-#else
-    returnViewFromArguments _ _ _ = error "Not supported in GHC"
-#endif
 
 -- | Create a callback that when called will render a view.  This is useful for interacting with third-party React classes that expect
 -- a property which is a function which when called returns a React element.   The way this works is

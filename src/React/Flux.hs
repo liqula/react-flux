@@ -90,6 +90,9 @@ module React.Flux (
   -- * Main
   , reactRender
   , reactRenderToString
+  , exportViewToJavaScript
+  , ArgumentsToProps
+  , ReturnProps(..)
 
   -- * Performance
   -- $performance
