@@ -58,6 +58,7 @@
 -- The file <https://bitbucket.org/wuzzeb/react-flux/src/tip/test/spec/TodoSpec.hs test\/spec\/TodoSpec.hs>
 -- in the source code contains a hspec-webdriver test for the TODO example application.
 
+{-# OPTIONS_GHC -fno-warn-duplicate-exports #-} -- ArgumentsToProps is exported twice, once by React.Flux.PropertiesAndEvents and once here
 module React.Flux (
   -- * Dispatcher
   -- $dispatcher
