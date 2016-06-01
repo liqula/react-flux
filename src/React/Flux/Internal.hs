@@ -260,16 +260,16 @@ mkReactElement runHandler getContext getPropsChildren = runWriterT . mToElem
         mToElem eM = do
             let e = execWriter $ runReactElementM eM
                 e' = case e of
-                        Content txt -> ForeignElement (Left "span") [] (Content txt)
+                        Content txt -> ForeignElement (Right $ ReactViewRef js_textWrapper) [] (Content txt)
                         _ -> e
             refs <- createElement e'
             case refs of
-                [] -> lift $ js_ReactCreateElementNoChildren "div"
+                [] -> lift $ js_ReactCreateElementNoChildren js_divLikeElement
                 [x] -> return x
                 xs -> lift $ do
                     emptyObj <- JSO.create
                     let arr = jsval $ JSA.fromList $ map reactElementRef xs
-                    js_ReactCreateElementName "div" emptyObj arr
+                    js_ReactCreateForeignElement (ReactViewRef js_divLikeElement) emptyObj arr
 
         -- add the property or handler to the javascript object
         addPropOrHandlerToObj :: JSO.Object -> PropertyOrHandler eventHandler -> MkReactElementM ()
@@ -345,7 +345,7 @@ type MkReactElementM a = WriterT [CallbackToRelease] IO a
 
 foreign import javascript unsafe
     "React['createElement']($1)"
-    js_ReactCreateElementNoChildren :: JSString -> IO ReactElementRef
+    js_ReactCreateElementNoChildren :: JSVal -> IO ReactElementRef
 
 foreign import javascript unsafe
     "React['createElement']($1, $2, $3)"
@@ -374,6 +374,14 @@ foreign import javascript unsafe
 foreign import javascript unsafe
     "$1.elem = $2"
     js_setElemReturnFromCallback :: JSVal -> ReactElementRef -> IO ()
+
+foreign import javascript unsafe
+    "$r = hsreact$divLikeElement"
+    js_divLikeElement :: JSVal
+
+foreign import javascript unsafe
+    "$r = hsreact$textWrapper"
+    js_textWrapper :: JSVal
 
 js_ReactCreateContent :: String -> ReactElementRef
 js_ReactCreateContent = ReactElementRef . unsafeCoerce . toJSString

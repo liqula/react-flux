@@ -53,6 +53,7 @@ library
               jsbits/export.js
               jsbits/callback.js
               jsbits/ajax.js
+              jsbits/native.js
 
   exposed-modules: React.Flux
                    React.Flux.DOM
