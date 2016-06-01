@@ -129,6 +129,8 @@ module React.Flux.Addons.Intl(
   , messageProp'
   , htmlMsg
   , htmlMsg'
+  , formattedMessage_
+  , formattedHtmlMessage_
 
   -- * Translation
   , Message(..)
@@ -543,7 +545,7 @@ message :: MessageId
         -> T.Text -- ^ The default message written in <http://formatjs.io/guides/message-syntax/ ICU message syntax>.
                   -- This message is used if no translation is found, and is also the message given to the translators.
         -> ExpQ --Q (TExp ([PropertyOrHandler eventHandler] -> ReactElementM eventHandler ()))
-message ident m = formattedMessage [|js_formatMsg|] ident $ Message "" m
+message ident m = formatMessage [|js_formatMsg|] ident $ Message "" m
 
 -- | Similar to 'message', but produce an expression of type @['IntlProperty'] -> PropertyOrHandler handler@,
 -- which should be passed the values for the message.  This allows you to format messages in places
@@ -569,7 +571,7 @@ message' :: MessageId
          -> T.Text -- ^ A description indented to provide context for translators
          -> T.Text -- ^ The default message written in ICU message syntax
          -> ExpQ --Q (TExp ([PropertyOrHandler eventHandler] -> ReactElementM eventHandler ()))
-message' ident descr m = formattedMessage [|js_formatMsg|] ident $ Message descr m
+message' ident descr m = formatMessage [|js_formatMsg|] ident $ Message descr m
 
 -- | A varient of 'messageProp' which allows you to specify some context for translators.
 messageProp' :: String -- ^ property to set
@@ -587,14 +589,14 @@ messageProp' name ident descr m =
 htmlMsg :: MessageId
         -> T.Text -- ^ default message written in ICU message syntax
         -> ExpQ
-htmlMsg ident m = formattedMessage [|js_formatHtmlMsg|] ident $ Message "" m
+htmlMsg ident m = formatMessage [|js_formatHtmlMsg|] ident $ Message "" m
 
 -- | A variant of 'htmlMsg' that allows you to specify some context for translators.
 htmlMsg' :: MessageId
          -> T.Text -- ^ A description intended to provide context for translators
          -> T.Text -- ^ The default message written in ICU message syntax
          -> ExpQ
-htmlMsg' ident descr m = formattedMessage [|js_formatHtmlMsg|] ident $ Message descr m
+htmlMsg' ident descr m = formatMessage [|js_formatHtmlMsg|] ident $ Message descr m
 
 recordMessage :: MessageId -> Message -> Q ()
 recordMessage ident m = do
@@ -611,8 +613,8 @@ recordMessage ident m = do
     qPutQ $ H.insert ident (m, curLoc) mmap
 
 -- | Utility function for messages
-formattedMessage :: ExpQ -> MessageId -> Message -> ExpQ --Q (TExp ([PropertyOrHandler eventHandler] -> ReactElementM eventHandler ()))
-formattedMessage cls ident m = do
+formatMessage :: ExpQ -> MessageId -> Message -> ExpQ --Q (TExp ([PropertyOrHandler eventHandler] -> ReactElementM eventHandler ()))
+formatMessage cls ident m = do
     recordMessage ident m
     let liftText x = [| T.pack $(liftString $ T.unpack x)|]
         liftedMsg = [| Message $(liftText $ msgDescription m) $(liftText $ msgDefaultMsg m) |]
@@ -623,6 +625,18 @@ formatMessageProp func name ident m = do
     recordMessage ident m
     let liftedMsg = [| object ["id" .= T.pack $(liftString $ T.unpack ident), "defaultMessage" .= T.pack $(liftString $ T.unpack $ msgDefaultMsg m) ] |]
     [|\options -> formatCtx $(liftString name) $(liftString func) $liftedMsg options |]
+
+-- | A raw @FormattedMessage@ element.  The given properties are passed directly with no handling.
+-- Any message is not recorded in Template Haskell and will not appear in any resulting message file
+-- created by 'writeIntlMessages'.
+formattedMessage_ :: [PropertyOrHandler eventHandler] -> ReactElementM eventHandler ()
+formattedMessage_ props = foreignClass js_formatMsg props mempty
+
+-- | A raw @FormattedHTMLMessage@ element.  The given properties are passed directly with no handling.
+-- Any message is not recorded in Template Haskell and will not appear in any resulting message file
+-- created by 'writeIntlMessages'.
+formattedHtmlMessage_ :: [PropertyOrHandler eventHandler] -> ReactElementM eventHandler ()
+formattedHtmlMessage_ props = foreignClass js_formatHtmlMsg props mempty
 
 -- | Perform an arbitrary IO action on the accumulated messages at compile time, which usually
 -- should be to write the messages to a file.  Despite producing a value of type @Q [Dec]@,
