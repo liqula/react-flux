@@ -321,8 +321,9 @@ parseEvent arg@(HandlerArg o) = Event
     , evtHandlerArg = arg
     }
 
--- | Use this to create an event handler for an event not covered by the rest of this module.  At
--- the moment, this is just the media events (onPlay, onPause, etc.) on image and video tags.
+-- | Use this to create an event handler for an event not covered by the rest of this module.
+-- (Events are not covered if they don't have extra arguments that require special handling.)
+-- For example, onPlay and onPause are events you could use with @on@.
 on :: JSString -> (Event -> handler) -> PropertyOrHandler handler
 on name f = CallbackPropertyWithSingleArgument
     { csPropertyName = name
