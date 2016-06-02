@@ -82,7 +82,7 @@ todoItem = defineView "todo item" $ \(todoIdx, todo) ->
 
 -- | A combinator for a todo item to use inside rendering functions
 todoItem_ :: (Int, Todo) -> ReactElementM eventHandler ()
-todoItem_ !todo = viewWithKey todoItem (fst todo) todo mempty
+todoItem_ !todo = viewWithIKey todoItem (fst todo) todo mempty
 
 -- | A view for the footer, taking the entire state as the properties.  This could alternatively
 -- been modeled as a controller-view, attaching directly to the store.

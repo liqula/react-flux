@@ -205,7 +205,7 @@ foreign import javascript unsafe
 
 -- | Convert a UTCTime to a javascript date object.
 timeToJSVal :: UTCTime -> JSVal
-timeToJSVal u@(UTCTime uday time) = js_mkDateTime (fromIntegral year) month day hour minute sec milli
+timeToJSVal (UTCTime uday time) = js_mkDateTime (fromIntegral year) month day hour minute sec milli
     where
         (year, month, day) = toGregorian uday
         TimeOfDay hour minute pSec = timeToTimeOfDay time
