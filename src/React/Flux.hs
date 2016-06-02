@@ -31,7 +31,7 @@
 --
 -- __Node Deployment__: 'reactRenderToString' is used to render the application to a string when
 -- running in node (not the browser).  To execute with node, you need to get @global.React@ (and
--- @global.ReactDOM@ for 0.14) before executing all.js.  The TODO example application does this by
+-- @global.ReactDOM@ for >=0.14) before executing all.js.  The TODO example application does this by
 -- creating a file @run-in-node.js@ with the contents
 --
 -- >React = require("react");

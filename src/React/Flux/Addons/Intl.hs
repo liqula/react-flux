@@ -1,13 +1,7 @@
--- | Bindings to the <http://formatjs.io/react/ ReactIntl> library, which allows easy formatting of
--- numbers, dates, times, relative times, pluralization, and translated messages. This library can
--- be used for formatting and pluralization even if you intend to present your application in a single
--- language and locale.
---
--- These bindings are for the 2.0 version of ReactIntl which is currently as a release candidate
--- (I am currently using v2.0.0-rc-1).  For temporary documentation,
--- see <https://github.com/yahoo/react-intl/issues/162 issue62>.  Because this is a binding to a
--- release candidate, the API below might change!  I consider it unlikely, but if a change is required
--- I will violate the PVP and not increment the major number, just the minor number.
+-- | Bindings to the <https://github.com/yahoo/react-intl ReactIntl> library version 2, which allows easy
+-- formatting of numbers, dates, times, relative times, pluralization, and translated messages. This
+-- library can be used for formatting and pluralization even if you intend to present your application
+-- in a single language and locale.
 --
 -- To use these bindings, you need to provide the @ReactIntl@ variable.  In the browser you can just
 -- load the @react-intl.min.js@ script onto the page so that @window.ReactIntl@ exists.  If you are
