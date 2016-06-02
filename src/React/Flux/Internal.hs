@@ -2,9 +2,9 @@
 --
 -- Normally you should not need to use anything in this module.  This module is only needed if you have
 -- complicated interaction with third-party javascript rendering code.
+
 module React.Flux.Internal(
     ReactViewRef(..)
-  , ReactViewKey(..)
   , ReactElementRef(..)
   , HandlerArg(..)
   , PropertyOrHandler(..)
@@ -119,24 +119,6 @@ instance Functor PropertyOrHandler where
 property :: ToJSVal val => JSString -> val -> PropertyOrHandler handler
 property = Property
 
--- | Keys in React can either be strings or integers
-class ReactViewKey key where
-    toKeyRef :: key -> IO JSVal
-
-#if __GHCJS__
-instance ReactViewKey String where
-    toKeyRef = return . unsafeCoerce . toJSString
-
-instance ReactViewKey Int where
-    toKeyRef i = toJSVal i
-#else
-instance ReactViewKey String where
-    toKeyRef = const $ return ()
-
-instance ReactViewKey Int where
-    toKeyRef = const $ return ()
-#endif
-
 -- | A React element is a node or list of nodes in a virtual tree.  Elements are the output of the
 -- rendering functions of classes.  React takes the output of the rendering function (which is a
 -- tree of elements) and then reconciles it with the actual DOM elements in the browser.  The
@@ -148,10 +130,9 @@ data ReactElement eventHandler
         , fProps :: [PropertyOrHandler eventHandler]
         , fChild :: ReactElement eventHandler
         }
-    | forall props key. (Typeable props, ReactViewKey key) => ViewElement
+    | forall props. Typeable props => ViewElement
         { ceClass :: ReactViewRef props
-        , ceKey :: Maybe key
-        -- TODO: ref?  ref support would need to tie into the Class too.
+        , ceKey :: Maybe JSVal
         , ceProps :: props
         , ceChild :: ReactElement eventHandler
         }
@@ -348,9 +329,7 @@ mkReactElement runHandler getContext getPropsChildren = runWriterT . mToElem
                              xs -> jsval $ JSA.fromList xs
 
             e <- lift $ case mkey of
-                Just key -> do
-                    keyRef <- toKeyRef key
-                    js_ReactCreateKeyedElement rc keyRef propsE children
+                Just keyRef -> js_ReactCreateKeyedElement rc keyRef propsE children
                 Nothing -> js_ReactCreateClass rc propsE children
             return [e]
 

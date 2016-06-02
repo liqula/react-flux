@@ -24,6 +24,9 @@
 
 * Add a `style` combinator to easily write inline styles on elements.
 
+* Add `viewWithIKey` and `viewWithSKey` for views with integer and string keys.  The old `viewWithKey`
+  was akward to use when OverloadedStrings was enabled.
+
 TODO: remove trace message from Addons.Intl
 
 # 1.0.7

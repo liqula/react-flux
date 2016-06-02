@@ -88,8 +88,8 @@ module React.Flux (
   , elemJSString
   , elemShow
   , view
-  , viewWithKey
-  , ReactViewKey
+  , viewWithSKey
+  , viewWithIKey
   , childrenPassedToView
   , foreignClass
   , module React.Flux.DOM
@@ -105,6 +105,10 @@ module React.Flux (
 
   -- * Performance
   -- $performance
+
+  -- * Depracated
+  , viewWithKey
+  , ReactViewKey
 ) where
 
 import Data.Typeable (Typeable)

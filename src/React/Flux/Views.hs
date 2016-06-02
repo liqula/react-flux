@@ -16,11 +16,13 @@ import JavaScript.Array
 import GHCJS.Foreign.Callback
 import GHCJS.Types (JSVal, JSString, IsJSVal, nullRef)
 import GHCJS.Marshal (ToJSVal(..), FromJSVal(..))
+import GHCJS.Marshal.Pure (PToJSVal(..))
 import qualified JavaScript.Array as JSA
 
 #else
 type JSVal = ()
 type JSArray = ()
+type JSString = String
 class FromJSVal a
 #endif
 
@@ -103,7 +105,7 @@ defineControllerView _ _ _ = ReactView (ReactViewRef ())
 -- One option to implement views is to just use a Haskell function taking the @props@ as input and
 -- producing a 'ReactElementM'.  For small views, such a Haskell function is ideal.
 -- Using a 'ReactView' provides more than just a Haskell function when used with a key property with
--- 'viewWithKey'.  The key property allows React to more easily reconcile the virtual DOM with the
+-- 'viewWithSKey' and 'viewWithIKey'.  The key property allows React to more easily reconcile the virtual DOM with the
 -- browser DOM.
 --
 -- The following is two example views: @mainSection_@ is just a Haskell function and @todoItem@
@@ -151,7 +153,7 @@ defineControllerView _ _ _ = ReactView (ReactViewRef ())
 -- >                }
 -- >
 -- >todoItem_ :: (Int, Todo) -> ReactElementM eventHandler ()
--- >todoItem_ !todo = viewWithKey todoItem (fst todo) todo mempty
+-- >todoItem_ !todo = viewWithIKey todoItem (fst todo) todo mempty
 defineView :: Typeable props
        => JSString -- ^ A name for this view, used only for debugging/console logging
        -> (props -> ReactElementM ViewEventHandler ()) -- ^ The rendering function
@@ -389,12 +391,27 @@ view :: Typeable props
      -> ReactElementM eventHandler a
 view rc props (ReactElementM child) =
     let (a, childEl) = runWriter child
-     in elementToM a $ ViewElement (reactView rc) (Nothing :: Maybe Int) props childEl
+     in elementToM a $ ViewElement (reactView rc) Nothing props childEl
 
--- | Create an element from a view, and also pass in a key property for the instance.  Key
--- properties speed up the <https://facebook.github.io/react/docs/reconciliation.html reconciliation>
--- of the virtual DOM with the DOM.  The key does not need to be globally unqiue, it only needs to
--- be unique within the siblings of an element.
+-- | Keys in React can either be strings or integers
+class ReactViewKey key where
+    toKeyRef :: key -> JSVal
+#if __GHCJS__
+instance ReactViewKey String where
+    toKeyRef = pToJSVal
+
+instance ReactViewKey Int where
+    toKeyRef = pToJSVal
+#else
+instance ReactViewKey String where
+    toKeyRef = const ()
+
+instance ReactViewKey Int where
+    toKeyRef = const ()
+#endif
+
+-- | A deprecated way to create a view with a key which has problems when OverloadedStrings is
+-- active.  Use 'viewWithSKey' or 'viewWithIKey' instead.
 viewWithKey :: (Typeable props, ReactViewKey key)
             => ReactView props -- ^ the view
             -> key -- ^ A value unique within the siblings of this element
@@ -403,7 +420,32 @@ viewWithKey :: (Typeable props, ReactViewKey key)
             -> ReactElementM eventHandler a
 viewWithKey rc key props (ReactElementM child) =
     let (a, childEl) = runWriter child
-     in elementToM a $ ViewElement (reactView rc) (Just key) props childEl
+     in elementToM a $ ViewElement (reactView rc) (Just $ toKeyRef key) props childEl
+
+-- | Create an element from a view, and also pass in a string key property for the instance.  Key
+-- properties speed up the <https://facebook.github.io/react/docs/reconciliation.html reconciliation>
+-- of the virtual DOM with the DOM.  The key does not need to be globally unqiue, it only needs to
+-- be unique within the siblings of an element.
+viewWithSKey :: Typeable props
+             => ReactView props -- ^ the view
+             -> JSString -- ^ The key, a value unique within the siblings of this element
+             -> props -- ^ The properties to pass to the view instance
+             -> ReactElementM eventHandler a -- ^ The children of the view
+             -> ReactElementM eventHandler a
+viewWithSKey rc key props (ReactElementM child) =
+    let (a, childEl) = runWriter child
+     in elementToM a $ ViewElement (reactView rc) (Just $ pToJSVal key) props childEl
+
+-- | Similar to 'viewWithSKey', but with an integer key instead of a string key.
+viewWithIKey :: Typeable props
+             => ReactView props -- ^ the view
+             -> Int -- ^ The key, a value unique within the siblings of this element
+             -> props -- ^ The properties to pass to the view instance
+             -> ReactElementM eventHandler a -- ^ The children of the view
+             -> ReactElementM eventHandler a
+viewWithIKey rc key props (ReactElementM child) =
+    let (a, childEl) = runWriter child
+     in elementToM a $ ViewElement (reactView rc) (Just $ pToJSVal key) props childEl
 
 -- | Create a 'ReactElement' for a class defined in javascript.  See
 -- 'React.Flux.Combinators.foreign_' for a convenient wrapper and some examples.
