@@ -14,8 +14,9 @@ import           React.Flux
 
 import qualified Data.Text     as T
 import           Data.Typeable (Typeable)
+import qualified Data.JSString.Text as JSS
 
-type AppName = String
+type AppName = T.Text
 type AppView = ReactElementM ViewEventHandler
 type AppRouter = [T.Text] -> IO ()
 
@@ -30,6 +31,6 @@ data App props = forall state. StoreData state =>
 
 initApp :: Typeable props => App props -> IO (ReactView props)
 initApp App{..} = do
-  let view' = defineControllerView appName appState (\st props -> appView st props)
+  let view' = defineControllerView (JSS.textToJSString appName) appState (\st props -> appView st props)
   alterStore appState appInitAction
   return view'

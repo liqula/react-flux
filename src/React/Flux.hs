@@ -83,7 +83,9 @@ module React.Flux (
   -- * Elements
   , ReactElement
   , ReactElementM(..)
+  , elemString
   , elemText
+  , elemJSString
   , elemShow
   , view
   , viewWithKey

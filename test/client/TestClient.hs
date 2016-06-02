@@ -10,12 +10,13 @@ import Debug.Trace
 import GHC.Generics (Generic)
 import React.Flux
 import React.Flux.Lifecycle
-import React.Flux.Internal (toJSString)
 import React.Flux.Addons.React
 import React.Flux.Addons.Bootstrap
+import qualified Data.Text as T
 
 import GHCJS.Types (JSVal, JSString)
 import GHCJS.Marshal (fromJSVal)
+import qualified Data.JSString.Text as JSS
 
 foreign import javascript unsafe
     "(function(x) { \
@@ -28,30 +29,33 @@ data OutputStoreData = OutputStoreData
     deriving (Show, Typeable)
 
 instance StoreData OutputStoreData where
-    type StoreAction OutputStoreData = [String]
+    type StoreAction OutputStoreData = [T.Text]
     -- log both to the console and to js_output
     transform ss OutputStoreData = do
-        mapM_ (js_output . toJSString) ss
-        trace (unlines ss) $ return OutputStoreData
+        mapM_ (js_output . JSS.textToJSString) ss
+        trace (unlines $ map T.unpack ss) $ return OutputStoreData
 
 outputStore :: ReactStore OutputStoreData
 outputStore = mkStore OutputStoreData
 
-output :: [String] -> [SomeStoreAction]
+output :: [T.Text] -> [SomeStoreAction]
 output s = [SomeStoreAction outputStore s]
 
-outputIO :: [String] -> IO ()
+outputIO :: [T.Text] -> IO ()
 outputIO ss = void $ transform ss OutputStoreData
 
 --------------------------------------------------------------------------------
 --- Events
 --------------------------------------------------------------------------------
 
-logM :: (String -> Bool) -> String
-logM f = "alt modifier: " ++ show (f "Alt")
+logM :: (T.Text -> Bool) -> T.Text
+logM f = "alt modifier: " <> (T.pack $ show (f "Alt"))
 
-logT :: EventTarget -> String
+logT :: EventTarget -> T.Text
 logT t = eventTargetProp t "id"
+
+tshow :: Show a => a -> T.Text
+tshow = T.pack . show
 
 rawShowView :: ReactView Int
 rawShowView = defineView "raw show view" elemShow
@@ -64,15 +68,15 @@ eventsView = defineView "events" $ \() ->
                     , "placeholder" $= "onKeyDown"
                     , onKeyDown $ \e k -> output
                         [ "keydown"
-                        , show e
-                        , show k
+                        , tshow e
+                        , tshow k
                         , logM (keyGetModifierState k)
                         , logT (evtTarget e)
                         , logT (evtCurrentTarget e)
                         ]
                     , onFocus $ \e _ -> output
                         [ "focus"
-                        , show e
+                        , tshow e
                         --, logT $ focusRelatedTarget f
                         ]
                     ]
@@ -80,8 +84,8 @@ eventsView = defineView "events" $ \() ->
         p_ $ label_ [ "id" $= "clickinput"
                     , onClick $ \e m -> output
                         [ "click"
-                        , show e
-                        , show m 
+                        , tshow e
+                        , tshow m 
                         , logM (mouseGetModifierState m)
                         --, logT (mouseRelatedTarget m)
                         ]
@@ -91,8 +95,8 @@ eventsView = defineView "events" $ \() ->
         p_ $ label_ [ "id" $= "touchinput"
                     , onTouchStart $ \e t -> output
                         [ "touchstart"
-                        , show e
-                        , show t
+                        , tshow e
+                        , tshow t
                         , logM (touchGetModifierState t)
                         , logT (touchTarget $ head $ touchTargets t)
                         , "endtouch"
@@ -127,11 +131,11 @@ eventsView_ = view eventsView () mempty
 --- Lifecycle
 --------------------------------------------------------------------------------
 
-logPandS :: LPropsAndState String Int -> IO ()
+logPandS :: LPropsAndState T.Text Int -> IO ()
 logPandS ps = do
     p <- lGetProps ps
     st <- lGetState ps
-    outputIO ["Current props and state: " ++ p ++ ", " ++ show st]
+    outputIO ["Current props and state: " <> p <> ", " <> (T.pack $ show st)]
 
 foreign import javascript unsafe
     "$1.id"
@@ -142,18 +146,18 @@ logDOM dom = do
     this <- lThis dom >>= js_domGetId >>= fromJSVal
     x <- lRef dom "refSt" >>= js_domGetId >>= fromJSVal
     y <- lRef dom "refProps" >>= js_domGetId >>= fromJSVal
-    outputIO [ "this id = " ++ fromMaybe "Nothing" this
-             , "refStr id = " ++ fromMaybe "Nothing" x
-             , "refProps id = " ++ fromMaybe "Nothing" y
+    outputIO [ "this id = " <> fromMaybe "Nothing" this
+             , "refStr id = " <> fromMaybe "Nothing" x
+             , "refProps id = " <> fromMaybe "Nothing" y
              ]
 
 
-testLifecycle :: ReactView String
+testLifecycle :: ReactView T.Text
 testLifecycle = defineLifecycleView "testlifecycle" (12 :: Int) lifecycleConfig
     { lRender = \s p -> p_ ["id" $= "lifecycle-p"] $ do
         span_ "Current state: "
         span_ ["ref" $= "refSt", "id" $= "hello"] (elemShow s)
-        span_ ["ref" $= "refProps", "id" $= "world"] $ elemText $ "Current props: " ++ p
+        span_ ["ref" $= "refProps", "id" $= "world"] $ elemText $ "Current props: " <> p
         button_ [ "id" $= "increment-state"
                 , onClick $ \_ _ st -> ([], Just $ st + 1)
                 ] "Incr"
@@ -171,24 +175,24 @@ testLifecycle = defineLifecycleView "testlifecycle" (12 :: Int) lifecycleConfig
     , lComponentWillReceiveProps = Just $ \pAndS _dom _setStateFn newProps -> do
         outputIO ["will recv props"]
         logPandS pAndS
-        outputIO ["New props: " ++ newProps]
+        outputIO ["New props: " <> newProps]
 
     , lComponentWillUpdate = Just $ \pAndS _dom newProps newState -> do
         outputIO ["will update"]
         logPandS pAndS
-        outputIO ["New props: " ++ newProps, "New state: " ++ show newState]
+        outputIO ["New props: " <> newProps, "New state: " <> tshow newState]
 
     , lComponentDidUpdate = Just $ \pAndS _dom _setStateFn oldProps oldState -> do
         outputIO ["did update"]
         logPandS pAndS
-        outputIO ["Old props: " ++ oldProps, "Old state: " ++ show oldState]
+        outputIO ["Old props: " <> oldProps, "Old state: " <> tshow oldState]
 
     , lComponentWillUnmount = Just $ \pAndS _dom -> do
         outputIO ["will unmount"]
         logPandS pAndS
     }
 
-testLifecycle_ :: String -> ReactElementM eventHandler ()
+testLifecycle_ :: T.Text -> ReactElementM eventHandler ()
 testLifecycle_ s = view testLifecycle s $ span_ ["id" $= "child-passed-to-view"] "I am a child!!!"
 
 --------------------------------------------------------------------------------
@@ -213,7 +217,7 @@ displayChildrenSpec = ul_ $ do
 --- CSS Transitions
 --------------------------------------------------------------------------------
 
-cssTransitions :: ReactView [String]
+cssTransitions :: ReactView [T.Text]
 cssTransitions = defineView "css transitions" $ \items ->
     div_ ["id" $= "css-transitions"] $
         cssTransitionGroup ["transitionName" $= "example"] $
@@ -232,7 +236,7 @@ bootstrapSpec = defineView "bootstrap" $ \() -> div_ ["id" $= "bootstrap"] $ do
         p_ "Hello, World!"
 
     bootstrap_ "Nav" [ "activeKey" @= (1 :: Int)
-                     , callback "onSelect" $ \(i :: Int) -> output ["Switched to " ++ show i]
+                     , callback "onSelect" $ \(i :: Int) -> output ["Switched to " <> tshow i]
                      ] $ do
         bootstrap_ "NavItem" ["eventKey" @= (1 :: Int)] "Item 1"
         bootstrap_ "NavItem" ["eventKey" @= (2 :: Int)] "Item 2"
@@ -295,12 +299,12 @@ shouldComponentUpdateStore = mkStore
 logComponentWillUpdate :: ReactView ShouldComponentUpdateData
 logComponentWillUpdate = defineLifecycleView "shouldComponentUpdate single spec" () lifecycleConfig
     { lRender = \() (ShouldComponentUpdateData i s) ->
-                    span_ (elemShow i) <> span_ (elemText s)
+                    span_ (elemShow i) <> span_ (elemString s)
     , lComponentWillUpdate = Just $ \curProps _ (ShouldComponentUpdateData newI newS) () -> do
           ShouldComponentUpdateData curI curS <- lGetProps curProps
           outputIO [ "Component will update single"
-                   , "current props: " ++ show curI ++ " " ++ curS
-                   , "new props: " ++ show newI ++ " " ++ newS
+                   , "current props: " <> tshow curI <> " " <> T.pack curS
+                   , "new props: " <> tshow newI <> " " <> T.pack newS
                    ]
     }
 
@@ -310,12 +314,12 @@ logComp1_ !sc i = viewWithKey logComponentWillUpdate i sc mempty
 logComponentWillUpdatePair :: ReactView (ShouldComponentUpdateData, ShouldComponentUpdateData)
 logComponentWillUpdatePair = defineLifecycleView "shouldComponentUpdate pair spec" () lifecycleConfig
     { lRender = \() (ShouldComponentUpdateData i1 s1, ShouldComponentUpdateData i2 s2) ->
-                    span_ (elemShow i1) <> span_ (elemText s1) <> span_ (elemShow i2) <> span_ (elemText s2)
+                    span_ (elemShow i1) <> span_ (elemString s1) <> span_ (elemShow i2) <> span_ (elemString s2)
     , lComponentWillUpdate = Just $ \curProps _ (ShouldComponentUpdateData newI1 newS1, ShouldComponentUpdateData newI2 newS2) () -> do
           (ShouldComponentUpdateData curI1 curS1, ShouldComponentUpdateData curI2 curS2) <- lGetProps curProps
           outputIO [ "Component will update for pair input view"
-                   , "current props: " ++ show curI1 ++ " " ++ curS1 ++ " " ++ show curI2 ++ " " ++ curS2
-                   , "new props: " ++ show newI1 ++ " " ++ newS1 ++ " " ++ show newI2 ++ " " ++ newS2
+                   , T.pack $ "current props: " ++ show curI1 ++ " " ++ curS1 ++ " " ++ show curI2 ++ " " ++ curS2
+                   , T.pack $ "new props: " ++ show newI1 ++ " " ++ newS1 ++ " " ++ show newI2 ++ " " ++ newS2
                    ]
     }
 
@@ -325,13 +329,13 @@ logComp2_ !sc1 !sc2 i = viewWithKey logComponentWillUpdatePair i (sc1, sc2) memp
 logComponentWillUpdateTriple :: ReactView (ShouldComponentUpdateData, ShouldComponentUpdateData, ShouldComponentUpdateData)
 logComponentWillUpdateTriple = defineLifecycleView "shouldComponentUpdate triple spec" () lifecycleConfig
     { lRender = \() (ShouldComponentUpdateData i1 s1, ShouldComponentUpdateData i2 s2, ShouldComponentUpdateData i3 s3) ->
-                    span_ (elemShow i1) <> span_ (elemText s1) <> span_ (elemShow i2) <> span_ (elemText s2) <> span_ (elemShow i3) <> span_ (elemText s3)
+                  span_ (elemShow i1) <> span_ (elemString s1) <> span_ (elemShow i2) <> span_ (elemString s2) <> span_ (elemShow i3) <> span_ (elemString s3)
     , lComponentWillUpdate = Just $ \curProps _
         (ShouldComponentUpdateData newI1 newS1, ShouldComponentUpdateData newI2 newS2, ShouldComponentUpdateData newI3 newS3) () -> do
             (ShouldComponentUpdateData curI1 curS1, ShouldComponentUpdateData curI2 curS2, ShouldComponentUpdateData curI3 curS3) <- lGetProps curProps
             outputIO [ "Component will update for triple input view"
-                     , "current props: " ++ show curI1 ++ " " ++ curS1 ++ " " ++ show curI2 ++ " " ++ curS2 ++ " " ++ show curI3 ++ " " ++ curS3
-                     , "new props: " ++ show newI1 ++ " " ++ newS1 ++ " " ++ show newI2 ++ " " ++ newS2 ++ " " ++ show newI3 ++ " " ++ newS3
+                     , T.pack $ "current props: " ++ show curI1 ++ " " ++ curS1 ++ " " ++ show curI2 ++ " " ++ curS2 ++ " " ++ show curI3 ++ " " ++ curS3
+                     , T.pack $ "new props: " ++ show newI1 ++ " " ++ newS1 ++ " " ++ show newI2 ++ " " ++ newS2 ++ " " ++ show newI3 ++ " " ++ newS3
                      ]
     }
 
@@ -353,9 +357,9 @@ shouldComponentUpdateSpec = defineControllerView "should component update" shoul
 
         forM_ [minBound..maxBound] $ \idx -> do
             button_ ["id" @= ("change-all-scu-" ++ show idx), onClick $ \_ _ -> [SomeStoreAction shouldComponentUpdateStore $ IncrementAllSCUData idx]] $
-                elemText $ "Increment all " ++ show idx
+                elemString $ "Increment all " ++ show idx
             button_ ["id" @=("increment-first-scu" ++ show idx), onClick $ \_ _ -> [SomeStoreAction shouldComponentUpdateStore $ IncrementFirstSCUData idx]] $
-                elemText $ "Increment first entry's integer" ++ show idx
+                elemString $ "Increment first entry's integer" ++ show idx
 
 --------------------------------------------------------------------------------
 --- Callback returning view
@@ -370,7 +374,7 @@ callbackArgsToProps i s = ReturnProps $ CallbackViewProps i s
 callbackViewTest :: ReactView CallbackViewProps
 callbackViewTest = defineView "callback view props test" $ \(CallbackViewProps i s) ->
     p_ [ "id" $= "callback-view-props-test"] $
-        elemText $ "Props are " ++ show i ++ " and " ++ s
+        elemString $ "Props are " ++ show i ++ " and " ++ s
 
 foreign import javascript unsafe
     "React['createClass']({'displayName':'callback wrapper', 'render': function() { \
@@ -396,7 +400,7 @@ testClient = defineLifecycleView "app" "Hello" lifecycleConfig
         when (s /= "") $
             testLifecycle_ s
         button_ [ "id" $= "add-app-str"
-                , onClick $ \_ _ s' -> ([], Just $ s' ++ "o")
+                , onClick $ \_ _ s' -> ([], Just $ s' <> "o")
                 ]
                 "Add o"
         button_ [ "id" $= "clear-app-str"

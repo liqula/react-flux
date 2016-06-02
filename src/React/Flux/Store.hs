@@ -39,7 +39,7 @@ instance IsJSVal (ReactStoreRef storeData)
 -- plus node can also be used for unit testing.
 --
 -- >data Todo = Todo {
--- >    todoText :: String
+-- >    todoText :: Text
 -- >  , todoComplete :: Bool
 -- >  , todoIsEditing :: Bool
 -- >} deriving (Show, Typeable)
@@ -48,10 +48,10 @@ instance IsJSVal (ReactStoreRef storeData)
 -- >    todoList :: [(Int, Todo)]
 -- >} deriving (Show, Typeable)
 -- >
--- >data TodoAction = TodoCreate String
+-- >data TodoAction = TodoCreate Text
 -- >                | TodoDelete Int
 -- >                | TodoEdit Int
--- >                | UpdateText Int String
+-- >                | UpdateText Int Text
 -- >                | ToggleAllComplete
 -- >                | TodoSetComplete Int Bool
 -- >                | ClearCompletedTodos

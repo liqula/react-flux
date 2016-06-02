@@ -166,6 +166,7 @@ import Debug.Trace (trace)
 import GHCJS.Types (JSVal, JSString)
 import GHCJS.Marshal (ToJSVal(..))
 import qualified JavaScript.Object as JSO
+import qualified Data.JSString as JSS
 
 foreign import javascript unsafe
     "$r = ReactIntl['IntlProvider']"
@@ -256,7 +257,7 @@ timeToRef _ = ()
 
 class ToJSVal a
 instance ToJSVal JSVal
-type JSString = ()
+type JSString = String
 #endif
 
 
@@ -283,18 +284,18 @@ instance ToJSVal a => ToJSVal (ContextApiCall a) where
             JSO.setProp n pRef propsObj
         js_callContextAPI ctx name aRef propsObj
 
-formatCtx :: ToJSVal a => String -> JSString -> a -> [IntlProperty] -> PropertyOrHandler handler
+formatCtx :: ToJSVal a => JSString -> JSString -> a -> [IntlProperty] -> PropertyOrHandler handler
 formatCtx name func val options = PropertyFromContext name $ ContextApiCall func val options
 
 #else
-formatCtx :: String -> String -> a -> [IntlProperty] -> PropertyOrHandler handler
+formatCtx :: JSString -> JSString -> a -> [IntlProperty] -> PropertyOrHandler handler
 formatCtx name _ _ _ = PropertyFromContext name $ \() -> ()
 #endif
 
 
 
 -- | Use the IntlProvider to set the @locale@, @formats@, and @messages@ property.
-intlProvider_ :: String -- ^ the locale to use
+intlProvider_ :: JSString -- ^ the locale to use
               -> Maybe JSVal
                   -- ^ A reference to translated messages, which must be an object with keys
                   -- 'MessageId' and value the translated message.  Set this as Nothing if you are not using
@@ -309,7 +310,7 @@ intlProvider_ :: String -- ^ the locale to use
               -> ReactElementM eventHandler a
 intlProvider_ locale mmsgs mformats = foreignClass js_intlProvider props
     where
-        props = catMaybes [ Just ("locale" @= locale)
+        props = catMaybes [ Just ("locale" &= locale)
                           , (property "messages") <$> mmsgs
                           , (property "formats" . Object) <$> mformats
                           ]
@@ -338,7 +339,7 @@ formattedNumber_ props = foreignClass js_formatNumber props mempty
 -- the number has not changed. 'formattedNumberProp' is needed if the formatted number has to be
 -- a property on another element, such as the placeholder for an input element.
 formattedNumberProp :: ToJSVal num
-                    => String -- ^ the property to set
+                    => JSString -- ^ the property to set
                     -> num -- ^ the number to format
                     -> [IntlProperty] -- ^ any options accepted by
                                       -- <https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/NumberFormat Intl.NumberFormat>
@@ -356,21 +357,21 @@ formattedNumberProp name x options = formatCtx name "formatNumber" x options
 -- These properties coorespond directly the options accepted by
 -- <https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/DateTimeFormat Intl.DateTimeFormat>.
 data DayFormat = DayFormat {
-    weekdayF :: Maybe String -- ^ possible values are narrow, short, and long
-  , eraF :: Maybe String -- ^ possible values are narrow, short, and long
-  , yearF :: Maybe String -- ^ possible values are numeric and 2-digit
-  , monthF :: Maybe String -- ^ possible values are numeric, 2-digit, narrow, short, and long
-  , dayF :: Maybe String -- ^ possible values are numeric and 2-digit
+    weekdayF :: Maybe JSString -- ^ possible values are narrow, short, and long
+  , eraF :: Maybe JSString -- ^ possible values are narrow, short, and long
+  , yearF :: Maybe JSString -- ^ possible values are numeric and 2-digit
+  , monthF :: Maybe JSString -- ^ possible values are numeric, 2-digit, narrow, short, and long
+  , dayF :: Maybe JSString -- ^ possible values are numeric and 2-digit
 } deriving Show
 
 -- | Convert a format to the properties accepted by FormattedDate
 dayFtoProps :: DayFormat -> [PropertyOrHandler handler]
 dayFtoProps (DayFormat w e y m d) = catMaybes
-    [ ("weekday"@=) <$> w
-    , ("era"@=) <$> e
-    , ("year"@=) <$> y
-    , ("month"@=) <$> m
-    , ("day"@=) <$> d
+    [ ("weekday"&=) <$> w
+    , ("era"&=) <$> e
+    , ("year"&=) <$> y
+    , ("month"&=) <$> m
+    , ("day"&=) <$> d
     ]
 
 -- | A short day format, where month is \"short\" and year and day are \"numeric\".
@@ -389,19 +390,19 @@ shortDate = DayFormat
 -- These properties coorespond directly the options accepted by
 -- <https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/DateTimeFormat Intl.DateTimeFormat>.
 data TimeFormat = TimeFormat {
-    hourF :: Maybe String -- ^ possible values are numeric and 2-digit
-  , minuteF :: Maybe String -- ^ possible values are numeric and 2-digit
-  , secondF :: Maybe String -- ^ possible values are numeric and 2-digit
-  , timeZoneNameF :: Maybe String -- ^ possible values are short and long
+    hourF :: Maybe JSString -- ^ possible values are numeric and 2-digit
+  , minuteF :: Maybe JSString -- ^ possible values are numeric and 2-digit
+  , secondF :: Maybe JSString -- ^ possible values are numeric and 2-digit
+  , timeZoneNameF :: Maybe JSString -- ^ possible values are short and long
 } deriving Show
 
 -- | Convert a time format to properties for the FormattedDate element
 timeFtoProps :: TimeFormat -> [PropertyOrHandler handler]
 timeFtoProps (TimeFormat h m s t) = catMaybes
-    [ ("hour"@=) <$> h
-    , ("minute"@=) <$> m
-    , ("second"@=) <$> s
-    , ("timeZoneName"@=) <$> t
+    [ ("hour"&=) <$> h
+    , ("minute"&=) <$> m
+    , ("second"&=) <$> s
+    , ("timeZoneName"&=) <$> t
     ]
 
 -- | A default date and time format, using 'shortDate' and then numeric for hour, minute, and
@@ -445,7 +446,7 @@ formattedDate_ t props = foreignClass js_formatDate (valProp:props) mempty
 -- 'utcTime_', or 'formattedDate_' should be prefered because as components they can avoid re-rendering when
 -- the date has not changed. 'formattedDateProp' is needed if the formatted date has to be
 -- a property on another element, such as the placeholder for an input element.
-formattedDateProp :: String -- ^ the property to set
+formattedDateProp :: JSString -- ^ the property to set
                   -> Either Day UTCTime -- ^ the day or time to format
                   -> [IntlProperty] -- ^ Any options supported by
                                     -- <https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/DateTimeFormat Intl.DateTimeFormat>.
@@ -473,7 +474,7 @@ formattedRelative_ t props = foreignClass js_formatRelative (property "value" (t
 -- 'relativeTo_' or 'formattedRelative_' should be prefered because as components they can avoid re-rendering when
 -- the date has not changed. 'formattedRelativeProp' is needed if the formatted date has to be
 -- a property on another element, such as the placeholder for an input element.
-formattedRelativeProp :: String -- ^ te property to set
+formattedRelativeProp :: JSString -- ^ te property to set
                       -> UTCTime -- ^ the time to format
                       -> [IntlProperty] -- ^ an object with properties \"units\" and \"style\".  \"units\" accepts values second, minute, hour
                                         -- day, month, or year and \"style\" accepts only the value \"numeric\".
@@ -494,7 +495,7 @@ plural_ props = foreignClass js_formatPlural props mempty
 -- | Format a number properly based on pluralization, and then use it as the value for a property.
 -- 'plural_' should be preferred, but 'pluralProp' can be used in places where a component is not
 -- possible such as the placeholder of an input element.
-pluralProp :: ToJSVal val => String -> val -> [IntlProperty] -> PropertyOrHandler eventHandler
+pluralProp :: ToJSVal val => JSString -> val -> [IntlProperty] -> PropertyOrHandler eventHandler
 pluralProp name val options = formatCtx name "formatPlural" val options
 
 --------------------------------------------------------------------------------
@@ -559,7 +560,7 @@ message ident m = formatMessage [|js_formatMsg|] ident $ Message "" m
 -- >       , $(messageProp "placeholder" "ageplaceholder" "Hello {name}, enter your age")
 -- >             [ "name" .= nameFrom storeData ]
 -- >       ]
-messageProp :: String -- ^ the property name to set
+messageProp :: T.Text -- ^ the property name to set
             -> MessageId -- ^ the message identifier
             -> T.Text -- ^ the default message written in ICU message syntax.
             -> ExpQ
@@ -574,7 +575,7 @@ message' :: MessageId
 message' ident descr m = formatMessage [|js_formatMsg|] ident $ Message descr m
 
 -- | A varient of 'messageProp' which allows you to specify some context for translators.
-messageProp' :: String -- ^ property to set
+messageProp' :: T.Text -- ^ property to set
              -> MessageId
              -> T.Text -- ^ A description intended to provide context for translators
              -> T.Text -- ^ The default message written in ICU message syntax
@@ -620,11 +621,11 @@ formatMessage cls ident m = do
         liftedMsg = [| Message $(liftText $ msgDescription m) $(liftText $ msgDefaultMsg m) |]
     [|\vals -> foreignClass $cls (messageToProps $(liftText ident) $liftedMsg vals) mempty |]
 
-formatMessageProp :: String -> String -> MessageId -> Message -> ExpQ -- Q (TExp ([IntlProperty] -> PropertyOrHandler eventHandler))
+formatMessageProp :: T.Text -> T.Text -> MessageId -> Message -> ExpQ -- Q (TExp ([IntlProperty] -> PropertyOrHandler eventHandler))
 formatMessageProp func name ident m = do
     recordMessage ident m
     let liftedMsg = [| object ["id" .= T.pack $(liftString $ T.unpack ident), "defaultMessage" .= T.pack $(liftString $ T.unpack $ msgDefaultMsg m) ] |]
-    [|\options -> formatCtx $(liftString name) $(liftString func) $liftedMsg options |]
+    [|\options -> formatCtx (JSS.pack $(liftString $ T.unpack name)) (JSS.pack $(liftString $ T.unpack func)) $liftedMsg options |]
 
 -- | A raw @FormattedMessage@ element.  The given properties are passed directly with no handling.
 -- Any message is not recorded in Template Haskell and will not appear in any resulting message file

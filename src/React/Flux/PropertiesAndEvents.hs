@@ -19,6 +19,7 @@ module React.Flux.PropertiesAndEvents (
   -- ** Combinators
   , (@=)
   , ($=)
+  , (&=)
   , classNames
 
   -- * Creating Events
@@ -94,6 +95,7 @@ import           Control.Concurrent.MVar (newMVar)
 import           Control.DeepSeq
 import           System.IO.Unsafe (unsafePerformIO)
 import           Data.Typeable (Typeable)
+import           Data.Monoid ((<>))
 import qualified Data.Text as T
 import qualified Data.Aeson as A
 import qualified Data.HashMap.Strict as M
@@ -106,15 +108,17 @@ import           React.Flux.Views (ReactView(..), ViewEventHandler, StatefulView
 import           Data.Maybe (fromMaybe)
 
 import           GHCJS.Foreign (fromJSBool)
-import           GHCJS.Marshal (FromJSVal(..))
+import           GHCJS.Marshal (ToJSVal(..), FromJSVal(..))
 import           GHCJS.Types (JSVal, nullRef, JSString, IsJSVal)
 import           JavaScript.Array as JSA
+import qualified Data.JSString.Text as JSS
 
 #else
 type JSVal = ()
 type JSString = String
 type JSArray = ()
 class FromJSVal a
+class ToJSVal a
 class IsJSVal a
 nullRef :: ()
 nullRef = ()
@@ -123,7 +127,7 @@ nullRef = ()
 -- | Some third-party React classes allow passing React elements as properties.  This function
 -- will first run the given 'ReactElementM' to obtain an element or elements, and then use that
 -- element as the value for a property with the given key.
-elementProperty :: String -> ReactElementM handler () -> PropertyOrHandler handler
+elementProperty :: JSString -> ReactElementM handler () -> PropertyOrHandler handler
 elementProperty = ElementProperty
 
 -- | Allows you to create nested object properties.  The list of properties passed in will be
@@ -137,7 +141,7 @@ elementProperty = ElementProperty
 -- would create a javascript object
 --
 -- >{"Hello": {a: 100, b: "World"}, "c": "!!!"}
-nestedProperty :: String -> [PropertyOrHandler handler] -> PropertyOrHandler handler
+nestedProperty :: JSString -> [PropertyOrHandler handler] -> PropertyOrHandler handler
 nestedProperty = NestedProperty
 
 -- | A class which is used to implement <https://wiki.haskell.org/Varargs variable argument functions>.
@@ -181,13 +185,13 @@ instance {-# OVERLAPPABLE #-} (FromJSVal a, CallbackFunction handler b) => Callb
 -- >baz :: ViewEventHandler
 --
 -- For another example, see the haddock comments in "React.Flux.Addons.Bootstrap".
-callback :: CallbackFunction handler func => String -> func -> PropertyOrHandler handler
+callback :: CallbackFunction handler func => JSString -> func -> PropertyOrHandler handler
 callback name func = CallbackPropertyWithArgumentArray name $ \arr -> applyFromArguments arr 0 func
 
 -- | Create a zero-argument callback property.  When this callback function is executed, it
 -- will render the given view and return the resulting React element.  If you need to 
 -- create a callback which expects arguments, use 'callbackViewWithProps' instead.
-callbackView :: String -> ReactView () -> PropertyOrHandler handler
+callbackView :: JSString -> ReactView () -> PropertyOrHandler handler
 callbackView name v = CallbackPropertyReturningView name (const $ return ()) (reactView v)
 
 -- | Create a callback that when called will render a view.  This is useful for interacting with third-party React classes that expect
@@ -231,21 +235,26 @@ callbackView name v = CallbackPropertyReturningView name (const $ return ()) (re
 --      @the_propname_to_pass_to_theForeignThing@.  The value of this property is a JavaScript
 --      function which when executed will convert the arguments to @props@, render the view, and
 --      return the resulting React element.
-callbackViewWithProps :: (Typeable props, ArgumentsToProps props func) => String -> ReactView props -> func -> PropertyOrHandler handler
+callbackViewWithProps :: (Typeable props, ArgumentsToProps props func) => JSString -> ReactView props -> func -> PropertyOrHandler handler
 callbackViewWithProps name v func = CallbackPropertyReturningView name (\arr -> returnViewFromArguments arr 0 func) (reactView v)
 
 ----------------------------------------------------------------------------------------------------
 --- Combinators
 ----------------------------------------------------------------------------------------------------
 
--- | Create a property.
-(@=) :: A.ToJSON a => T.Text -> a -> PropertyOrHandler handler
-n @= a = Property (T.unpack n) (A.toJSON a)
+-- | Create a property from any aeson value (the at sign looks like "A" for aeson)
+(@=) :: A.ToJSON a => JSString -> a -> PropertyOrHandler handler
+n @= a = Property n (A.toJSON a)
+
+-- | Create a property for anything that can be converted to a javascript value using the @ToJSVal@
+-- class from the @ghcjs-base@ package..  This is just an infix version of 'property'.
+(&=) :: ToJSVal a => JSString -> a -> PropertyOrHandler handler
+n &= a = Property n a
 
 -- | Create a text-valued property.  This is here to avoid problems when OverloadedStrings extension
 -- is enabled
-($=) :: T.Text -> T.Text -> PropertyOrHandler handler
-n $= a = Property (T.unpack n) a
+($=) :: JSString -> JSString -> PropertyOrHandler handler
+n $= a = Property n a
 
 -- | Set the <https://facebook.github.io/react/docs/class-name-manipulation.html className> property to consist
 -- of all the names which are matched with True, allowing you to easily toggle class names based on
@@ -268,12 +277,12 @@ instance Show (EventTarget) where
     show _ = "EventTarget"
 
 -- | Access a property in an event target
-eventTargetProp :: FromJSVal val => EventTarget -> String -> val
-eventTargetProp (EventTarget ref) key = ref .: toJSString key
+eventTargetProp :: FromJSVal val => EventTarget -> JSString -> val
+eventTargetProp (EventTarget ref) key = ref .: key
 
 -- | Every event in React is a synthetic event, a cross-browser wrapper around the native event.
 data Event = Event
-    { evtType :: String
+    { evtType :: T.Text
     , evtBubbles :: Bool
     , evtCancelable :: Bool
     , evtCurrentTarget :: EventTarget
@@ -295,7 +304,7 @@ data Event = Event
 -- >           ]
 --
 -- In this case, @val@ would coorespond to the javascript expression @evt.target.value@.
-target :: FromJSVal val => Event -> String -> val
+target :: FromJSVal val => Event -> JSString -> val
 target e s = eventTargetProp (evtTarget e) s
 
 parseEvent :: HandlerArg -> Event
@@ -314,14 +323,14 @@ parseEvent arg@(HandlerArg o) = Event
 
 -- | Use this to create an event handler for an event not covered by the rest of this module.  At
 -- the moment, this is just the media events (onPlay, onPause, etc.) on image and video tags.
-on :: String -> (Event -> handler) -> PropertyOrHandler handler
+on :: JSString -> (Event -> handler) -> PropertyOrHandler handler
 on name f = CallbackPropertyWithSingleArgument
     { csPropertyName = name
     , csFunc = f . parseEvent
     }
 
 -- | Construct a handler from a detail parser, used by the various events below.
-on2 :: String -- ^ The event name
+on2 :: JSString -- ^ The event name
     -> (HandlerArg -> detail) -- ^ A function parsing the details for the specific event.
     -> (Event -> detail -> handler) -- ^ The function implementing the handler.
     -> PropertyOrHandler handler
@@ -389,7 +398,7 @@ stopPropagation = SomeStoreAction fakeEventStore . StopPropagation . evtHandlerA
 -- | By default, the handlers below are triggered during the bubbling phase.  Use this to switch
 -- them to trigger during the capture phase.
 capturePhase :: PropertyOrHandler handler -> PropertyOrHandler handler
-capturePhase (CallbackPropertyWithSingleArgument n h) = CallbackPropertyWithSingleArgument (n ++ "Capture") h
+capturePhase (CallbackPropertyWithSingleArgument n h) = CallbackPropertyWithSingleArgument (n <> "Capture") h
 capturePhase _ = error "You must use React.Flux.PropertiesAndEvents.capturePhase on an event handler"
 
 ---------------------------------------------------------------------------------------------------
@@ -406,10 +415,10 @@ data KeyboardEvent = KeyboardEvent
   { keyEvtAltKey :: Bool
   , keyEvtCharCode :: Int
   , keyEvtCtrlKey :: Bool
-  , keyGetModifierState :: String -> Bool
-  , keyKey :: String
+  , keyGetModifierState :: T.Text -> Bool
+  , keyKey :: T.Text
   , keyCode :: Int
-  , keyLocale :: String
+  , keyLocale :: Maybe T.Text
   , keyLocation :: Int
   , keyMetaKey :: Bool
   , keyRepeat :: Bool
@@ -489,7 +498,7 @@ data MouseEvent = MouseEvent
   , mouseClientX :: Int
   , mouseClientY :: Int
   , mouseCtrlKey :: Bool
-  , mouseGetModifierState :: String -> Bool
+  , mouseGetModifierState :: T.Text -> Bool
   , mouseMetaKey :: Bool
   , mousePageX :: Int
   , mousePageY :: Int
@@ -604,7 +613,7 @@ data TouchEvent = TouchEvent {
     touchAltKey :: Bool
   , changedTouches :: [Touch]
   , touchCtrlKey :: Bool
-  , touchGetModifierState :: String -> Bool
+  , touchGetModifierState :: T.Text -> Bool
   , touchMetaKey :: Bool
   , touchShiftKey :: Bool
   , touchTargets :: [Touch]
@@ -724,8 +733,8 @@ foreign import javascript unsafe
     "$1['getModifierState']($2)"
     js_GetModifierState :: JSVal -> JSString -> JSVal
 
-getModifierState :: JSVal -> String -> Bool
-getModifierState ref = fromJSBool . js_GetModifierState ref . toJSString
+getModifierState :: JSVal -> T.Text -> Bool
+getModifierState ref = fromJSBool . js_GetModifierState ref . JSS.textToJSString
 
 arrayLength :: JSArray -> Int
 arrayLength = JSA.length
@@ -735,16 +744,16 @@ arrayIndex = JSA.index
 
 #else
 
-js_getProp :: a -> String -> JSVal
+js_getProp :: a -> JSString -> JSVal
 js_getProp _ _ = ()
 
-js_getArrayProp :: a -> String -> JSVal
+js_getArrayProp :: a -> JSString -> JSVal
 js_getArrayProp _ _ = ()
 
-(.:) :: JSVal -> String -> b
+(.:) :: JSVal -> JSString -> b
 _ .: _ = undefined
 
-getModifierState :: JSVal -> String -> Bool
+getModifierState :: JSVal -> JSString -> Bool
 getModifierState _ _ = False
 
 arrayLength :: JSArray -> Int

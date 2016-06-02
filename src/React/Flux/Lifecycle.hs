@@ -52,6 +52,7 @@ import React.Flux.Export
 import GHCJS.Foreign (jsNull)
 import GHCJS.Foreign.Callback
 import GHCJS.Types (JSVal, jsval)
+import Data.JSString (JSString)
 
 #endif
 
@@ -68,7 +69,7 @@ data LPropsAndState props state = LPropsAndState
 -- 'lRef'.
 data LDOM = LDOM
   { lThis :: IO HTMLElement
-  , lRef :: String -> IO HTMLElement
+  , lRef :: JSString -> IO HTMLElement
   }
 
 -- | Set the state of the class.
@@ -124,7 +125,7 @@ defineLifecycleView name initialState cfg = unsafePerformIO $ do
     renderCb <- mkRenderCallback (js_ReactGetState >=> parseExport) runStateViewHandler render
 
     let dom this = LDOM { lThis = js_ReactFindDOMNode this
-                        , lRef = \r -> js_ReactGetRef this $ toJSString r
+                        , lRef = \r -> js_ReactGetRef this r
                         }
 
         setStateFn this s = export s >>= js_ReactUpdateAndReleaseState this

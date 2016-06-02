@@ -113,7 +113,7 @@ testClientSpec filename = session " for the test client" $ using Chrome $ do
         [keydown, evt, keyEvt, modState, target, curTarget] <- loadLog
         keydown `shouldBe` "keydown"
         evt `shouldBeEvent` ("keydown", True, 3)
-        keyEvt `shouldBe` "(False,0,False,\"Unidentified\",88,\"\",0,False,False,False,88)"
+        keyEvt `shouldBe` "(False,0,False,\"Unidentified\",88,Nothing,0,False,False,False,88)"
         modState `shouldBe` "alt modifier: False"
         target `shouldBe` "keyinput"
         curTarget `shouldBe` "keyinput"
@@ -122,9 +122,9 @@ testClientSpec filename = session " for the test client" $ using Chrome $ do
         findElem (ById "keyinput") >>= sendKeys "\xE00Ar" -- send Alt-r
         -- generates two events, one for alt, one for r
         [_, _, keyEvt, modState, _, _, _, _, keyEvt2, modState2, _, _] <- loadLog
-        keyEvt `shouldBe` "(True,0,False,\"Alt\",18,\"\",0,False,False,False,18)"
+        keyEvt `shouldBe` "(True,0,False,\"Alt\",18,Nothing,0,False,False,False,18)"
         modState `shouldBe` "alt modifier: True"
-        keyEvt2 `shouldBe` "(True,0,False,\"Unidentified\",82,\"\",0,False,False,False,82)"
+        keyEvt2 `shouldBe` "(True,0,False,\"Unidentified\",82,Nothing,0,False,False,False,82)"
         modState2 `shouldBe` "alt modifier: True"
 
     it "processes a click event" $ runWD $ do
@@ -427,7 +427,7 @@ intlSpec filename = session " for the i18n test client" $ using Chrome $ do
             daysAgo = diffDays today moon
             yearsAgo :: Int = round $ realToFrac daysAgo / (365 :: Double) -- is close enough
         "f-relative" `intlSpanShouldBe` (show (yearsAgo) ++ " years ago")
-        "f-relative-days" `intlSpanShouldBe` (showWithComma (daysAgo+1) ++ " days ago")
+        "f-relative-days" `intlSpanShouldBe` (showWithComma (daysAgo) ++ " days ago")
 
     it "displays messages" $ runWD $ do
         msg <- findElem $ ById "f-msg"

@@ -11,7 +11,9 @@ module React.Flux.Internal(
   , property
   , ReactElement(..)
   , ReactElementM(..)
+  , elemString
   , elemText
+  , elemJSString
   , elemShow
   , el
   , childrenPassedToView
@@ -26,10 +28,12 @@ import           Data.Aeson
 import           Data.Typeable (Typeable)
 import           Control.Monad.Writer
 import           Control.Monad.Identity (Identity(..))
+import           Data.Text (Text)
 
 #ifdef __GHCJS__
 import           Unsafe.Coerce
 import qualified Data.JSString as JSS
+import qualified Data.JSString.Text as JSS
 import           JavaScript.Array (JSArray)
 import qualified JavaScript.Array as JSA
 import           GHCJS.Foreign.Callback
@@ -72,31 +76,31 @@ instance Show HandlerArg where
 -- passed as the second argument to @React.createElement@.
 data PropertyOrHandler handler =
    forall ref. ToJSVal ref => Property
-      { propertyName :: String
+      { propertyName :: JSString
       , propertyVal :: ref
       }
  | forall ref. ToJSVal ref => PropertyFromContext 
-      { propFromThisName :: String
+      { propFromThisName :: JSString
       , propFromThisVal :: JSVal -> ref -- ^ will be passed this.context
       }
  | NestedProperty
-      { nestedPropertyName :: String
+      { nestedPropertyName :: JSString
       , nestedPropertyVals :: [PropertyOrHandler handler]
       }
  | ElementProperty
-      { elementPropertyName :: String
+      { elementPropertyName :: JSString
       , elementValue :: ReactElementM handler ()
       }
  | CallbackPropertyWithArgumentArray
-      { caPropertyName :: String
+      { caPropertyName :: JSString
       , caFunc :: JSArray -> IO handler
       }
  | CallbackPropertyWithSingleArgument
-      { csPropertyName :: String
+      { csPropertyName :: JSString
       , csFunc :: HandlerArg -> handler
       }
  | forall props. Typeable props => CallbackPropertyReturningView
-      { cretPropertyName :: String
+      { cretPropertyName :: JSString
       , cretArgToProp :: JSArray -> IO props
       , cretView :: ReactViewRef props
       }
@@ -112,7 +116,7 @@ instance Functor PropertyOrHandler where
     fmap _ (CallbackPropertyReturningView name f v) = CallbackPropertyReturningView name f v
 
 -- | Create a property from anything that can be converted to a JSVal
-property :: ToJSVal val => String -> val -> PropertyOrHandler handler
+property :: ToJSVal val => JSString -> val -> PropertyOrHandler handler
 property = Property
 
 -- | Keys in React can either be strings or integers
@@ -140,7 +144,7 @@ instance ReactViewKey Int where
 -- elements are rendered into the browser DOM as siblings.
 data ReactElement eventHandler
     = ForeignElement
-        { fName :: Either String (ReactViewRef Object)
+        { fName :: Either JSString (ReactViewRef Object)
         , fProps :: [PropertyOrHandler eventHandler]
         , fChild :: ReactElement eventHandler
         }
@@ -152,7 +156,7 @@ data ReactElement eventHandler
         , ceChild :: ReactElement eventHandler
         }
     | ChildrenPassedToView
-    | Content String
+    | Content JSString
     | Append (ReactElement eventHandler) (ReactElement eventHandler)
     | EmptyElement
 
@@ -206,22 +210,31 @@ instance (a ~ ()) => Monoid (ReactElementM eventHandler a) where
          in elementToM () $ Append e1' e2'
 
 instance (a ~ ()) => IsString (ReactElementM eventHandler a) where
-    fromString s = elementToM () $ Content s
+    fromString s = elementToM () $ Content $ toJSString s
 
--- | Create a text element from a string.  This is an alias for 'fromString'.  The text content is
--- escaped to be HTML safe.  If you need to insert HTML, instead use the
+-- | Create a text element from a string. The text content is escaped to be HTML safe.
+-- If you need to insert HTML, instead use the
 -- <https://facebook.github.io/react/tips/dangerously-set-inner-html.html dangerouslySetInnerHTML>
--- property.
-elemText :: String -> ReactElementM eventHandler ()
-elemText s = elementToM () $ Content s
+-- property.  This is an alias for 'fromString'.
+elemString :: String -> ReactElementM eventHandler ()
+elemString s = elementToM () $ Content $ toJSString s
+
+-- | Create a text element from a text value. The text content is escaped to be HTML safe.
+elemText :: Text -> ReactElementM eventHandler ()
+elemText s = elementToM () $ Content $ JSS.textToJSString s
+
+-- | Create a text element from a @JSString@.  This is more efficient for hard-coded strings than
+-- converting from text to a JavaScript string.  The string is escaped to be HTML safe.
+elemJSString :: JSString -> ReactElementM eventHandler ()
+elemJSString s = elementToM () $ Content s
 
 -- | Create an element containing text which is the result of 'show'ing the argument.
 -- Note that the resulting string is then escaped to be HTML safe.
 elemShow :: Show a => a -> ReactElementM eventHandler ()
-elemShow s = elementToM () $ Content $ show s
+elemShow s = elementToM () $ Content $ toJSString $ show s
 
 -- | Create a React element.
-el :: String -- ^ The element name (the first argument to @React.createElement@).
+el :: JSString -- ^ The element name (the first argument to @React.createElement@).
    -> [PropertyOrHandler eventHandler] -- ^ The properties to pass to the element (the second argument to @React.createElement@).
    -> ReactElementM eventHandler a -- ^ The child elements (the third argument to @React.createElement@).
    -> ReactElementM eventHandler a
@@ -275,18 +288,18 @@ mkReactElement runHandler getContext getPropsChildren = runWriterT . mToElem
         addPropOrHandlerToObj :: JSO.Object -> PropertyOrHandler eventHandler -> MkReactElementM ()
         addPropOrHandlerToObj obj (Property n val) = lift $ do
             vRef <- toJSVal val
-            JSO.setProp (toJSString n) vRef obj
+            JSO.setProp n vRef obj
         addPropOrHandlerToObj obj (PropertyFromContext n f) = lift $ do
             ctx <- getContext
             vRef <- toJSVal $ f ctx
-            JSO.setProp (toJSString n) vRef obj
+            JSO.setProp n vRef obj
         addPropOrHandlerToObj obj (NestedProperty n vals) = do
             nested <- lift $ JSO.create
             mapM_ (addPropOrHandlerToObj nested) vals
-            lift $ JSO.setProp (toJSString n) (jsval nested) obj
+            lift $ JSO.setProp n (jsval nested) obj
         addPropOrHandlerToObj obj (ElementProperty name rM) = do
             ReactElementRef ref <- mToElem rM
-            lift $ JSO.setProp (toJSString name) ref obj
+            lift $ JSO.setProp name ref obj
         addPropOrHandlerToObj obj (CallbackPropertyWithArgumentArray name func) = do
             -- this will be released by the render function of the class (jsbits/class.js)
             cb <- lift $ syncCallback1 ContinueAsync $ \argref -> do
@@ -294,18 +307,18 @@ mkReactElement runHandler getContext getPropsChildren = runWriterT . mToElem
                 runHandler handler
             tell [jsval cb]
             wrappedCb <- lift $ js_CreateArgumentsCallback cb
-            lift $ JSO.setProp (toJSString name) wrappedCb obj
+            lift $ JSO.setProp name wrappedCb obj
         addPropOrHandlerToObj obj (CallbackPropertyWithSingleArgument name func) = do
             -- this will be released by the render function of the class (jsbits/class.js)
             cb <- lift $ syncCallback1 ContinueAsync $ \ref ->
                 runHandler $ func $ HandlerArg ref
             tell [jsval cb]
-            lift $ JSO.setProp (toJSString name) (jsval cb) obj
+            lift $ JSO.setProp name (jsval cb) obj
 
         addPropOrHandlerToObj obj (CallbackPropertyReturningView name toProps v) = do
             (cb, wrappedCb) <- lift $ exportViewToJs v toProps
             tell [cb]
-            lift $ JSO.setProp (toJSString name) wrappedCb obj
+            lift $ JSO.setProp name wrappedCb obj
 
         -- call React.createElement
         createElement :: ReactElement eventHandler -> MkReactElementM [ReactElementRef]
@@ -322,7 +335,7 @@ mkReactElement runHandler getContext getPropsChildren = runWriterT . mToElem
                              [x] -> x
                              xs -> jsval $ JSA.fromList xs
             e <- lift $ case fName f of
-                Left s -> js_ReactCreateElementName (toJSString s) obj children
+                Left s -> js_ReactCreateElementName s obj children
                 Right ref -> js_ReactCreateForeignElement ref obj children
             return [e]
         createElement (ViewElement { ceClass = rc, ceProps = props, ceKey = mkey, ceChild = child }) = do
@@ -383,8 +396,8 @@ foreign import javascript unsafe
     "$r = hsreact$textWrapper"
     js_textWrapper :: JSVal
 
-js_ReactCreateContent :: String -> ReactElementRef
-js_ReactCreateContent = ReactElementRef . unsafeCoerce . toJSString
+js_ReactCreateContent :: JSString -> ReactElementRef
+js_ReactCreateContent = ReactElementRef . unsafeCoerce
 
 toJSString :: String -> JSString
 toJSString = JSS.pack

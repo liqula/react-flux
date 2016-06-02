@@ -112,7 +112,7 @@ tabItem =
   span_ ["style" @= A.object ["color" A..= ("#eee"::String)] | cur == aidx] $
   if cur == aidx
   then elemText aname
-  else a_ ["href" $= actionRoute prouter (SwitchApp aidx Nothing)] $ elemText aname
+  else a_ ["href" &= actionRoute prouter (SwitchApp aidx Nothing)] $ elemText aname
 
 tabItem_ :: ((ParentRouter, Int), (Int, AppName)) -> ReactElementM eventHandler ()
 tabItem_ tab =

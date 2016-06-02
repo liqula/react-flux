@@ -69,7 +69,7 @@ type ViewEventHandler = [SomeStoreAction]
 -- >        mainSection_ todoState
 -- >        todoFooter_ todoState
 defineControllerView :: (StoreData storeData, Typeable props)
-                 => String -- ^ A name for this view, used only for debugging/console logging
+                 => JSString -- ^ A name for this view, used only for debugging/console logging
                  -> ReactStore storeData -- ^ The store this controller view should attach to.
                  -> (storeData -> props -> ReactElementM ViewEventHandler ()) -- ^ The rendering function
                  -> ReactView props
@@ -79,7 +79,7 @@ defineControllerView :: (StoreData storeData, Typeable props)
 defineControllerView name (ReactStore store _) buildNode = unsafePerformIO $ do
     let render sd props = return $ buildNode sd props
     renderCb <- mkRenderCallback (js_ReactGetState >=> parseExport) runViewHandler render
-    ReactView <$> js_createControllerView (toJSString name) store renderCb
+    ReactView <$> js_createControllerView name store renderCb
 
 -- | Transform a controller view handler to a raw handler.
 runViewHandler :: ReactThis state props -> ViewEventHandler -> IO ()
@@ -153,7 +153,7 @@ defineControllerView _ _ _ = ReactView (ReactViewRef ())
 -- >todoItem_ :: (Int, Todo) -> ReactElementM eventHandler ()
 -- >todoItem_ !todo = viewWithKey todoItem (fst todo) todo mempty
 defineView :: Typeable props
-       => String -- ^ A name for this view, used only for debugging/console logging
+       => JSString -- ^ A name for this view, used only for debugging/console logging
        -> (props -> ReactElementM ViewEventHandler ()) -- ^ The rendering function
        -> ReactView props
 
@@ -162,7 +162,7 @@ defineView :: Typeable props
 defineView name buildNode = unsafePerformIO $ do
     let render () props = return $ buildNode props
     renderCb <- mkRenderCallback (const $ return ()) runViewHandler render
-    ReactView <$> js_createView (toJSString name) renderCb
+    ReactView <$> js_createView name renderCb
 
 #else
 
@@ -198,29 +198,29 @@ type StatefulViewEventHandler state = state -> ([SomeStoreAction], Maybe state)
 -- new state.  Any more complicated state should be moved out into a (possibly new) store.
 --
 -- >data TextInputArgs = TextInputArgs {
--- >      tiaId :: Maybe String
--- >    , tiaClass :: String
--- >    , tiaPlaceholder :: String
--- >    , tiaOnSave :: String -> [SomeStoreAction]
--- >    , tiaValue :: Maybe String
+-- >      tiaId :: Maybe JSString
+-- >    , tiaClass :: JSString
+-- >    , tiaPlaceholder :: JSString
+-- >    , tiaOnSave :: Text -> [SomeStoreAction]
+-- >    , tiaValue :: Maybe Text
 -- >} deriving (Typeable)
 -- >
 -- >todoTextInput :: ReactView TextInputArgs
 -- >todoTextInput = defineStatefulView "todo text input" "" $ \curText args ->
 -- >    input_ $
--- >        maybe [] (\i -> ["id" @= i]) (tiaId args)
+-- >        maybe [] (\i -> ["id" &= i]) (tiaId args)
 -- >        ++
--- >        [ "className" @= tiaClass args
--- >        , "placeholder" @= tiaPlaceholder args
--- >        , "value" @= curText
--- >        , "autoFocus" @= True
+-- >        [ "className" &= tiaClass args
+-- >        , "placeholder" &= tiaPlaceholder args
+-- >        , "value" &= curText
+-- >        , "autoFocus" &= True
 -- >        , onChange $ \evt _ -> ([], Just $ target evt "value")
 -- >        , onBlur $ \_ _ curState ->
--- >             if not (null curState)
+-- >             if not (Text.null curState)
 -- >                 then (tiaOnSave args curState, Just "")
 -- >                 else ([], Nothing)
 -- >        , onKeyDown $ \_ evt curState ->
--- >             if keyCode evt == 13 && not (null curState) -- 13 is enter
+-- >             if keyCode evt == 13 && not (Text.null curState) -- 13 is enter
 -- >                 then (tiaOnSave args curState, Just "")
 -- >                 else ([], Nothing)
 -- >        ]
@@ -228,7 +228,7 @@ type StatefulViewEventHandler state = state -> ([SomeStoreAction], Maybe state)
 -- >todoTextInput_ :: TextInputArgs -> ReactElementM eventHandler ()
 -- >todoTextInput_ !args = view todoTextInput args mempty
 defineStatefulView :: (Typeable state, NFData state, Typeable props)
-               => String -- ^ A name for this view, used only for debugging/console logging
+               => JSString -- ^ A name for this view, used only for debugging/console logging
                -> state -- ^ The initial state
                -> (state -> props -> ReactElementM (StatefulViewEventHandler state) ()) -- ^ The rendering function
                -> ReactView props
@@ -239,7 +239,7 @@ defineStatefulView name initial buildNode = unsafePerformIO $ do
     initialRef <- export initial
     let render state props = return $ buildNode state props
     renderCb <- mkRenderCallback (js_ReactGetState >=> parseExport) runStateViewHandler render
-    ReactView <$> js_createStatefulView (toJSString name) initialRef renderCb
+    ReactView <$> js_createStatefulView name initialRef renderCb
 
 -- | Transform a stateful view event handler to a raw event handler
 runStateViewHandler :: (Typeable state, NFData state)

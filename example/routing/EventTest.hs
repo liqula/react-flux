@@ -20,6 +20,10 @@ import qualified Data.Text                    as T
 import           Data.Typeable                (Typeable)
 import           GHC.Generics                 (Generic)
 
+#ifdef __GHCJS__
+import Data.JSString (JSString)
+#endif
+
 data ETState = ETState
     { etActions :: [ETAction]
     , etText    :: !T.Text
@@ -69,13 +73,13 @@ dispatchEventTest a = [SomeStoreAction store a]
 view :: ReactView ETState
 view = defineView "event-tests" $ \(ETState actions text bool) ->
   section_ $ do
-    let textVal = "value" $= text
+    let textVal = "value" &= text
 
     div_ ["className" $= "et-actions"] $ do
       a_ [onClick $ \_ _ -> dispatchEventTest ClearActionsA] $
         elemText "Clear event history"
       pre_ $
-        elemText $ unlines $ map show actions
+        elemString $ unlines $ map show actions
 
     h2_ $ elemText "Testing keyboard events"
     p_ $ elemText "Type <enter> to test onKeyUp/onKeyDown"
@@ -187,13 +191,13 @@ view_ st =
 
 #ifdef __GHCJS__
 
-targetInt :: Event -> String -> Int
+targetInt :: Event -> JSString -> Int
 targetInt = target
 
-targetText :: Event -> String -> T.Text
+targetText :: Event -> JSString -> T.Text
 targetText = target
 
-targetBool :: Event -> String -> Bool
+targetBool :: Event -> JSString -> Bool
 targetBool = target
 
 #else

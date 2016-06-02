@@ -1,5 +1,6 @@
 -- |
 
+{-# LANGUAGE OverloadedStrings #-}
 module Main where
 
 import           React.Flux
@@ -9,6 +10,7 @@ import qualified EventTest  as EventTest
 import           Router
 import qualified TabbedApps as TabbedApps
 import           Types
+import qualified Data.Text as T
 
 main :: IO ()
 main = do
@@ -33,15 +35,15 @@ main = do
                  TabbedApps.Tab (appName a) (\pr -> view v pr mempty) (appRouter a))
       apps appViews
 
-clockApp :: String -> App TabbedApps.ParentRouter
+clockApp :: T.Text -> App TabbedApps.ParentRouter
 clockApp name = App name Clock.store (\st _ -> Clock.view_ st) Clock.ClockInit Nothing
 
-etApp :: String -> App TabbedApps.ParentRouter
+etApp :: T.Text -> App TabbedApps.ParentRouter
 etApp name = App name rst (\st _ -> EventTest.view_ st) EventTest.ETInit Nothing
   where
     rst = EventTest.store
 
-tabApp :: String -> [TabbedApps.Tab] -> App TabbedApps.ParentRouter
+tabApp :: T.Text -> [TabbedApps.Tab] -> App TabbedApps.ParentRouter
 tabApp name tabs =
   let rst = TabbedApps.newStore tabs
   in
