@@ -1,5 +1,41 @@
 # Unreleased
 
+* Breaking Change - I removed the use of `String` and replaced it with either `Text` or `JSString`
+  (from the `Data.JSString` module in `ghcjs-base`).  If a value was just going to be passed straight into
+  react, I made it a JSString and if the value was intended to be manipulated in Haskell I used Text.
+  The main changes are:
+      
+      * `elemText` used to (confusingly) take a `String`.  Now there are three functions: `elemString`,
+        `elemText`, and `elemJSString` that take a `String`, `Text`, and `JSString` value respectively.
+
+      * The type of `$=` now uses JSString.  `$=` is intended only to avoid ambiguity when using
+        overloaded strings and string constants and `JSString` has an `IsString` instance.
+
+      * There is a new property creator `&=` which instead of converting to Aeson and then to a javascript
+        value like `@=` does, `&=` uses the `ToJSVal` class from `GHCJS.Foreign.Marshal` to convert values
+        directly to javascript.
+
+      * Several functions had their type changed to instead of taking a String as a param take a Text or
+        JSString as a parameter
+
+   Despite being quite a large change, it didn't take much effort for me to convert my application to this
+   new API.  You can see the conversion of the todo example application here:
+   https://bitbucket.org/wuzzeb/react-flux/commits/a630da5f9032745ab92da6e3d9f9038915b9b319
+   The main things that required changing are:
+
+      * Converting between `String` and `JSString` is done via `pack` and `unpack` in `Data.JSString`.
+        Converting between `Text` and `JSString` is done via `textToJSString` and `textFromJSString`
+        in the `Data.JSString.Text` module.  In fact, this conversion needed to happen in only a
+        few places for me because for the most part the `IsString` instance and `OverloadedStrings`
+        extension properly converted the string literals to the proper type.  A few places I needed to
+        use `<>` from `Data.Monoid` to concatenate `JSString`s.
+
+      * A few places I was accidentally using `$=` for non-literal strings.  Switching these to `&=`
+        was enough, since `&=` is polymorphic over the type of the property value.
+
+      * Most places using `elemText` had an error, but here it was straightforward to switch to
+        either `elemString` or keep `elemText` and use `Text` values inside my store.
+
 * React-flux has used the shouldComponentUpdate lifetime method to prevent re-rendering in some cases,
   but it was finicky and sometimes wouldn't work (not a correctness bug, just a missed performance
   improvement).  I now better understand when it works and does not work, and edited the documentation
