@@ -80,11 +80,7 @@ showWithComma i = show x ++ "," ++ replicate (3-length y') '0' ++ y'
         y' = show y
 
 spec :: Spec
-spec = do
-    describe "React 0.13" $ testClientSpec "test-client13.html"
-    describe "React 0.14" $ do
-        testClientSpec "test-client14.html"
-        intlSpec "test-client14.html"
+spec = testClientSpec "test-client.html"
 
 testClientSpec :: String -> Spec
 testClientSpec filename = session " for the test client" $ using Chrome $ do
@@ -236,27 +232,6 @@ testClientSpec filename = session " for the test client" $ using Chrome $ do
         getText a `shouldReturn` "A"
         getText b `shouldReturn` "B"
 
-    describe "bootstrap" $ do
-
-        it "displays and closes alert" $ runWD $ do
-            alert <- findElem $ ByCSS "div#bootstrap div.alert"
-            (findElemFrom alert (ByTag "p") >>= getText)
-                `shouldReturn` "Hello, World!"
-            findElemFrom alert (ByTag "button") >>= click
-            loadLog `shouldReturn` ["Closing alert"]
-
-        it "switchs nav items" $ runWD $ do
-            navUl <- findElem $ ByCSS "div#bootstrap ul"
-            i1 <- findElemFrom navUl $ ByCSS "li:first-child a"
-            i2 <- findElemFrom navUl $ ByCSS "li:nth-child(2) a"
-            i3 <- findElemFrom navUl $ ByCSS "li:nth-child(3) a"
-            click i2
-            loadLog `shouldReturn` ["Switched to 2"]
-            click i3
-            loadLog `shouldReturn` ["Switched to 3"]
-            click i1
-            loadLog `shouldReturn` ["Switched to 1"]
-
     it "renders a callback returning a view" $ runWD $ do
         e <- findElem $ ById "callback-view-props-test"
         getText e `shouldReturn` "Props are 5 and Hello World"
@@ -398,62 +373,54 @@ testClientSpec filename = session " for the test client" $ using Chrome $ do
                 scuTripleShouldBe ["3Quick Ben4Whiskeyjack5Fiddler", "6Karsa7Tehol8Tayschrenn", "10Anomander Rake11Iskaral Pust12Dujek"]
                 loadLog `shouldReturn` []
 
+    describe "i18n" $ do
+        it "opens the page" $ runWD $ do
+            dir <- liftIO $ getCurrentDirectory
+            openPage $ "file://" ++ dir ++ "/../client/" ++ filename
 
-    {-
-    it "inspects the session" $ runWD $ do
-        loadLog >>= \x -> liftIO $ putStrLn $ show x
-        inspectSession
-    -}
+        it "displays the intl formatted data" $ runWD $ do
+            "f-number" `intlSpanShouldBe` "90%"
+            "f-int" `intlSpanShouldBe` "100,000"
+            "f-double" `intlSpanShouldBe` "40,000.2"
+            "f-shortday" `intlSpanShouldBe` "Jul 20, 1969"
+            "f-fullday" `intlSpanShouldBe` "Sunday, July 20, 69 AD"
+            "f-date" `intlSpanShouldBe` "Sun, Jul 20, 69"
+            -- f-shorttime and f-fulltime cannot be (easily) tested since they rely on the current timezone
+            "f-time" `intlSpanShouldBe` "Jul 19, 69, 4:56:00 PM GMT-10"
+            "f-plural" `intlSpanShouldBe` "plural other"
 
-intlSpec :: String -> Spec
-intlSpec filename = session " for the i18n test client" $ using Chrome $ do
-    it "opens the page" $ runWD $ do
-        dir <- liftIO $ getCurrentDirectory
-        openPage $ "file://" ++ dir ++ "/../client/" ++ filename
+            today <- liftIO (utctDay <$> getCurrentTime)
+            let moon = fromGregorian 1969 7 20
+                daysAgo = diffDays today moon
+                yearsAgo :: Int = round $ realToFrac daysAgo / (365 :: Double) -- is close enough
+            "f-relative" `intlSpanShouldBe` (show (yearsAgo) ++ " years ago")
+            "f-relative-days" `intlSpanShouldBe` (showWithComma (daysAgo+1) ++ " days ago")
 
-    it "displays the intl formatted data" $ runWD $ do
-        "f-number" `intlSpanShouldBe` "90%"
-        "f-int" `intlSpanShouldBe` "100,000"
-        "f-double" `intlSpanShouldBe` "40,000.2"
-        "f-shortday" `intlSpanShouldBe` "Jul 20, 1969"
-        "f-fullday" `intlSpanShouldBe` "Sunday, July 20, 69 AD"
-        "f-date" `intlSpanShouldBe` "Sun, Jul 20, 69"
-        -- f-shorttime and f-fulltime cannot be (easily) tested since they rely on the current timezone
-        "f-time" `intlSpanShouldBe` "Jul 19, 69, 4:56:00 PM GMT-10"
-        "f-plural" `intlSpanShouldBe` "plural other"
+        it "displays messages" $ runWD $ do
+            msg <- findElem $ ById "f-msg"
+            getText msg `shouldReturn` "Neil Armstrong took 100 photos years ago."
+            takenAgoSpan <- findElemFrom msg $ ById "takenAgoSpan"
+            getText takenAgoSpan `shouldReturn` "years ago"
 
-        today <- liftIO (utctDay <$> getCurrentTime)
-        let moon = fromGregorian 1969 7 20
-            daysAgo = diffDays today moon
-            yearsAgo :: Int = round $ realToFrac daysAgo / (365 :: Double) -- is close enough
-        "f-relative" `intlSpanShouldBe` (show (yearsAgo) ++ " years ago")
-        "f-relative-days" `intlSpanShouldBe` (showWithComma (daysAgo) ++ " days ago")
+            msg' <- findElem $ ById "f-msg-with-descr"
+            getText msg' `shouldReturn` "Neil Armstrong took no photos."
 
-    it "displays messages" $ runWD $ do
-        msg <- findElem $ ById "f-msg"
-        getText msg `shouldReturn` "Neil Armstrong took 100 photos years ago."
-        takenAgoSpan <- findElemFrom msg $ ById "takenAgoSpan"
-        getText takenAgoSpan `shouldReturn` "years ago"
+            "f-msg-with-trans" `intlSpanShouldBe` "message from translation xxx"
 
-        msg' <- findElem $ ById "f-msg-with-descr"
-        getText msg' `shouldReturn` "Neil Armstrong took no photos."
+            htmlMsg <- findElem $ ById "f-html-msg"
+            getText htmlMsg `shouldReturn` "42 is the answer to life, the universe, and everything"
+            (findElemFrom htmlMsg (ByTag "b") >>= getText)
+                `shouldReturn` "42"
 
-        "f-msg-with-trans" `intlSpanShouldBe` "message from translation xxx"
+            htmlMsg' <- findElem $ ById "f-html-msg-with-descr"
+            getText htmlMsg' `shouldReturn` "42 is the answer to life, the universe, and everything"
+            (findElemFrom htmlMsg' (ByTag "b") >>= getText)
+                `shouldReturn` "answer"
 
-        htmlMsg <- findElem $ ById "f-html-msg"
-        getText htmlMsg `shouldReturn` "42 is the answer to life, the universe, and everything"
-        (findElemFrom htmlMsg (ByTag "b") >>= getText)
-            `shouldReturn` "42"
-
-        htmlMsg' <- findElem $ ById "f-html-msg-with-descr"
-        getText htmlMsg' `shouldReturn` "42 is the answer to life, the universe, and everything"
-        (findElemFrom htmlMsg' (ByTag "b") >>= getText)
-            `shouldReturn` "answer"
-
-    it "displays formatted properties" $ runWD $ do
-        "f-number-prop" `intlPlaceholderShouldBe` "123,456"
-        "f-date-prop" `intlPlaceholderShouldBe` "7/20/1969"
-        "f-time-prop" `intlPlaceholderShouldBe` "Jul 19, 69, 4 PM"
-        "f-plural-prop" `intlPlaceholderShouldBe` "other"
-        "f-msg-prop" `intlPlaceholderShouldBe` "Neil Armstrong took 100 photos"
-        "f-msg-prop-with-descr" `intlPlaceholderShouldBe` "Neil Armstrong took 0 photos"
+        it "displays formatted properties" $ runWD $ do
+            "f-number-prop" `intlPlaceholderShouldBe` "123,456"
+            "f-date-prop" `intlPlaceholderShouldBe` "7/20/1969"
+            "f-time-prop" `intlPlaceholderShouldBe` "Jul 19, 69, 4 PM"
+            "f-plural-prop" `intlPlaceholderShouldBe` "other"
+            "f-msg-prop" `intlPlaceholderShouldBe` "Neil Armstrong took 100 photos"
+            "f-msg-prop-with-descr" `intlPlaceholderShouldBe` "Neil Armstrong took 0 photos"
