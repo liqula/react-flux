@@ -1,13 +1,14 @@
-{-# LANGUAGE TypeFamilies, DeriveGeneric, DeriveAnyClass #-}
+{-# LANGUAGE TypeFamilies, DeriveGeneric, DeriveAnyClass, OverloadedStrings #-}
 module TodoStore where
 
 import React.Flux
 import Control.DeepSeq
 import GHC.Generics (Generic)
 import Data.Typeable (Typeable)
+import qualified Data.Text as T
 
 data Todo = Todo {
-    todoText :: String
+    todoText :: T.Text
   , todoComplete :: Bool
   , todoIsEditing :: Bool
 } deriving (Show, Typeable)
@@ -16,10 +17,10 @@ newtype TodoState = TodoState {
     todoList :: [(Int, Todo)]
 } deriving (Show, Typeable)
 
-data TodoAction = TodoCreate String
+data TodoAction = TodoCreate T.Text
                 | TodoDelete Int
                 | TodoEdit Int
-                | UpdateText Int String
+                | UpdateText Int T.Text
                 | ToggleAllComplete
                 | TodoSetComplete Int Bool
                 | ClearCompletedTodos

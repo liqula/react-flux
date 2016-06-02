@@ -100,7 +100,7 @@ todoFooter = defineView "footer" $ \(TodoState todos) ->
                 button_ [ "id" $= "clear-completed"
                         , onClick $ \_ _ -> dispatchTodo ClearCompletedTodos
                         ] $
-                    elemText $ "Clear completed (" ++ show completed ++ ")"
+                    elemString $ "Clear completed (" ++ show completed ++ ")"
 
 -- | A render combinator for the footer
 todoFooter_ :: TodoState -> ReactElementM eventHandler ()

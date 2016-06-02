@@ -7,15 +7,17 @@ module TodoComponents where
 
 import Data.Typeable (Typeable)
 import React.Flux
+import Data.JSString (JSString)
+import qualified Data.Text as T
 
 -- | The properties for the text input component.  Note how we can pass anything, including
 -- functions, as the properties; the only requirement is an instance of Typeable.
 data TextInputArgs = TextInputArgs {
-      tiaId :: Maybe String
-    , tiaClass :: String
-    , tiaPlaceholder :: String
-    , tiaOnSave :: String -> [SomeStoreAction]
-    , tiaValue :: Maybe String
+      tiaId :: Maybe JSString
+    , tiaClass :: JSString
+    , tiaPlaceholder :: JSString
+    , tiaOnSave :: T.Text -> [SomeStoreAction]
+    , tiaValue :: Maybe T.Text
 } deriving (Typeable)
 
 -- | The text input stateful view.  The state is the text that has been typed into the textbox
@@ -24,23 +26,23 @@ data TextInputArgs = TextInputArgs {
 todoTextInput :: ReactView TextInputArgs
 todoTextInput = defineStatefulView "todo text input" "" $ \curText args ->
     input_ $
-        maybe [] (\i -> ["id" @= i]) (tiaId args)
+        maybe [] (\i -> ["id" &= i]) (tiaId args)
         ++
-        [ "className" @= tiaClass args
-        , "placeholder" @= tiaPlaceholder args
-        , "value" @= curText -- using value here creates a controlled component: https://facebook.github.io/react/docs/forms.html
-        , "autoFocus" @= True
+        [ "className" &= tiaClass args
+        , "placeholder" &= tiaPlaceholder args
+        , "value" &= curText -- using value here creates a controlled component: https://facebook.github.io/react/docs/forms.html
+        , "autoFocus" &= True
 
         -- Update the current state with the current text in the textbox, sending no actions
         , onChange $ \evt _ -> ([], Just $ target evt "value")
 
         -- Produce the save action and reset the current state to the empty string
         , onBlur $ \_ _ curState ->
-            if not (null curState)
+            if not (T.null curState)
                 then (tiaOnSave args curState, Just "")
                 else ([], Nothing)
         , onKeyDown $ \_ evt curState ->
-             if keyCode evt == 13 && not (null curState) -- 13 is enter
+             if keyCode evt == 13 && not (T.null curState) -- 13 is enter
                  then (tiaOnSave args curState, Just "")
                  else ([], Nothing)
         ]
