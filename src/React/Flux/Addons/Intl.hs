@@ -159,7 +159,6 @@ import qualified Data.ByteString.Lazy as BL
 import qualified Data.HashMap.Strict as H
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
-import Debug.Trace (trace)
 
 #ifdef __GHCJS__
 
@@ -201,8 +200,8 @@ foreign import javascript unsafe
     js_mkDate :: Int -> Int -> Int -> JSVal
 
 -- | Convert a day to a javascript Date
-dayToRef :: Day -> JSVal
-dayToRef day = js_mkDate (fromIntegral y) m d
+dayToJSVal :: Day -> JSVal
+dayToJSVal day = js_mkDate (fromIntegral y) m d
     where
         (y, m, d) = toGregorian day
 
@@ -211,15 +210,13 @@ foreign import javascript unsafe
     js_mkDateTime :: Int -> Int -> Int -> Int -> Int -> Int -> Int -> JSVal
 
 -- | Convert a UTCTime to a javascript date object.
-timeToRef :: UTCTime -> JSVal
-timeToRef u@(UTCTime uday time) = 
-        trace ("converting time " ++ show u ++ " with " ++ show (year, month, day, hour, minute, sec, micro)) $
-        js_mkDateTime (fromIntegral year) month day hour minute sec micro
+timeToJSVal :: UTCTime -> JSVal
+timeToJSVal u@(UTCTime uday time) = js_mkDateTime (fromIntegral year) month day hour minute sec milli
     where
         (year, month, day) = toGregorian uday
         TimeOfDay hour minute pSec = timeToTimeOfDay time
         (sec, fracSec) = properFraction pSec
-        micro = round $ fracSec * 1000000 --pico is 10^12, microsecond is 10^6
+        milli = round $ fracSec * 1000 -- milli is 10^3
 
 foreign import javascript unsafe
     "$1['intl'][$2]($3, $4)"
@@ -249,11 +246,11 @@ js_formatMsg = ()
 js_formatHtmlMsg :: JSVal
 js_formatHtmlMsg = ()
 
-dayToRef :: Day -> JSVal
-dayToRef _ = ()
+dayToJSVal :: Day -> JSVal
+dayToJSVal _ = ()
 
-timeToRef :: UTCTime -> JSVal
-timeToRef _ = ()
+timeToJSVal :: UTCTime -> JSVal
+timeToJSVal _ = ()
 
 class ToJSVal a
 instance ToJSVal JSVal
@@ -267,10 +264,10 @@ iprop :: ToJSVal v => JSString -> v -> IntlProperty
 iprop = IntlProperty
 
 dayProp :: JSString -> Day -> IntlProperty
-dayProp n d = IntlProperty n (dayToRef d)
+dayProp n d = IntlProperty n (dayToJSVal d)
 
 timeProp :: JSString -> UTCTime -> IntlProperty
-timeProp n t = IntlProperty n (timeToRef t)
+timeProp n t = IntlProperty n (timeToJSVal t)
 
 #ifdef __GHCJS__
 data ContextApiCall a = ContextApiCall JSString a [IntlProperty] JSVal
@@ -420,7 +417,7 @@ shortDateTime = (shortDate, TimeFormat
 day_ :: DayFormat -> Day -> ReactElementM eventHandler ()
 day_ fmt day = time_ [property "dateTime" dateRef] $ foreignClass js_formatDate props mempty
     where
-        dateRef = dayToRef day
+        dateRef = dayToJSVal day
         props = property "value" dateRef : dayFtoProps fmt
 
 -- | Display a 'UTCTime' using the given format.  Despite giving the time in UTC, it will be
@@ -429,7 +426,7 @@ day_ fmt day = time_ [property "dateTime" dateRef] $ foreignClass js_formatDate 
 utcTime_ :: (DayFormat, TimeFormat) -> UTCTime -> ReactElementM eventHandler ()
 utcTime_ (dayFmt, timeF) t = time_ [property "dateTime" timeRef] $ foreignClass js_formatDate props mempty
     where
-        timeRef = timeToRef t
+        timeRef = timeToJSVal t
         props = property "value" timeRef : (dayFtoProps dayFmt ++ timeFtoProps timeF)
 
 -- | A raw <http://formatjs.io/react/#formatted-date FormattedDate> class which allows custom
@@ -440,7 +437,7 @@ utcTime_ (dayFmt, timeF) t = time_ [property "dateTime" timeRef] $ foreignClass 
 formattedDate_ :: Either Day UTCTime -> [PropertyOrHandler eventHandler] -> ReactElementM eventHandler ()
 formattedDate_ t props = foreignClass js_formatDate (valProp:props) mempty
     where
-        valProp = property "value" $ either dayToRef timeToRef t
+        valProp = property "value" $ either dayToJSVal timeToJSVal t
 
 -- | Format a day or time as a string, and then use it as the value for a property.  'day_',
 -- 'utcTime_', or 'formattedDate_' should be prefered because as components they can avoid re-rendering when
@@ -452,23 +449,23 @@ formattedDateProp :: JSString -- ^ the property to set
                                     -- <https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/DateTimeFormat Intl.DateTimeFormat>.
                   -> PropertyOrHandler eventHandler
 formattedDateProp name (Left day) options =
-    formatCtx name "formatDate" (dayToRef day) options
+    formatCtx name "formatDate" (dayToJSVal day) options
 formattedDateProp name (Right time) options =
-    formatCtx name "formatTime" (timeToRef time) options
+    formatCtx name "formatTime" (timeToJSVal time) options
 
 -- | Display the 'UTCTime' as a relative time.  In addition, wrap the display in a HTML5
 -- <https://developer.mozilla.org/en-US/docs/Web/HTML/Element/time time> element.
 relativeTo_ :: UTCTime -> ReactElementM eventHandler ()
 relativeTo_ t = time_ [property "dateTime" timeRef] $ foreignClass js_formatRelative [property "value" timeRef] mempty
     where
-        timeRef = timeToRef t
+        timeRef = timeToJSVal t
 
 -- | Format the given UTCTime using the <http://formatjs.io/react/#formatted-relative FormattedRelative>
 -- class to display a relative time to now.  The given 'UTCTime' is passed in the value property.
 -- The supported style/formatting properties are \"units\" which can be one of second, minute, hour,
 -- day, month, or year and \"style\" which if given must be numeric.
 formattedRelative_ :: UTCTime -> [PropertyOrHandler eventHandler] -> ReactElementM eventHandler ()
-formattedRelative_ t props = foreignClass js_formatRelative (property "value" (timeToRef t) : props) mempty
+formattedRelative_ t props = foreignClass js_formatRelative (property "value" (timeToJSVal t) : props) mempty
 
 -- | Format a time as a relative time string, and then use it as the value for a property.
 -- 'relativeTo_' or 'formattedRelative_' should be prefered because as components they can avoid re-rendering when
@@ -479,7 +476,7 @@ formattedRelativeProp :: JSString -- ^ te property to set
                       -> [IntlProperty] -- ^ an object with properties \"units\" and \"style\".  \"units\" accepts values second, minute, hour
                                         -- day, month, or year and \"style\" accepts only the value \"numeric\".
                       -> PropertyOrHandler eventHandler
-formattedRelativeProp name time options = formatCtx name "formatRelative" (timeToRef time) options
+formattedRelativeProp name time options = formatCtx name "formatRelative" (timeToJSVal time) options
 
 --------------------------------------------------------------------------------
 -- Plural
