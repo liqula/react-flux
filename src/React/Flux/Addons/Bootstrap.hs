@@ -1,6 +1,12 @@
 -- | Bindings to <http://react-bootstrap.github.io/ React-Bootstrap>.  To use this
 -- binding, include the browser-global version of @react-bootstrap.js@ so that @window.ReactBootstrap@
 -- is defined.  You can then use 'bootstrap_' inside your rendering functions.
+--
+-- Note: I initially wrote these bindings when I was first starting React, but after some experience
+-- I think that bootstrap and react just do not fit together and I no longer use bootstrap and react
+-- together.  While I am leaving this here for backwards compatibility, I suggest you use a different
+-- library.  I am currently using <http://www.material-ui.com Material UI> and accessing the
+-- components using @foreign_@.
 module React.Flux.Addons.Bootstrap (
     bootstrap_
 ) where
