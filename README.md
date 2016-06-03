@@ -12,29 +12,27 @@ The [haddocks](https://hackage.haskell.org/package/react-flux) contain the docum
 
 I use stack to build my frontend which uses react-flux.  I set up stack and
 ghcjs using [these
-instructions](http://docs.haskellstack.org/en/stable/ghcjs.html).  Note that
-react-flux requires GHCJS master (a.k.a. improved base).  At the moment I want
-to use GHC 7.10.3 and no ghcjs snapshot uses lts-4.1 and GHC 7.10.3, so I am
-building ghcjs manually.  So what I do is [install ghcjs from
-git](https://github.com/ghcjs/ghcjs) using the following.  (Once the ghcjs
-snapshots have caught up I will transition to using them and have stack install
-ghcjs instead of installing ghcjs manually.)
+instructions](http://docs.haskellstack.org/en/stable/ghcjs/).  Note that
+react-flux requires GHCJS master (a.k.a. improved base).  I keep updated with
+the latest version of GHCJS and lts.  As I write this, I use the following `stack.yaml`,
+but as new LTS versions or new GHCJS versions come out I keep updating to them (and
+probably forget to update this README :)
 
 ~~~
-$ git clone https://github.com/ghcjs/ghcjs.git
-$ cabal install ./ghcjs
-$ ghcjs-boot --dev
-~~~
-
-After this, in my application which depends on react-flux, I use the following `stack.yaml`:
-
-~~~
-resolver: lts-4.1
-compiler: ghcjs-0.2.0_ghc-7.10.3
+resolver: lts-6.1
 packages:
     - .
 extra-deps:
     - react-flux-(version)
+
+compiler: ghcjs-0.2.0.20160414_ghc-7.10.3
+compiler-check: match-exact
+setup-info:
+  ghcjs:
+    source:
+      ghcjs-0.2.0.20160414_ghc-7.10.3:
+        url: https://s3.amazonaws.com/ghcjs/ghcjs-0.2.0.20160414_ghc-7.10.3.tar.gz
+        sha1: 6d6f307503be9e94e0c96ef1308c7cf224d06be3
 ~~~
 
 
@@ -77,7 +75,7 @@ release candiate of the react-intl library must be installed from npm.
 
 ~~~
 cd test/client
-npm install react-intl@v2.0.0-rc-1
+npm install react-intl
 ~~~
 
 Finally, start selenium-server-standalone and execute the test suite.  Make sure you also have
