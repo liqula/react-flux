@@ -52,7 +52,6 @@ import React.Flux.Export
 import GHCJS.Foreign (jsNull)
 import GHCJS.Foreign.Callback
 import GHCJS.Types (JSVal, jsval)
-import Data.JSString (JSString)
 
 #endif
 

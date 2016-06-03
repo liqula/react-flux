@@ -145,7 +145,7 @@ import Data.Time
 import Language.Haskell.TH (runIO, Q, Loc, location, ExpQ)
 import Language.Haskell.TH.Syntax (liftString, qGetQ, qPutQ, reportWarning, Dec)
 import React.Flux
-import React.Flux.Internal (PropertyOrHandler(PropertyFromContext))
+import React.Flux.Internal (PropertyOrHandler(PropertyFromContext), toJSString)
 import System.IO (withFile, IOMode(..))
 import qualified Data.Aeson as Aeson
 import qualified Data.ByteString as B
@@ -156,10 +156,9 @@ import qualified Data.Text.Encoding as T
 
 #ifdef __GHCJS__
 
-import GHCJS.Types (JSVal, JSString)
+import GHCJS.Types (JSString, JSVal)
 import GHCJS.Marshal (ToJSVal(..))
 import qualified JavaScript.Object as JSO
-import qualified Data.JSString as JSS
 
 foreign import javascript unsafe
     "$r = ReactIntl['IntlProvider']"
@@ -616,7 +615,7 @@ formatMessageProp :: T.Text -> T.Text -> MessageId -> Message -> ExpQ -- Q (TExp
 formatMessageProp func name ident m = do
     recordMessage ident m
     let liftedMsg = [| object ["id" .= T.pack $(liftString $ T.unpack ident), "defaultMessage" .= T.pack $(liftString $ T.unpack $ msgDefaultMsg m) ] |]
-    [|\options -> formatCtx (JSS.pack $(liftString $ T.unpack name)) (JSS.pack $(liftString $ T.unpack func)) $liftedMsg options |]
+    [|\options -> formatCtx (toJSString $(liftString $ T.unpack name)) (toJSString $(liftString $ T.unpack func)) $liftedMsg options |]
 
 -- | A raw @FormattedMessage@ element.  The given properties are passed directly with no handling.
 -- Any message is not recorded in Template Haskell and will not appear in any resulting message file

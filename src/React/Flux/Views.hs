@@ -14,7 +14,7 @@ import System.IO.Unsafe (unsafePerformIO)
 import React.Flux.Export
 import JavaScript.Array
 import GHCJS.Foreign.Callback
-import GHCJS.Types (JSVal, JSString, IsJSVal, nullRef)
+import GHCJS.Types (JSVal, IsJSVal, nullRef)
 import GHCJS.Marshal (ToJSVal(..), FromJSVal(..))
 import GHCJS.Marshal.Pure (PToJSVal(..))
 import qualified JavaScript.Array as JSA
@@ -22,8 +22,9 @@ import qualified JavaScript.Array as JSA
 #else
 type JSVal = ()
 type JSArray = ()
-type JSString = String
 class FromJSVal a
+pToJSVal :: a -> JSVal
+pToJSVal _ = ()
 #endif
 
 

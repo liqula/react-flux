@@ -122,7 +122,7 @@ import React.Flux.Combinators
 import React.Flux.Store
 
 #ifdef __GHCJS__
-import GHCJS.Types (JSString, JSVal, nullRef)
+import GHCJS.Types (JSVal, nullRef)
 import GHCJS.Marshal (fromJSVal)
 #endif
 

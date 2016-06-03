@@ -33,7 +33,7 @@ import Control.Arrow ((***))
 import Control.DeepSeq (deepseq)
 import GHCJS.Foreign.Callback
 import GHCJS.Marshal (ToJSVal(..), toJSVal_aeson, FromJSVal(..))
-import GHCJS.Types (JSString, JSVal)
+import GHCJS.Types (JSVal)
 import qualified Data.Text as T
 import qualified Data.JSString.Text as JSS
 
@@ -45,8 +45,6 @@ foreign import javascript unsafe
 #else
 js_lookupWindow :: a -> ()
 js_lookupWindow _ = ()
-
-type JSString = String
 #endif
 
 -- | A wrapper around 'foreignClass' that looks up the class on the `window`.  I use it for several
@@ -132,8 +130,8 @@ faIcon_ cl = i_ ["className" &= ("fa fa-" <> cl)] mempty
 
 -- | A simple combinator to easily write <https://facebook.github.io/react/tips/inline-styles.html inline styles>
 -- on elements.
-style :: [(Text,Text)] -> PropertyOrHandler handler
-style = nestedProperty "style" . map (\(n,a) -> (JSS.textToJSString n &= a))
+style :: [(JSString,JSString)] -> PropertyOrHandler handler
+style = nestedProperty "style" . map (\(n,a) -> (n &= a))
 
 --------------------------------------------------------------------------------
 --- Ajax

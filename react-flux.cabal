@@ -108,7 +108,8 @@ executable todo
                 , react-flux
                 , deepseq
                 , text
-                , ghcjs-base
+   if impl(ghcjs)
+      build-depends: ghcjs-base
 
 executable todo-node
    if !flag(example)
@@ -122,7 +123,8 @@ executable todo-node
                 , react-flux
                 , deepseq
                 , text
-                , ghcjs-base
+   if impl(ghcjs)
+      build-depends: ghcjs-base
 
 executable purecss-side-menu
    if !flag(example)

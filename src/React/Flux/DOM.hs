@@ -48,12 +48,6 @@ module React.Flux.DOM where
 
 import React.Flux.Internal
 
-#ifdef __GHCJS__
-import Data.JSString (JSString)
-#else
-type JSString = String
-#endif
-
 -- | This class allows the DOM combinators to optionally take a list of properties or handlers, or
 -- for the list to be omitted.
 class Term eventHandler arg result | result -> arg, result -> eventHandler where

@@ -108,17 +108,15 @@ import           React.Flux.Views (ReactView(..), ViewEventHandler, StatefulView
 import           Data.Maybe (fromMaybe)
 
 import           GHCJS.Foreign (fromJSBool)
-import           GHCJS.Marshal (ToJSVal(..), FromJSVal(..))
-import           GHCJS.Types (JSVal, nullRef, JSString, IsJSVal)
+import           GHCJS.Marshal (FromJSVal(..))
+import           GHCJS.Types (JSVal, nullRef, IsJSVal)
 import           JavaScript.Array as JSA
 import qualified Data.JSString.Text as JSS
 
 #else
 type JSVal = ()
-type JSString = String
 type JSArray = ()
 class FromJSVal a
-class ToJSVal a
 class IsJSVal a
 nullRef :: ()
 nullRef = ()
@@ -245,11 +243,6 @@ callbackViewWithProps name v func = CallbackPropertyReturningView name (\arr -> 
 -- | Create a property from any aeson value (the at sign looks like "A" for aeson)
 (@=) :: A.ToJSON a => JSString -> a -> PropertyOrHandler handler
 n @= a = Property n (A.toJSON a)
-
--- | Create a property for anything that can be converted to a javascript value using the @ToJSVal@
--- class from the @ghcjs-base@ package..  This is just an infix version of 'property'.
-(&=) :: ToJSVal a => JSString -> a -> PropertyOrHandler handler
-n &= a = Property n a
 
 -- | Create a text-valued property.  This is here to avoid problems when OverloadedStrings extension
 -- is enabled
@@ -754,7 +747,7 @@ js_getArrayProp _ _ = ()
 (.:) :: JSVal -> JSString -> b
 _ .: _ = undefined
 
-getModifierState :: JSVal -> JSString -> Bool
+getModifierState :: JSVal -> T.Text -> Bool
 getModifierState _ _ = False
 
 arrayLength :: JSArray -> Int

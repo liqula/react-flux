@@ -9,6 +9,7 @@ module React.Flux.Internal(
   , HandlerArg(..)
   , PropertyOrHandler(..)
   , property
+  , (&=)
   , ReactElement(..)
   , ReactElementM(..)
   , elemString
@@ -19,8 +20,9 @@ module React.Flux.Internal(
   , childrenPassedToView
   , elementToM
   , mkReactElement
-  , toJSString
   , exportViewToJs
+  , toJSString
+  , JSString
 ) where
 
 import           Data.String (IsString(..))
@@ -28,7 +30,7 @@ import           Data.Aeson
 import           Data.Typeable (Typeable)
 import           Control.Monad.Writer
 import           Control.Monad.Identity (Identity(..))
-import           Data.Text (Text)
+import qualified Data.Text as T
 
 #ifdef __GHCJS__
 import           Unsafe.Coerce
@@ -51,6 +53,10 @@ instance ToJSVal Text
 instance ToJSVal ()
 class IsJSVal a
 type JSArray = JSVal
+type JSString = String
+instance IsJSVal JSVal
+instance IsJSVal JSString
+instance ToJSVal JSString
 #endif
 
 -- type JSObject a = JSO.Object a
@@ -118,6 +124,11 @@ instance Functor PropertyOrHandler where
 -- | Create a property from anything that can be converted to a JSVal
 property :: ToJSVal val => JSString -> val -> PropertyOrHandler handler
 property = Property
+
+-- | Create a property for anything that can be converted to a javascript value using the @ToJSVal@
+-- class from the @ghcjs-base@ package..  This is just an infix version of 'property'.
+(&=) :: ToJSVal a => JSString -> a -> PropertyOrHandler handler
+n &= a = Property n a
 
 -- | A React element is a node or list of nodes in a virtual tree.  Elements are the output of the
 -- rendering functions of classes.  React takes the output of the rendering function (which is a
@@ -201,8 +212,12 @@ elemString :: String -> ReactElementM eventHandler ()
 elemString s = elementToM () $ Content $ toJSString s
 
 -- | Create a text element from a text value. The text content is escaped to be HTML safe.
-elemText :: Text -> ReactElementM eventHandler ()
+elemText :: T.Text -> ReactElementM eventHandler ()
+#ifdef __GHCJS__
 elemText s = elementToM () $ Content $ JSS.textToJSString s
+#else
+elemText s = elementToM () $ Content $ T.unpack s
+#endif
 
 -- | Create a text element from a @JSString@.  This is more efficient for hard-coded strings than
 -- converting from text to a JavaScript string.  The string is escaped to be HTML safe.
