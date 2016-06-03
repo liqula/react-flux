@@ -1,4 +1,4 @@
-# Unreleased
+# 1.1.0
 
 * Breaking Change - I removed the use of `String` and replaced it with either `Text` or `JSString`
   (from the `Data.JSString` module in `ghcjs-base`).  If a value was just going to be passed straight into
