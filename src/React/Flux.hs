@@ -30,12 +30,12 @@
 -- >})(window, window['React'], window['ReactDOM']);
 --
 -- __Node Deployment__: 'reactRenderToString' is used to render the application to a string when
--- running in node (not the browser).  To execute with node, you need to get @global.React@ (and
--- @global.ReactDOM@ for >=0.14) before executing all.js.  The TODO example application does this by
+-- running in node (not the browser).  To execute with node, you need to get @global.React@ and
+-- @global.ReactDOMServer@  before executing all.js.  The TODO example application does this by
 -- creating a file @run-in-node.js@ with the contents
 --
 -- >React = require("react");
--- >ReactDOM = require("react-dom");
+-- >ReactDOMServer = require("react-dom/server");
 -- >require("../../js-build/install-root/bin/todo-node.jsexe/all.js");
 --
 -- __React Native__: This module also works with <https://facebook.github.io/react-native/ React-Native>
@@ -154,8 +154,8 @@ reactRender _ _ _ = return ()
 
 #endif
 
--- | Render your React application to a string using either @React.renderToString@ if the first
--- argument is false or @React.renderToStaticMarkup@ if the first argument is true.
+-- | Render your React application to a string using either @ReactDOMServer.renderToString@ if the first
+-- argument is false or @ReactDOMServer.renderToStaticMarkup@ if the first argument is true.
 -- Use this only on the server when running with node.
 reactRenderToString :: Typeable props
                     => Bool -- ^ Render to static markup?  If true, this won't create extra DOM attributes
@@ -175,11 +175,11 @@ reactRenderToString includeStatic rc props = do
     maybe (error "Unable to convert string return to Text") return mtxt
 
 foreign import javascript unsafe
-    "(typeof ReactDOM === 'object' ? ReactDOM : React)['renderToString']($1)"
+    "(typeof ReactDOMServer === 'object' ? ReactDOMServer : (typeof ReactDOM === 'object' ? ReactDOM : React))['renderToString']($1)"
     js_ReactRenderToString :: ReactElementRef -> IO JSVal
 
 foreign import javascript unsafe
-    "(typeof ReactDOM === 'object' ? ReactDOM : React)['renderToStaticMarkup']($1)"
+    "(typeof ReactDOMServer === 'object' ? ReactDOMServer : (typeof ReactDOM === 'object' ? ReactDOM : React))['renderToStaticMarkup']($1)"
     js_ReactRenderStaticMarkup :: ReactElementRef -> IO JSVal
 
 #else

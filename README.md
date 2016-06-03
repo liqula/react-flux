@@ -60,23 +60,18 @@ the first `stack build` below.  Then, you must build the test suite, which is a
 haskell application using
 [hspec-webdriver](https://hackage.haskell.org/package/hspec-webdriver).  This
 must be built using GHC (not GHCJS), so there is a separate `stack.yaml` file
-in the `test/spec` directory.  In summary, run the following commands:
+in the `test/spec` directory.  Also, `react-intl` must be installed in the test client
+directory.  In summary, run the following commands:
 
 ~~~ {.bash}
-stack build
-make
+cd test/client
+npm install react-intl
 cd test/spec
 stack build
 ~~~
 
 Next, install [selenium-server-standalone](http://www.seleniumhq.org/download/) (also from
-[npm](https://www.npmjs.com/package/selenium-server-standalone-jar)). Also, at the moment, the
-release candiate of the react-intl library must be installed from npm.
-
-~~~
-cd test/client
-npm install react-intl
-~~~
+[npm](https://www.npmjs.com/package/selenium-server-standalone-jar)).
 
 Finally, start selenium-server-standalone and execute the test suite.  Make sure you also have
 closure installed, since the test suite will compress the todo app before testing it.  It must be
