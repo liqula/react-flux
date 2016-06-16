@@ -99,6 +99,8 @@ import           Data.Monoid ((<>))
 import qualified Data.Text as T
 import qualified Data.Aeson as A
 import qualified Data.HashMap.Strict as M
+import           Data.Word
+import           Data.Int
 
 import           React.Flux.Internal
 import           React.Flux.Store
@@ -117,6 +119,30 @@ import qualified Data.JSString.Text as JSS
 type JSVal = ()
 type JSArray = ()
 class FromJSVal a
+instance FromJSVal ()
+instance FromJSVal a => FromJSVal [a]
+instance FromJSVal a => FromJSVal (Maybe a)
+instance FromJSVal T.Text
+instance FromJSVal Char
+instance FromJSVal Bool
+instance FromJSVal Int
+instance FromJSVal Int8
+instance FromJSVal Int16
+instance FromJSVal Int32
+instance FromJSVal Word
+instance FromJSVal Word8
+instance FromJSVal Word16
+instance FromJSVal Word32
+instance FromJSVal Float
+instance FromJSVal Double
+instance FromJSVal A.Value
+instance (FromJSVal a, FromJSVal b) => FromJSVal (a,b)
+instance (FromJSVal a, FromJSVal b, FromJSVal c) => FromJSVal (a,b,c)
+instance (FromJSVal a, FromJSVal b, FromJSVal c, FromJSVal d) => FromJSVal (a,b,c,d)
+instance (FromJSVal a, FromJSVal b, FromJSVal c, FromJSVal d, FromJSVal e) => FromJSVal (a,b,c,d,e)
+instance (FromJSVal a, FromJSVal b, FromJSVal c, FromJSVal d, FromJSVal e, FromJSVal f) => FromJSVal (a,b,c,d,e,f)
+instance (FromJSVal a, FromJSVal b, FromJSVal c, FromJSVal d, FromJSVal e, FromJSVal f, FromJSVal g) => FromJSVal (a,b,c,d,e,f,g)
+instance (FromJSVal a, FromJSVal b, FromJSVal c, FromJSVal d, FromJSVal e, FromJSVal f, FromJSVal g, FromJSVal h) => FromJSVal (a,b,c,d,e,f,g,h)
 class IsJSVal a
 nullRef :: ()
 nullRef = ()
