@@ -87,8 +87,6 @@ module React.Flux.Addons.Intl(
   -- * Formatting
   , IntlProperty
   , iprop
-  , dayProp
-  , timeProp
   
   -- ** Numbers
   , int_
@@ -105,6 +103,10 @@ module React.Flux.Addons.Intl(
   , utcTime_
   , formattedDate_
   , formattedDateProp
+  , dayToJSVal
+  , timeToJSVal
+  , dayProp
+  , timeProp
 
   -- ** Relative Times
   , relativeTo_
@@ -192,28 +194,14 @@ foreign import javascript unsafe
     "$r = (new Date($1, $2-1, $3))"
     js_mkDate :: Int -> Int -> Int -> JSVal
 
--- | Convert a day to a javascript Date
-dayToJSVal :: Day -> JSVal
-dayToJSVal day = js_mkDate (fromIntegral y) m d
-    where
-        (y, m, d) = toGregorian day
-
 foreign import javascript unsafe
     "$r = (new Date(Date.UTC($1, $2-1, $3, $4, $5, $6, $7)))"
     js_mkDateTime :: Int -> Int -> Int -> Int -> Int -> Int -> Int -> JSVal
 
--- | Convert a UTCTime to a javascript date object.
-timeToJSVal :: UTCTime -> JSVal
-timeToJSVal (UTCTime uday time) = js_mkDateTime (fromIntegral year) month day hour minute sec milli
-    where
-        (year, month, day) = toGregorian uday
-        TimeOfDay hour minute pSec = timeToTimeOfDay time
-        (sec, fracSec) = properFraction pSec
-        milli = round $ fracSec * 1000 -- milli is 10^3
-
 foreign import javascript unsafe
     "$1['intl'][$2]($3, $4)"
     js_callContextAPI :: JSVal -> JSString -> JSVal -> JSO.Object -> IO JSVal
+
 #else
 
 type JSVal = ()
@@ -239,26 +227,63 @@ js_formatMsg = ()
 js_formatHtmlMsg :: JSVal
 js_formatHtmlMsg = ()
 
-dayToJSVal :: Day -> JSVal
-dayToJSVal _ = ()
-
-timeToJSVal :: UTCTime -> JSVal
-timeToJSVal _ = ()
-
 class ToJSVal a
 instance ToJSVal JSVal
 type JSString = String
+
 #endif
 
+-- | Convert a day to a javascript Date.  This is useful to pass a date as a property to a
+-- 'message'.  Note that @JSVal@ is an instance of @ToJSVal@ so the result of 'dayToJSVal' can
+-- be passed as a property via '(&=)'.
+dayToJSVal :: Day -> JSVal
+#ifdef __GHCJS__
+dayToJSVal day = js_mkDate (fromIntegral y) m d
+    where
+        (y, m, d) = toGregorian day
+#else
+dayToJSVal _ = ()
+#endif
 
+-- | Convert a UTCTime to a javascript date object.  This is useful to pass a time as a property
+-- to a 'message'.  Note that @JSVal@ is an instance of @ToJSVal@ so the result of 'timeToJSVal' can
+-- be passed as a property via '(&=)'.
+timeToJSVal :: UTCTime -> JSVal
+#ifdef __GHCJS__
+timeToJSVal (UTCTime uday time) = js_mkDateTime (fromIntegral year) month day hour minute sec milli
+    where
+        (year, month, day) = toGregorian uday
+        TimeOfDay hour minute pSec = timeToTimeOfDay time
+        (sec, fracSec) = properFraction pSec
+        milli = round $ fracSec * 1000 -- milli is 10^3
+#else
+timeToJSVal _ = ()
+#endif
+
+-- | A property and value that is passed to the intl elements below in situations where
+-- React elements can not be used.
+--
+-- Some of the intl elements below such as 'message' (among others) allow other React elements to
+-- be passed as properties.  In this case, 'PropertyOrHandler' is used as the
+-- type for the parameters and elements can be passed using 'elementProperty'.
+-- But for some intl elements below such as 'messageProp', a limitation on the internals of this
+-- @react-flux@ package disallow element properties to be created and so only basic javascript
+-- values can be passed.  In these situations, the type 'IntlProperty' is used to restrict the
+-- properties to basic javascript values.
 data IntlProperty = forall ref. ToJSVal ref => IntlProperty JSString ref
 
+-- | Create an 'IntlProperty' from a property name and anything that can be converted to a
+-- javascript value. (@ToJSVal@ lives in @GHCJS.Foreign.Marshal@ module in the @ghcjs-base@ package.)
 iprop :: ToJSVal v => JSString -> v -> IntlProperty
 iprop = IntlProperty
 
+-- | Convert a day to a javascript date and set it as a property.  This is primarily useful to be able
+-- to pass a date as a property to 'messageProp'.
 dayProp :: JSString -> Day -> IntlProperty
 dayProp n d = IntlProperty n (dayToJSVal d)
 
+-- | Convert a 'UTCTime' to a javascript date and set it as a property.  This is primarily useful to
+-- be able to pass a time as a property to 'messageProp'.
 timeProp :: JSString -> UTCTime -> IntlProperty
 timeProp n t = IntlProperty n (timeToJSVal t)
 
