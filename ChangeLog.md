@@ -1,3 +1,14 @@
+# 1.1.1
+
+* When compiling with GHC (not GHCJS), add fake instances for FromJSVal to allow more programs to compile
+  with GHC.  (Thanks Sönke Hahn!)
+
+* Export functions `timeToJSVal` and `dateToJSVal` from `React.Flux.Addons.Intl`.  These functions, which
+  have been used internally for a while, convert a Haskell `Day` or `UTCTime` to a JavaScript date.  They
+  are useful outside of `react-flux` when you want to pass dates or times to messages.
+
+* Some haddock improvements to `React.Flux.Addons.Intl`.
+
 # 1.1.0
 
 * Breaking Change - I removed the use of `String` and replaced it with either `Text` or `JSString`
