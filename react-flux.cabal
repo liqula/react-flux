@@ -1,5 +1,5 @@
 name:                react-flux
-version:             1.1.1
+version:             1.2.0
 synopsis:            A binding to React based on the Flux application architecture for GHCJS
 category:            Web
 homepage:            https://bitbucket.org/wuzzeb/react-flux
@@ -60,6 +60,7 @@ library
                    React.Flux.PropertiesAndEvents
                    React.Flux.Combinators
                    React.Flux.Lifecycle
+                   React.Flux.Ajax
                    React.Flux.Internal
                    React.Flux.Addons.React
                    React.Flux.Addons.Bootstrap

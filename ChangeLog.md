@@ -1,3 +1,10 @@
+# Unreleased
+
+* Add timeout support to the AJAX functionality.  This has three changes.  First, the AJAX code moved
+  into it's own module `React.Flux.Ajax` which is not re-exported by `React.Flux`.  Second, the
+  `AjaxRequest` has a new entry `reqTimeout` to optionally specify a timeout value.  Finally, the
+  `jsonAjax` function now takes a `RequestTimeout` as the first parameter.
+
 # 1.1.1
 
 * When compiling with GHC (not GHCJS), add fake instances for FromJSVal to allow more programs to compile

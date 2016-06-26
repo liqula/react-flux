@@ -1,4 +1,4 @@
-resolver: lts-5.5
+resolver: lts-6.2
 compiler: ghcjs-0.2.0.20160414_ghc-7.10.3
 compiler-check: match-exact
 setup-info:
