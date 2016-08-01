@@ -1,9 +1,18 @@
-# Unreleased
+# 1.2.1
 
-* Add timeout support to the AJAX functionality.  This has three changes.  First, the AJAX code moved
+* A few fixes to get the haddock documentation (hopefully) working on hackage, no functional
+  change to any code in this release.
+
+# 1.2.0
+
+* (Breaking Change) Add timeout support to the AJAX functionality.  This has three changes.  First, the AJAX code moved
   into it's own module `React.Flux.Ajax` which is not re-exported by `React.Flux`.  Second, the
   `AjaxRequest` has a new entry `reqTimeout` to optionally specify a timeout value.  Finally, the
   `jsonAjax` function now takes a `RequestTimeout` as the first parameter.
+
+* `reactRender` and `reactRenderToString` now error when executed if you call them when compiling with GHC
+  instead of GHCJS.  These functions only work when using GHCJS to compile because for the actual rendering
+  we rely on the React javascript code.  In addition, there are a few haddock updates about this change.
 
 # 1.1.1
 
@@ -22,7 +31,7 @@
   (from the `Data.JSString` module in `ghcjs-base`).  If a value was just going to be passed straight into
   react, I made it a JSString and if the value was intended to be manipulated in Haskell I used Text.
   The main changes are:
-      
+
       * `elemText` used to (confusingly) take a `String`.  Now there are three functions: `elemString`,
         `elemText`, and `elemJSString` that take a `String`, `Text`, and `JSString` value respectively.
 

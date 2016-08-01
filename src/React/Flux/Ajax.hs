@@ -33,9 +33,11 @@ import React.Flux.Export
 -- response handler executes.
 data RequestTimeout = TimeoutMilliseconds Int | NoTimeout
 
+#ifdef __GHCJS__
 instance ToJSVal RequestTimeout where
     toJSVal (TimeoutMilliseconds i) = toJSVal i
     toJSVal NoTimeout = pure jsNull
+#endif
 
 -- | The input to an AJAX request built using @XMLHttpRequest@.
 data AjaxRequest = AjaxRequest
@@ -194,7 +196,7 @@ jsonAjax timeout method uri headers body handler = do
                         Error e -> handler $ Left (500, T.pack e)
             else handler $ Left (respStatus resp, JSS.textFromJSString $ respResponseText resp)
 #else
-jsonAjax _ _ _ _ _ = return ()
+jsonAjax _ _ _ _ _ _ = return ()
 #endif
 
 #ifdef __GHCJS__

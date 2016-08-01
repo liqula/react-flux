@@ -109,6 +109,12 @@ defineControllerView _ _ _ = ReactView (ReactViewRef ())
 -- 'viewWithSKey' and 'viewWithIKey'.  The key property allows React to more easily reconcile the virtual DOM with the
 -- browser DOM.
 --
+-- Due to React limitations (see <https://github.com/facebook/react/issues/2127 issue2127>), React
+-- views must have a single top-level element.  If your haskell code returns multiple top-level
+-- elements, react-flux will wrap them in a container @div@.  You should not rely on this and instead
+-- make sure each view returns only a single top-level element (such as @todoItem@ below returning only
+-- a single @li@ element).
+--
 -- The following is two example views: @mainSection_@ is just a Haskell function and @todoItem@
 -- is a React view.  We use the convention that an underscore suffix signifies a combinator
 -- which can be used in the rendering function.
@@ -129,7 +135,7 @@ defineControllerView _ _ _ = ReactView (ReactViewRef ())
 -- >    li_ [ classNames [("completed", todoComplete todo), ("editing", todoIsEditing todo)]
 -- >        , "key" @= todoIdx
 -- >        ] $ do
--- >        
+-- >
 -- >        div_ [ "className" $= "view"] $ do
 -- >            input_ [ "className" $= "toggle"
 -- >                   , "type" $= "checkbox"
