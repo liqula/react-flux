@@ -37,6 +37,12 @@ pToJSVal _ = ()
 -- This module supports 3 kinds of views.  All of the views provided by this module are pure, in the
 -- sense that the rendering function and event handlers cannot perform any IO.  All IO occurs inside
 -- the 'transform' function of a store.
+--
+-- Due to React limitations (see <https://github.com/facebook/react/issues/2127 issue2127>), React
+-- views must have a single top-level element.  If your haskell code returns multiple top-level
+-- elements, react-flux will wrap them in a container @div@.  You should not rely on this and instead
+-- make sure each view returns only a single top-level element (such as @todoItem@ below returning only
+-- a single @li@ element).
 newtype ReactView props = ReactView { reactView :: ReactViewRef props }
 
 ---------------------------------------------------------------------------------------------------
@@ -108,12 +114,6 @@ defineControllerView _ _ _ = ReactView (ReactViewRef ())
 -- Using a 'ReactView' provides more than just a Haskell function when used with a key property with
 -- 'viewWithSKey' and 'viewWithIKey'.  The key property allows React to more easily reconcile the virtual DOM with the
 -- browser DOM.
---
--- Due to React limitations (see <https://github.com/facebook/react/issues/2127 issue2127>), React
--- views must have a single top-level element.  If your haskell code returns multiple top-level
--- elements, react-flux will wrap them in a container @div@.  You should not rely on this and instead
--- make sure each view returns only a single top-level element (such as @todoItem@ below returning only
--- a single @li@ element).
 --
 -- The following is two example views: @mainSection_@ is just a Haskell function and @todoItem@
 -- is a React view.  We use the convention that an underscore suffix signifies a combinator
