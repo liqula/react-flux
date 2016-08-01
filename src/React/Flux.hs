@@ -131,6 +131,8 @@ import GHCJS.Marshal (fromJSVal)
 ----------------------------------------------------------------------------------------------------
 
 -- | Render your React application into the DOM.  Use this from your @main@ function, and only in the browser.
+-- 'reactRender' only works when compiled with GHCJS (not GHC), because we rely on the React javascript code
+-- to actually perform the rendering.
 reactRender :: Typeable props
             => String -- ^ The ID of the HTML element to render the application into.
                       -- (This string is passed to @document.getElementById@)
@@ -150,13 +152,19 @@ foreign import javascript unsafe
 
 #else
 
-reactRender _ _ _ = return ()
+reactRender _ _ _ = error "reactRender only works when compiled with GHCJS, because we rely on the javascript React code."
 
 #endif
 
 -- | Render your React application to a string using either @ReactDOMServer.renderToString@ if the first
 -- argument is false or @ReactDOMServer.renderToStaticMarkup@ if the first argument is true.
 -- Use this only on the server when running with node.
+-- 'reactRenderToString' only works when compiled with GHCJS (not GHC), because we rely on the React javascript code
+-- to actually perform the rendering.
+--
+-- If you are interested in isomorphic React, I suggest instead of using 'reactRenderToString' you use
+-- 'exportViewToJavaScript' and then write a small top-level JavaScript view which can then integrate with
+-- all the usual isomorphic React tools.
 reactRenderToString :: Typeable props
                     => Bool -- ^ Render to static markup?  If true, this won't create extra DOM attributes
                             -- that React uses internally.
@@ -184,7 +192,7 @@ foreign import javascript unsafe
 
 #else
 
-reactRenderToString _ _ _ = return ""
+reactRenderToString _ _ _ = error "reactRenderToString only works when compiled with GHCJS, because we rely on the javascript React code."
 
 #endif
 
