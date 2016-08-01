@@ -36,7 +36,7 @@ it renders it to a string and then displays it.  To execute this, run
 
 ~~~
 cd example/todo
-npm install react@0.14.6
+npm install react@15.3.0 react-dom@15.3.0
 node run-in-node.js
 ~~~
 
