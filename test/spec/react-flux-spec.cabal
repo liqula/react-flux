@@ -11,7 +11,7 @@ executable react-flux-spec
    build-depends: base
                 , hspec
                 , webdriver
-                , hspec-webdriver
+                , hspec-webdriver >= 1.2
                 , directory
                 , process
                 , transformers

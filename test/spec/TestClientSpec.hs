@@ -82,8 +82,11 @@ showWithComma i = show x ++ "," ++ replicate (3-length y') '0' ++ y'
 spec :: Spec
 spec = testClientSpec "test-client.html"
 
+allBrowsers :: [Capabilities]
+allBrowsers = [chromeCaps]
+
 testClientSpec :: String -> Spec
-testClientSpec filename = session " for the test client" $ using Chrome $ do
+testClientSpec filename = session " for the test client" $ using allBrowsers $ do
     it "opens the page" $ runWD $ do
         dir <- liftIO $ getCurrentDirectory
         openPage $ "file://" ++ dir ++ "/../client/" ++ filename

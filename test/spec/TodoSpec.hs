@@ -38,8 +38,11 @@ getRow i = do
     entries <- findElems $ ByCSS "ul#todo-list > li"
     return $ entries !! i
 
+allBrowsers :: [Capabilities]
+allBrowsers = [chromeCaps]
+
 spec :: Spec
-spec = session " for todo example application" $ using Chrome $ do
+spec = session " for todo example application" $ using allBrowsers $ do
     it "opens the page" $ runWD $ do
         dir <- liftIO $ getCurrentDirectory
         openPage $ "file://" ++ dir ++ "/../../example/todo/todo.html"
