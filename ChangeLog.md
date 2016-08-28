@@ -1,3 +1,8 @@
+# 1.2.2
+
+* Update the test suite to use hspec-webdriver-1.2.  There was no change to any code
+  besides the test suite.
+
 # 1.2.1
 
 * A few fixes to get the haddock documentation (hopefully) working on hackage, no functional
