@@ -286,9 +286,6 @@ defineStatefulView _ _ _ = ReactView (ReactViewRef ())
 
 #ifdef __GHCJS__
 
-newtype ReactThis state props = ReactThis JSVal
-instance IsJSVal (ReactThis state props)
-
 foreign import javascript unsafe
     "$1['state'].hs"
     js_ReactGetState :: ReactThis state props -> IO (Export state)
@@ -296,14 +293,6 @@ foreign import javascript unsafe
 foreign import javascript unsafe
     "$1['props'].hs"
     js_ReactGetProps :: ReactThis state props -> IO (Export props)
-
-foreign import javascript unsafe
-    "$1['context']"
-    js_ReactGetContext :: ReactThis state props -> IO JSVal
-
-foreign import javascript unsafe
-    "hsreact$children_to_array($1['props']['children'])"
-    js_ReactGetChildren :: ReactThis state props -> IO JSArray
 
 foreign import javascript unsafe
     "$1._updateAndReleaseState($2)"
@@ -366,12 +355,7 @@ mkRenderCallback parseState runHandler render = syncCallback2 ContinueAsync $ \t
     state <- parseState this
     props <- js_ReactGetProps this >>= parseExport
     node <- render state props
-
-    let getPropsChildren = do childRef <- js_ReactGetChildren this
-                              return $ map ReactElementRef $ toList childRef
-        getContext = js_ReactGetContext this
-
-    (element, evtCallbacks) <- mkReactElement (runHandler this) getContext getPropsChildren node
+    (element, evtCallbacks) <- mkReactElement (runHandler this) this node
 
     evtCallbacksRef <- toJSVal evtCallbacks
     js_RenderCbSetResults arg evtCallbacksRef element
@@ -469,6 +453,31 @@ foreignClass name attrs (ReactElementM child) =
 
 #else
 foreignClass _ _ x = x
+#endif
+
+-- | Inject arbitrary javascript code into the rendering function.  This is very low level and should only
+-- be used as a last resort when interacting with complex third-party react classes.  For the most part,
+-- third-party react classes can be interacted with using 'foreignClass' and the various ways of creating
+-- properties.
+rawJsRendering :: (JSVal -> JSArray -> IO JSVal)
+                  -- ^ The raw code to inject into the rendering function.  The first argument is the 'this' value
+                  -- from the rendering function so points to the react class.  The second argument is the result of
+                  -- rendering the children so is an array of react elements.  The return value must be a React element.
+               -> ReactElementM handler () -- ^ the children
+               -> ReactElementM handler ()
+
+#ifdef __GHCJS__
+
+rawJsRendering trans (ReactElementM child) =
+    let (a, childEl) = runWriter child
+        trans' thisVal childLst =
+          ReactElementRef <$> trans thisVal (JSA.fromList $ map reactElementRef childLst)
+     in elementToM a $ RawJsElement trans' childEl
+
+#else
+
+rawJsRendering _ x = x
+
 #endif
 
 -- | A class which is used to implement <https://wiki.haskell.org/Varargs variable argument functions>.

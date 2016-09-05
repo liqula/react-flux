@@ -18,6 +18,7 @@ import qualified Data.Text as T
 
 import GHCJS.Types (JSVal, JSString)
 import GHCJS.Marshal (fromJSVal)
+import JavaScript.Array (JSArray)
 import qualified Data.JSString.Text as JSS
 
 foreign import javascript unsafe
@@ -45,6 +46,10 @@ output s = [SomeStoreAction outputStore s]
 
 outputIO :: [T.Text] -> IO ()
 outputIO ss = void $ transform ss OutputStoreData
+
+foreign import javascript unsafe
+  "React['createElement']('p', {'id': 'test-raw-js-para'}, $2)"
+  js_testRawJs :: JSVal -> JSArray -> IO JSVal
 
 --------------------------------------------------------------------------------
 --- Events
@@ -87,7 +92,7 @@ eventsView = defineView "events" $ \() ->
                     , onClick $ \e m -> output
                         [ "click"
                         , tshow e
-                        , tshow m 
+                        , tshow m
                         , logM (mouseGetModifierState m)
                         --, logT (mouseRelatedTarget m)
                         ]
@@ -117,7 +122,7 @@ eventsView = defineView "events" $ \() ->
                  , onClick $ \_ _ -> output ["Click on outer div"]
                  , capturePhase $ onDoubleClick $ \e _ -> output ["Double click outer div"] ++ [stopPropagation e]
                  ] $ do
-                
+
                 span_ [ "id" $= "inner-span"
                       , onClick $ \e _ -> output ["Click inner span"] ++ [stopPropagation e]
                       , onDoubleClick $ \_ _ -> output ["Double click inner span"]
@@ -406,7 +411,7 @@ intlSpecBody = defineView "intl body" $ \() -> div_ ["id" $= "intl-spec"] $
 
         let step = UTCTime moon (2*60*60 + 56*60) -- 1969-7-20 02:56 UTC
             fullT = (fullDayF, TimeFormat { hourF = Just "numeric", minuteF = Just "2-digit", secondF = Just "numeric", timeZoneNameF = Just "long" })
-        
+
         li_ ["id" $= "f-shorttime"] $ utcTime_ shortDateTime step
         li_ ["id" $= "f-fulltime"] $ utcTime_ fullT step
         li_ ["id" $= "f-time"] $ formattedDate_ (Right step)
@@ -499,6 +504,10 @@ testClient = defineLifecycleView "app" "Hello" lifecycleConfig
         view callbackViewWrapper () mempty
 
         view intlSpec () mempty
+
+        rawJsRendering js_testRawJs $
+          span_ ["id" $= "test-raw-js-body"]
+            "Raw Javascript Render Body"
     }
 
 main :: IO ()

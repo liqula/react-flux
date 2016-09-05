@@ -164,6 +164,10 @@ testClientSpec filename = session " for the test client" $ using allBrowsers $ d
         (findElem (ById "raw-show-view") >>= getText)
             `shouldReturn` "42"
 
+    it "has rendered the raw javascript rendering" $ runWD $
+        (findElem (ByCSS "p#test-raw-js-para > span") >>= getText)
+            `shouldReturn` "Raw Javascript Render Body"
+
     describe "lifecycle events" $ do
 
         it "properly updates the state" $ runWD $ do

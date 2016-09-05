@@ -92,6 +92,7 @@ module React.Flux (
   , viewWithIKey
   , childrenPassedToView
   , foreignClass
+  , rawJsRendering
   , module React.Flux.DOM
   , module React.Flux.PropertiesAndEvents
   , module React.Flux.Combinators
@@ -143,7 +144,7 @@ reactRender :: Typeable props
 #ifdef __GHCJS__
 
 reactRender htmlId rc props = do
-    (e, _) <- mkReactElement id (return nullRef) (return []) $ view rc props mempty
+    (e, _) <- mkReactElement id (ReactThis nullRef) $ view rc props mempty
     js_ReactRender e (toJSString htmlId)
 
 foreign import javascript unsafe
@@ -175,7 +176,7 @@ reactRenderToString :: Typeable props
 #ifdef __GHCJS__
 
 reactRenderToString includeStatic rc props = do
-    (e, _) <- mkReactElement id (return nullRef) (return []) $ view rc props mempty
+    (e, _) <- mkReactElement id (ReactThis nullRef) $ view rc props mempty
     sRef <- (if includeStatic then js_ReactRenderStaticMarkup else js_ReactRenderToString) e
     --return sRef
     --return $ JSS.unpack sRef

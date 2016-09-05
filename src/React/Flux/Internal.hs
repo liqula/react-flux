@@ -6,6 +6,7 @@
 module React.Flux.Internal(
     ReactViewRef(..)
   , ReactElementRef(..)
+  , ReactThis(..)
   , HandlerArg(..)
   , PropertyOrHandler(..)
   , property
@@ -73,6 +74,10 @@ instance IsJSVal ReactElementRef
 newtype HandlerArg = HandlerArg JSVal
 instance IsJSVal HandlerArg
 
+-- | The this value during the rendering function
+newtype ReactThis state props = ReactThis {reactThisRef :: JSVal }
+instance IsJSVal (ReactThis state props)
+
 instance Show HandlerArg where
     show _ = "HandlerArg"
 
@@ -85,7 +90,7 @@ data PropertyOrHandler handler =
       { propertyName :: JSString
       , propertyVal :: ref
       }
- | forall ref. ToJSVal ref => PropertyFromContext 
+ | forall ref. ToJSVal ref => PropertyFromContext
       { propFromThisName :: JSString
       , propFromThisVal :: JSVal -> ref -- ^ will be passed this.context
       }
@@ -147,6 +152,11 @@ data ReactElement eventHandler
         , ceProps :: props
         , ceChild :: ReactElement eventHandler
         }
+    | RawJsElement
+        { rawTransform :: JSVal -> [ReactElementRef] -> IO ReactElementRef
+        -- ^ first arg is this from render method, second argument is the rendering of 'rawChild'
+        , rawChild :: ReactElement eventHandler
+        }
     | ChildrenPassedToView
     | Content JSString
     | Append (ReactElement eventHandler) (ReactElement eventHandler)
@@ -159,6 +169,7 @@ instance Monoid (ReactElement eventHandler) where
 instance Functor ReactElement where
     fmap f (ForeignElement n p c) = ForeignElement n (map (fmap f) p) (fmap f c)
     fmap f (ViewElement n k p c) = ViewElement n k p (fmap f c)
+    fmap f (RawJsElement t c) = RawJsElement t (fmap f c)
     fmap _ ChildrenPassedToView = ChildrenPassedToView
     fmap f (Append a b) = Append (fmap f a) (fmap f b)
     fmap _ (Content s) = Content s
@@ -253,16 +264,15 @@ type CallbackToRelease = JSVal
 -- | Execute a ReactElementM to create a javascript React element and a list of callbacks attached
 -- to nodes within the element.  These callbacks will need to be released with 'releaseCallback'
 -- once the class is re-rendered.
-mkReactElement :: forall eventHandler.
+mkReactElement :: forall eventHandler state props.
                   (eventHandler -> IO ())
-               -> IO JSVal -- ^ this.context
-               -> IO [ReactElementRef] -- ^ this.props.children
+               -> ReactThis state props -- ^ this
                -> ReactElementM eventHandler ()
                -> IO (ReactElementRef, [CallbackToRelease])
 
 #ifdef __GHCJS__
 
-mkReactElement runHandler getContext getPropsChildren = runWriterT . mToElem
+mkReactElement runHandler this = runWriterT . mToElem
     where
         -- Run the ReactElementM monad to create a ReactElementRef.
         mToElem :: ReactElementM eventHandler () -> MkReactElementM ReactElementRef
@@ -286,7 +296,7 @@ mkReactElement runHandler getContext getPropsChildren = runWriterT . mToElem
             vRef <- toJSVal val
             JSO.setProp n vRef obj
         addPropOrHandlerToObj obj (PropertyFromContext n f) = lift $ do
-            ctx <- getContext
+            ctx <- js_ReactGetContext this
             vRef <- toJSVal $ f ctx
             JSO.setProp n vRef obj
         addPropOrHandlerToObj obj (NestedProperty n vals) = do
@@ -321,7 +331,9 @@ mkReactElement runHandler getContext getPropsChildren = runWriterT . mToElem
         createElement EmptyElement = return []
         createElement (Append x y) = (++) <$> createElement x <*> createElement y
         createElement (Content s) = return [js_ReactCreateContent s]
-        createElement ChildrenPassedToView = lift getPropsChildren
+        createElement ChildrenPassedToView = lift $ do
+          childRef <- js_ReactGetChildren this
+          return $ map ReactElementRef $ JSA.toList childRef
         createElement (f@(ForeignElement{})) = do
             obj <- lift $ JSO.create
             mapM_ (addPropOrHandlerToObj obj) $ fProps f
@@ -346,6 +358,11 @@ mkReactElement runHandler getContext getPropsChildren = runWriterT . mToElem
             e <- lift $ case mkey of
                 Just keyRef -> js_ReactCreateKeyedElement rc keyRef propsE children
                 Nothing -> js_ReactCreateClass rc propsE children
+            return [e]
+
+        createElement (RawJsElement trans child) = do
+            childNodes <- createElement child
+            e <- liftIO $ trans (reactThisRef this) childNodes
             return [e]
 
 type MkReactElementM a = WriterT [CallbackToRelease] IO a
@@ -389,6 +406,15 @@ foreign import javascript unsafe
 foreign import javascript unsafe
     "$r = hsreact$textWrapper"
     js_textWrapper :: JSVal
+
+foreign import javascript unsafe
+    "$1['context']"
+    js_ReactGetContext :: ReactThis state props -> IO JSVal
+
+foreign import javascript unsafe
+    "hsreact$children_to_array($1['props']['children'])"
+    js_ReactGetChildren :: ReactThis state props -> IO JSArray
+
 
 js_ReactCreateContent :: JSString -> ReactElementRef
 js_ReactCreateContent = ReactElementRef . unsafeCoerce
