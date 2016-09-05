@@ -13,6 +13,7 @@ module React.Flux.Internal(
   , (&=)
   , ReactElement(..)
   , ReactElementM(..)
+  , transHandler
   , elemString
   , elemText
   , elemJSString
@@ -214,6 +215,12 @@ instance (a ~ ()) => Monoid (ReactElementM eventHandler a) where
 
 instance (a ~ ()) => IsString (ReactElementM eventHandler a) where
     fromString s = elementToM () $ Content $ toJSString s
+
+-- | Transform the event handler for a 'ReactElementM'.
+transHandler :: (handler1 -> handler2) -> ReactElementM handler1 a -> ReactElementM handler2 a
+transHandler f (ReactElementM writer) = ReactElementM $ mapWriter f' writer
+  where
+    f' (a, x) = (a, fmap f x)
 
 -- | Create a text element from a string. The text content is escaped to be HTML safe.
 -- If you need to insert HTML, instead use the

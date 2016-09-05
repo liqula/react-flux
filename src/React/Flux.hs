@@ -93,6 +93,8 @@ module React.Flux (
   , childrenPassedToView
   , foreignClass
   , rawJsRendering
+  , transHandler
+  , liftViewToStateHandler
   , module React.Flux.DOM
   , module React.Flux.PropertiesAndEvents
   , module React.Flux.Combinators

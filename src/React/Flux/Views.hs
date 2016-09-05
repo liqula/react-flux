@@ -196,6 +196,12 @@ defineView _ _ = ReactView (ReactViewRef ())
 -- instead use the state passed directly to the handler.
 type StatefulViewEventHandler state = state -> ([SomeStoreAction], Maybe state)
 
+-- | Change the event handler from 'ViewEventHandler' to 'StatefulViewEventHandler' to allow you to embed
+-- combinators with 'ViewEventHandler's into a stateful view.  Each such lifted handler makes no change to
+-- the state.
+liftViewToStateHandler :: ReactElementM ViewEventHandler a -> ReactElementM (StatefulViewEventHandler st) a
+liftViewToStateHandler = transHandler (\h _ -> (h, Nothing))
+
 -- | A stateful view is a re-usable component of the page which keeps track of internal state.
 -- Try to keep as many views as possible stateless.  The React documentation on
 -- <https://facebook.github.io/react/docs/interactivity-and-dynamic-uis.html interactivity and dynamic UIs>
