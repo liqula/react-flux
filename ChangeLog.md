@@ -1,3 +1,13 @@
+# 1.2.3
+
+* Add `rawJsRendering` function which allows you to inject arbitrary javascript code
+  into the rendering function of a view.  This is quite low-level and should be a last
+  resort, but it can be used if you have especially tricky 3rd-party React classes.  Having
+  said that, I suggest you try other approaches first.
+
+* Add `transHandler` and `liftViewToStateHandler` utility functions which can be used to transform
+  the handler that a `ReactElementM` lives in.
+
 # 1.2.2
 
 * Update the test suite to use hspec-webdriver-1.2.  There was no change to any code

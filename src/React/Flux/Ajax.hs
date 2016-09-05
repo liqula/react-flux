@@ -1,3 +1,7 @@
+-- | Make calls to the backend from within your stores.  This module is low-level
+-- in that it mostly directly exposes the XMLHttpRequest access.  If you are using
+-- servant, <http://hackage.haskell.org/package/react-flux-servant react-flux-servant>
+-- for a higher-level interface.
 module React.Flux.Ajax (
     initAjax
   , RequestTimeout(..)
