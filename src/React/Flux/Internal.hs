@@ -441,7 +441,7 @@ exportViewToJs view toProps = do
     return (jsval cb, wrappedCb)
 
 #else
-mkReactElement _ _ _ _ = return (ReactElementRef (), [])
+mkReactElement _ _ _ = return (ReactElementRef (), [])
 
 toJSString :: String -> String
 toJSString = id
