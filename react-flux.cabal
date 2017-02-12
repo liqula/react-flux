@@ -82,6 +82,9 @@ library
                       OverloadedStrings
                       ScopedTypeVariables
                       TypeFamilies
+                      PolyKinds
+                      DataKinds
+                      TypeOperators
 
   build-depends: base >=4.8 && < 5
                , deepseq

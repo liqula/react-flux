@@ -189,3 +189,46 @@ var hsreact$children_to_array = typeof React !== "object" ? null : (React['Child
         });
         return ret;
     }));
+
+
+function hsreact$mk_new_view(name, renderCb) {
+    var cl = {
+        'displayName': name,
+        'componentWillReceiveProps': function() {
+            this['props'].hs.map(h$release);
+        },
+        'componentWillUnmount': function() {
+            this._currentCallbacks.map(h$release);
+            this['props'].hs.map(h$release);
+        },
+        'render': function() {
+            var arg = {
+                newCallbacks: [],
+                elem:null
+            };
+            renderCb(this, arg);
+            this._currentCallbacks.map(h$release);
+            this._currentCallbacks = arg.newCallbacks;
+            return arg.elem;
+        },
+        'shouldComponentUpdate': function(newPropsI) {
+            var newProps = newPropsI.hs;
+            var oldProps = this['props'].hs;
+            if (newProps.length !== oldProps.length) return true;
+            for (var i = 0; i < oldProps.length; i++) {
+                if (newProps[i].root != oldProps[i].root) //Use != here to check if objects are the same
+                    return true;
+            }
+            return false;
+        },
+        _currentCallbacks: []
+    };
+
+    if (typeof ReactIntl != "undefined") {
+        cl['contextTypes'] = {
+            'intl': ReactIntl['intlShape']
+        };
+    }
+
+    return React['createClass'](cl);
+}

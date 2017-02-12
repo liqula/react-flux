@@ -1,9 +1,10 @@
-{-# LANGUAGE OverloadedStrings, BangPatterns #-}
+{-# LANGUAGE OverloadedStrings, BangPatterns, DataKinds #-}
 -- | The views for the TODO app
 module TodoViews where
 
 import Control.Monad (when)
 import React.Flux
+import qualified Data.JSString as JSS
 
 import TodoDispatcher
 import TodoStore
@@ -14,13 +15,13 @@ import TodoComponents
 todoApp :: ReactView ()
 todoApp = defineControllerView "todo app" todoStore $ \todoState () ->
     div_ $ do
-        todoHeader_
+        view_ todoHeader "header"
         mainSection_ todoState
-        todoFooter_ todoState
+        view_ todoFooter "footer" todoState
 
 -- | The TODO header as a React view with no properties.
-todoHeader :: ReactView ()
-todoHeader = defineView "header" $ \() ->
+todoHeader :: View '[]
+todoHeader = mkView "header" $
     header_ ["id" $= "header"] $ do
         h1_ "todos"
         todoTextInput_  TextInputArgs
@@ -30,10 +31,6 @@ todoHeader = defineView "header" $ \() ->
           , tiaOnSave = dispatchTodo . TodoCreate
           , tiaValue = Nothing
           }
-
--- | A combinator for the header suitable for use inside the 'todoApp' rendering function.
-todoHeader_ :: ReactElementM eventHandler ()
-todoHeader_ = view todoHeader () mempty
 
 -- | A view that does not use a ReactView and is instead just a Haskell function.
 -- Note how we use an underscore to signal that this is directly a combinator that can be used
@@ -53,12 +50,12 @@ mainSection_ st = section_ ["id" $= "main"] $ do
 -- transform function of the store to not change the Haskell object for the pair (Int, Todo), and
 -- in this case React will not re-render the todo item.  For more details, see the "Performance"
 -- section of the React.Flux documentation.
-todoItem :: ReactView (Int, Todo)
-todoItem = defineView "todo item" $ \(todoIdx, todo) ->
+todoItem :: View '[Int, Todo]
+todoItem = mkView "todo item" $ \todoIdx todo ->
     li_ [ classNames [("completed", todoComplete todo), ("editing", todoIsEditing todo)]
         , "key" @= todoIdx
         ] $ do
-        
+
         cldiv_ "view" $ do
             input_ [ "className" $= "toggle"
                    , "type" $= "checkbox"
@@ -82,12 +79,12 @@ todoItem = defineView "todo item" $ \(todoIdx, todo) ->
 
 -- | A combinator for a todo item to use inside rendering functions
 todoItem_ :: (Int, Todo) -> ReactElementM eventHandler ()
-todoItem_ !todo = viewWithIKey todoItem (fst todo) todo mempty
+todoItem_ (i, t) = view_ todoItem (JSS.pack $ show i) i t
 
 -- | A view for the footer, taking the entire state as the properties.  This could alternatively
 -- been modeled as a controller-view, attaching directly to the store.
-todoFooter :: ReactView TodoState
-todoFooter = defineView "footer" $ \(TodoState todos) ->
+todoFooter :: View '[TodoState]
+todoFooter = mkView "footer" $ \(TodoState todos) ->
     let completed = length (filter (todoComplete . snd) todos)
         itemsLeft = length todos - completed
      in footer_ [ "id" $= "footer"] $ do
@@ -101,7 +98,3 @@ todoFooter = defineView "footer" $ \(TodoState todos) ->
                         , onClick $ \_ _ -> dispatchTodo ClearCompletedTodos
                         ] $
                     elemString $ "Clear completed (" ++ show completed ++ ")"
-
--- | A render combinator for the footer
-todoFooter_ :: TodoState -> ReactElementM eventHandler ()
-todoFooter_ !s = view todoFooter s mempty

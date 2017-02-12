@@ -47,4 +47,4 @@ tabApp :: T.Text -> [TabbedApps.Tab] -> App TabbedApps.ParentRouter
 tabApp name tabs =
   let rst = TabbedApps.newStore tabs
   in
-    App name rst (\st rt -> TabbedApps.view_ rst rt st) TabbedApps.TabbedInit (Just $ storeRouter rst)
+    App name rst (\st rt -> TabbedApps.tabView_ rst rt st) TabbedApps.TabbedInit (Just $ storeRouter rst)

@@ -5,6 +5,7 @@
 
 module React.Flux.Internal(
     ReactViewRef(..)
+  , NewJsProps(..)
   , ReactElementRef(..)
   , ReactThis(..)
   , HandlerArg(..)
@@ -64,7 +65,7 @@ instance ToJSVal JSString
 -- type JSObject a = JSO.Object a
 
 -- | This type is for the return value of @React.createClass@
-newtype ReactViewRef props = ReactViewRef { reactViewRef :: JSVal }
+newtype ReactViewRef (props :: k) = ReactViewRef { reactViewRef :: JSVal }
 instance IsJSVal (ReactViewRef props)
 
 -- | This type is for the return value of @React.createElement@
@@ -78,6 +79,9 @@ instance IsJSVal HandlerArg
 -- | The this value during the rendering function
 newtype ReactThis state props = ReactThis {reactThisRef :: JSVal }
 instance IsJSVal (ReactThis state props)
+
+newtype NewJsProps = NewJsProps JSVal -- javascript list
+instance IsJSVal NewJsProps
 
 instance Show HandlerArg where
     show _ = "HandlerArg"
@@ -153,6 +157,11 @@ data ReactElement eventHandler
         , ceProps :: props
         , ceChild :: ReactElement eventHandler
         }
+    | NewViewElement
+        { newClass :: ReactViewRef ()
+        , newViewKey :: JSString
+        , newViewProps :: NewJsProps -> IO NewJsProps
+        }
     | RawJsElement
         { rawTransform :: JSVal -> [ReactElementRef] -> IO ReactElementRef
         -- ^ first arg is this from render method, second argument is the rendering of 'rawChild'
@@ -170,6 +179,7 @@ instance Monoid (ReactElement eventHandler) where
 instance Functor ReactElement where
     fmap f (ForeignElement n p c) = ForeignElement n (map (fmap f) p) (fmap f c)
     fmap f (ViewElement n k p c) = ViewElement n k p (fmap f c)
+    fmap _ (NewViewElement n k p) = NewViewElement n k p
     fmap f (RawJsElement t c) = RawJsElement t (fmap f c)
     fmap _ ChildrenPassedToView = ChildrenPassedToView
     fmap f (Append a b) = Append (fmap f a) (fmap f b)
@@ -367,6 +377,13 @@ mkReactElement runHandler this = runWriterT . mToElem
                 Nothing -> js_ReactCreateClass rc propsE children
             return [e]
 
+        createElement (NewViewElement { newClass = rc, newViewKey = k, newViewProps = buildProps}) = do
+            keyRef <- lift $ toJSVal k
+            emptyLst <- lift $ js_emptyList
+            props <- lift $ buildProps emptyLst
+            e <- lift $ js_ReactNewViewElement rc keyRef props jsNull
+            return [e]
+
         createElement (RawJsElement trans child) = do
             childNodes <- createElement child
             e <- liftIO $ trans (reactThisRef this) childNodes
@@ -393,6 +410,10 @@ foreign import javascript unsafe
 foreign import javascript unsafe
     "React['createElement']($1, {key: $2, hs:$3}, $4)"
     js_ReactCreateKeyedElement :: ReactViewRef a -> JSVal -> Export props -> JSVal -> IO ReactElementRef
+
+foreign import javascript unsafe
+    "React['createElement']($1, {key: $2, hs:$3}, $4)"
+    js_ReactNewViewElement :: ReactViewRef a -> JSVal -> NewJsProps -> JSVal -> IO ReactElementRef
 
 foreign import javascript unsafe
     "hsreact$mk_arguments_callback($1)"
@@ -422,6 +443,9 @@ foreign import javascript unsafe
     "hsreact$children_to_array($1['props']['children'])"
     js_ReactGetChildren :: ReactThis state props -> IO JSArray
 
+foreign import javascript unsafe
+    "[]"
+    js_emptyList :: IO NewJsProps
 
 js_ReactCreateContent :: JSString -> ReactElementRef
 js_ReactCreateContent = ReactElementRef . unsafeCoerce

@@ -1,10 +1,11 @@
 -- | Internal module containing the view definitions
-{-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE UndecidableInstances, AllowAmbiguousTypes, TypeApplications #-}
 module React.Flux.Views where
 
 import Control.Monad.Writer
-import Data.Typeable (Typeable)
+import Data.Typeable
 import Control.DeepSeq
+import qualified Data.HashMap.Strict as M
 
 import React.Flux.Store
 import React.Flux.Internal
@@ -571,4 +572,150 @@ exportViewToJavaScript :: (Typeable props, ArgumentsToProps props func) => React
 exportViewToJavaScript v func = do
     (_callbackToRelease, wrappedCb) <- exportViewToJs (reactView v) (\arr -> returnViewFromArguments arr 0 func)
     return wrappedCb
+
+
+
+
+
+
+newtype View (props :: [*]) = View (ReactViewRef ())
+
+type family ViewPropsToElement (props :: [*]) (handler :: *) where
+  ViewPropsToElement '[] handler = ReactElementM handler ()
+  ViewPropsToElement (a ': rest) handler = a -> ViewPropsToElement rest handler
+
+class ViewProps (props :: [*]) where
+  viewPropsToJs :: Proxy props -> Proxy handler -> ReactViewRef () -> JSString -> (NewJsProps -> IO NewJsProps) -> ViewPropsToElement props handler
+  applyViewPropsFromJs :: Proxy props -> ViewPropsToElement props handler -> NewJsProps -> Int -> IO (ReactElementM handler ())
+
+instance ViewProps '[] where
+  viewPropsToJs _ _ ref k props = elementToM () $ NewViewElement ref k props
+  applyViewPropsFromJs _ x _ _ = return x
+
+instance (ViewProps rest, Typeable a) => ViewProps (a ': (rest :: [*])) where
+  viewPropsToJs _ h ref k props = \a -> viewPropsToJs (Proxy :: Proxy rest) h ref k (props >=> pushProp a)
+
+  applyViewPropsFromJs _ f props i = do
+    val <- getProp props i
+    applyViewPropsFromJs (Proxy :: Proxy rest) (f val) props (i+1)
+
+instance (ControllerViewStores rest, StoreData store) => ControllerViewStores (StoreArg store ': (rest :: [*])) where
+  applyControllerViewFromJs _ p f st props = do
+    sval <- findFromState (Proxy :: Proxy store) st
+    applyControllerViewFromJs (Proxy :: Proxy rest) p (f sval) st props
+
+  stateForView _ = M.insertWith (++) storeTy [StoreToState storeTy id] (stateForView (Proxy :: Proxy rest))
+    where storeTy = typeRep (Proxy :: Proxy store)
+
+mkView :: forall (props :: [*]). ViewProps props => JSString -> ViewPropsToElement props ViewEventHandler -> View props
+#ifdef __GHCJS__
+mkView name buildNode = unsafePerformIO $ do
+  renderCb <- syncCallback2 ContinueAsync $ \thisRef argRef -> do
+    let this = ReactThis thisRef
+        arg = RenderCbArg argRef
+    props <- js_PropsList this
+    node <- applyViewPropsFromJs (Proxy :: Proxy props) buildNode props 0
+    (element, evtCallbacks) <- mkReactElement (runViewHandler this) this node
+    evtCallbacksRef <- toJSVal evtCallbacks
+    js_RenderCbSetResults arg evtCallbacksRef element
+
+  View <$> js_createNewView name renderCb
+#else
+mkView _ _ = View (ReactViewRef ())
+#endif
+
+view_ :: forall props handler. ViewProps (props :: [*]) => View props -> JSString -> ViewPropsToElement props handler
+view_ (View ref) key = viewPropsToJs (Proxy :: Proxy props) (Proxy :: Proxy handler) ref key return
+
+#ifdef __GHCJS__
+foreign import javascript unsafe
+  "$1['props'].hs"
+  js_PropsList :: ReactThis state props -> IO NewJsProps
+
+foreign import javascript unsafe
+  "$1[$2]"
+  js_getPropFromList :: NewJsProps -> Int -> IO (Export a)
+
+foreign import javascript unsafe
+  "$1.push($2)"
+  js_pushProp :: NewJsProps -> Export a -> IO ()
+
+foreign import javascript unsafe
+    "hsreact$mk_new_view($1, $2)"
+    js_createNewView :: JSString -> Callback (JSVal -> JSVal -> IO ()) -> IO (ReactViewRef props)
+#endif
+
+getProp :: Typeable a => NewJsProps -> Int -> IO a
+#ifdef __GHCJS__
+getProp p i = js_getPropFromList p i >>= parseExport
+#else
+getProp = error "Not definfed"
+#endif
+
+pushProp :: Typeable a => a -> NewJsProps -> IO NewJsProps
+#ifdef __GHCJS__
+pushProp val props = do
+  valE <- export val -- this will be released in the lifecycle callbacks of the class
+  js_pushProp props valE
+  return props
+#else
+pushProp _ = return
+#endif
+
+
+
+
+
+
+
+
+
+data StoreToState = StoreToState
+  { resultTy :: TypeRep
+  , storeToState :: JSVal -> JSVal
+  }
+
+newtype JsState = JsState JSVal -- javascript map from store typerep fingerprint to value
+data StoreArg store
+data DerivedFrom store a
+
+type family ControllerViewToElement (stores :: [*]) (props :: [*]) (handler :: *) where
+  ControllerViewToElement '[] props handler = ViewPropsToElement props handler
+  ControllerViewToElement (StoreArg store ': rest) props handler = store -> ControllerViewToElement rest props handler
+  ControllerViewToElement (DerivedFrom store a ': rest) props handler = a -> ControllerViewToElement rest props handler
+
+class ControllerViewStores (stores :: [*]) where
+  applyControllerViewFromJs :: forall props handler. ViewProps props
+                            => Proxy stores
+                            -> Proxy props
+                            -> ControllerViewToElement stores props handler
+                            -> JsState
+                            -> NewJsProps
+                            -> IO (ReactElementM handler ())
+  stateForView :: Proxy stores -> M.HashMap TypeRep [StoreToState]
+
+
+instance ControllerViewStores '[] where
+  applyControllerViewFromJs _ p f _ props = applyViewPropsFromJs p f props 0
+  stateForView _ = mempty
+
+class DerivedFromStore store a | store -> a, a -> store where
+  type IntermediateValue store a
+  extractValue :: store -> IntermediateValue store a
+  deriveFromValue :: IntermediateValue store a -> a
+
+findFromState :: Typeable a => Proxy a -> JsState -> IO a
+findFromState = error "Undefined"
+
+instance (ControllerViewStores rest, StoreData store, DerivedFromStore store a, Typeable (IntermediateValue store a), Typeable a)
+   => ControllerViewStores (DerivedFrom store a ': (rest :: [*])) where
+  applyControllerViewFromJs _ p f st props = do
+    sval <- findFromState (Proxy :: Proxy (IntermediateValue store a)) st
+    applyControllerViewFromJs (Proxy :: Proxy rest) p (f $ deriveFromValue sval) st props
+
+  stateForView _ = M.insertWith (++) storeTy [StoreToState aTy derive] (stateForView (Proxy :: Proxy rest))
+    where
+      storeTy = typeRep (Proxy :: Proxy store)
+      aTy = typeRep (Proxy :: Proxy a)
+      derive = error "Not implemented" --deriveFromValue
 

@@ -17,7 +17,7 @@ module TabbedApps (TabbedAction(..)
                   , dispatch
                   , newStore
                   , view
-                  , view_) where
+                  , tabView_) where
 
 import           React.Flux          hiding (view)
 import qualified React.Flux          as RF
@@ -118,8 +118,8 @@ tabItem_ :: ((ParentRouter, Int), (Int, AppName)) -> ReactElementM eventHandler 
 tabItem_ tab =
   viewWithKey tabItem (fst $ snd tab) tab mempty
 
-view_ :: ReactStore TabbedState -> ParentRouter -> TabbedState -> ReactElementM eventHandler ()
-view_ rst pr st =
+tabView_ :: ReactStore TabbedState -> ParentRouter -> TabbedState -> ReactElementM eventHandler ()
+tabView_ rst pr st =
   RF.view (view rst pr) st mempty
 
 dispatch :: ReactStore TabbedState -> TabbedAction -> [SomeStoreAction]

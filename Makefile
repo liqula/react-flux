@@ -1,5 +1,5 @@
 .PHONY: all clean
-INSTALL_ROOT:=$(shell stack path --local-install-root)
+INSTALL_ROOT:=$(shell stack path --stack-yaml stack.ghcjs.yaml --local-install-root)
 
 all: js-build/install-root js-build/todo.min.js
 
@@ -8,7 +8,7 @@ js-build/install-root: $(INSTALL_ROOT)
 	ln -sf $(INSTALL_ROOT) js-build/install-root
 
 js-build/todo.min.js: js-build/todo.js
-	closure --compilation_level=ADVANCED_OPTIMIZATIONS js-build/todo.js > js-build/todo.min.js
+	closure-compiler --compilation_level=ADVANCED_OPTIMIZATIONS js-build/todo.js > js-build/todo.min.js
 
 js-build/todo.js: $(INSTALL_ROOT)/bin/todo.jsexe/all.js
 	mkdir -p js-build
