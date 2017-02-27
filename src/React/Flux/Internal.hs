@@ -24,6 +24,7 @@ module React.Flux.Internal(
   , elementToM
   , mkReactElement
   , exportViewToJs
+  , exportNewViewToJs
   , toJSString
   , JSString
 ) where
@@ -381,7 +382,7 @@ mkReactElement runHandler this = runWriterT . mToElem
             keyRef <- lift $ toJSVal k
             emptyLst <- lift $ js_emptyList
             props <- lift $ buildProps emptyLst
-            e <- lift $ js_ReactNewViewElement rc keyRef props jsNull
+            e <- lift $ js_ReactNewViewElement rc keyRef props
             return [e]
 
         createElement (RawJsElement trans child) = do
@@ -412,8 +413,12 @@ foreign import javascript unsafe
     js_ReactCreateKeyedElement :: ReactViewRef a -> JSVal -> Export props -> JSVal -> IO ReactElementRef
 
 foreign import javascript unsafe
-    "React['createElement']($1, {key: $2, hs:$3}, $4)"
-    js_ReactNewViewElement :: ReactViewRef a -> JSVal -> NewJsProps -> JSVal -> IO ReactElementRef
+    "React['createElement']($1, {key: $2, hs:$3})"
+    js_ReactNewViewElement :: ReactViewRef a -> JSVal -> NewJsProps -> IO ReactElementRef
+
+foreign import javascript unsafe
+    "React['createElement']($1, {hs:$2})"
+    js_ReactNewViewElementNoKey :: ReactViewRef a -> NewJsProps -> IO ReactElementRef
 
 foreign import javascript unsafe
     "hsreact$mk_arguments_callback($1)"
@@ -464,6 +469,15 @@ exportViewToJs view toProps = do
     wrappedCb <- js_wrapCallbackReturningElement cb
     return (jsval cb, wrappedCb)
 
+exportNewViewToJs :: Typeable props => ReactViewRef props -> (JSArray -> IO NewJsProps) -> IO (CallbackToRelease, JSVal)
+exportNewViewToJs view toProps = do
+    cb <- syncCallback2 ContinueAsync $ \ret argref -> do
+        props <- toProps $ unsafeCoerce argref
+        e <- js_ReactNewViewElementNoKey view props
+        js_setElemReturnFromCallback ret e
+    wrappedCb <- js_wrapCallbackReturningElement cb
+    return (jsval cb, wrappedCb)
+
 #else
 mkReactElement _ _ _ = return (ReactElementRef (), [])
 
@@ -473,4 +487,6 @@ toJSString = id
 exportViewToJs :: Typeable props => ReactViewRef props -> (JSArray -> IO props) -> IO (CallbackToRelease, JSVal)
 exportViewToJs _ _ = return ((), ())
 
+exportNewViewToJs :: Typeable props => ReactViewRef props -> (JSArray -> IO NewJsProps) -> IO (CallbackToRelease, JSVal)
+exportNewViewToJs _ _ = return ((), ())
 #endif

@@ -595,8 +595,12 @@ class ViewProps (props :: [*]) where
   renderViewProps :: Proxy props -> ReactViewRef () -> JSString -> (NewJsProps -> IO NewJsProps) -> ViewPropsToRender props
   applyViewPropsFromJs :: Proxy props -> ViewPropsToElement props handler -> NewJsProps -> Int -> IO (ReactElementM handler ())
 
+class ExportViewProps (props :: [*]) where
+  applyViewPropsFromArray :: Proxy props -> JSArray -> Int -> NewJsProps -> IO NewJsProps
+
 instance ViewProps '[] where
   viewPropsToJs _ _ ref k props = elementToM () $ NewViewElement ref k props
+
 #ifdef __GHCJS__
   renderViewProps _ ref k props =
     do (e, _) <- mkReactElement id (ReactThis nullRef) $ elementToM () $ NewViewElement ref k props
@@ -604,7 +608,11 @@ instance ViewProps '[] where
 #else
   renderViewProps _ _ _ _ = return ()
 #endif
+
   applyViewPropsFromJs _ x _ _ = return x
+
+instance ExportViewProps '[] where
+  applyViewPropsFromArray _ _ _ p = return p
 
 instance (ViewProps rest, Typeable a) => ViewProps (a ': (rest :: [*])) where
   viewPropsToJs _ h ref k props = \a -> viewPropsToJs (Proxy :: Proxy rest) h ref k (props >=> pushProp a)
@@ -614,6 +622,17 @@ instance (ViewProps rest, Typeable a) => ViewProps (a ': (rest :: [*])) where
   applyViewPropsFromJs _ f props i = do
     val <- getProp props i
     applyViewPropsFromJs (Proxy :: Proxy rest) (f val) props (i+1)
+
+instance forall (rest :: [*]) a. (ExportViewProps rest, Typeable a, FromJSVal a) => ExportViewProps (a ': rest) where
+#ifdef __GHCJS__
+  applyViewPropsFromArray _ inputArr k outputArr =
+    do ma <- fromJSVal $ if k >= JSA.length inputArr then nullRef else JSA.index k inputArr
+       a :: a <- maybe (error "Unable to decode callback argument") return ma
+       outputArr' <- pushProp a outputArr
+       applyViewPropsFromArray (Proxy :: Proxy rest) inputArr (k+1) outputArr'
+#else
+  applyViewPropsFromArray _ _ _ p = return p
+#endif
 
 mkView :: forall (props :: [*]). ViewProps props => JSString -> ViewPropsToElement props ViewEventHandler -> View props
 #ifdef __GHCJS__
@@ -630,6 +649,21 @@ mkView name buildNode = unsafePerformIO $ do
   View <$> js_createNewView name renderCb
 #else
 mkView _ _ = View (ReactViewRef ())
+#endif
+
+exportReactViewToJavaScript :: forall (props :: [*]). (ExportViewProps props) => View props -> IO JSVal
+#ifdef __GHCJS__
+exportReactViewToJavaScript (View v) = do
+    (_callbackToRelease, wrappedCb) <- exportNewViewToJs v $ \arr -> do
+      emptyLst <- js_newEmptyPropList
+      applyViewPropsFromArray (Proxy :: Proxy props) arr 0 emptyLst
+    return wrappedCb
+
+foreign import javascript unsafe
+    "[]"
+    js_newEmptyPropList :: IO NewJsProps
+#else
+exportReactViewToJavaScript _ = return ()
 #endif
 
 mkStatefulView :: forall (state :: *) (props :: [*]). (Typeable state, NFData state, ViewProps props)
