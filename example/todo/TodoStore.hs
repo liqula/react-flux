@@ -55,8 +55,8 @@ instance StoreData TodoState where
         putStrLn $ "New todos: " ++ show newTodos
         return $ TodoState newTodos
 
-todoStore :: ReactStore TodoState
-todoStore = mkStore $ TodoState
+initialTodos :: TodoState
+initialTodos = TodoState
     [ (0, Todo "Learn react" True False)
     , (1, Todo "Learn react-flux" False False)
     ]

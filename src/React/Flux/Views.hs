@@ -1,5 +1,6 @@
 -- | Internal module containing the view definitions
-{-# LANGUAGE UndecidableInstances, AllowAmbiguousTypes, TypeApplications #-}
+{-# LANGUAGE UndecidableInstances, AllowAmbiguousTypes, TypeApplications, MagicHash #-}
+{-# OPTIONS_GHC -fno-warn-redundant-constraints #-}
 module React.Flux.Views where
 
 import Control.Monad.Writer
@@ -15,7 +16,7 @@ import System.IO.Unsafe (unsafePerformIO)
 import React.Flux.Export
 import JavaScript.Array
 import GHCJS.Foreign.Callback
-import GHCJS.Types (JSVal, IsJSVal, nullRef)
+import GHCJS.Types (JSVal, IsJSVal, nullRef, jsval)
 import GHCJS.Marshal (ToJSVal(..), FromJSVal(..))
 import GHCJS.Marshal.Pure (PToJSVal(..))
 import qualified JavaScript.Array as JSA
@@ -23,6 +24,7 @@ import qualified JavaScript.Array as JSA
 #else
 type JSVal = ()
 type JSArray = ()
+type Callback x = ()
 class FromJSVal a
 pToJSVal :: a -> JSVal
 pToJSVal _ = ()
@@ -584,28 +586,34 @@ type family ViewPropsToElement (props :: [*]) (handler :: *) where
   ViewPropsToElement '[] handler = ReactElementM handler ()
   ViewPropsToElement (a ': rest) handler = a -> ViewPropsToElement rest handler
 
+type family ViewPropsToRender (props :: [*]) where
+  ViewPropsToRender '[] = IO ()
+  ViewPropsToRender (a ': rest) = a -> ViewPropsToRender rest
+
 class ViewProps (props :: [*]) where
   viewPropsToJs :: Proxy props -> Proxy handler -> ReactViewRef () -> JSString -> (NewJsProps -> IO NewJsProps) -> ViewPropsToElement props handler
+  renderViewProps :: Proxy props -> ReactViewRef () -> JSString -> (NewJsProps -> IO NewJsProps) -> ViewPropsToRender props
   applyViewPropsFromJs :: Proxy props -> ViewPropsToElement props handler -> NewJsProps -> Int -> IO (ReactElementM handler ())
 
 instance ViewProps '[] where
   viewPropsToJs _ _ ref k props = elementToM () $ NewViewElement ref k props
+#ifdef __GHCJS__
+  renderViewProps _ ref k props =
+    do (e, _) <- mkReactElement id (ReactThis nullRef) $ elementToM () $ NewViewElement ref k props
+       js_ReactRender e k
+#else
+  renderViewProps _ _ _ _ = return ()
+#endif
   applyViewPropsFromJs _ x _ _ = return x
 
 instance (ViewProps rest, Typeable a) => ViewProps (a ': (rest :: [*])) where
   viewPropsToJs _ h ref k props = \a -> viewPropsToJs (Proxy :: Proxy rest) h ref k (props >=> pushProp a)
 
+  renderViewProps _ ref k props = \a -> a `seq` renderViewProps (Proxy :: Proxy rest) ref k (props >=> pushProp a)
+
   applyViewPropsFromJs _ f props i = do
     val <- getProp props i
     applyViewPropsFromJs (Proxy :: Proxy rest) (f val) props (i+1)
-
-instance (ControllerViewStores rest, StoreData store) => ControllerViewStores (StoreArg store ': (rest :: [*])) where
-  applyControllerViewFromJs _ p f st props = do
-    sval <- findFromState (Proxy :: Proxy store) st
-    applyControllerViewFromJs (Proxy :: Proxy rest) p (f sval) st props
-
-  stateForView _ = M.insertWith (++) storeTy [StoreToState storeTy id] (stateForView (Proxy :: Proxy rest))
-    where storeTy = typeRep (Proxy :: Proxy store)
 
 mkView :: forall (props :: [*]). ViewProps props => JSString -> ViewPropsToElement props ViewEventHandler -> View props
 #ifdef __GHCJS__
@@ -633,6 +641,10 @@ foreign import javascript unsafe
   js_PropsList :: ReactThis state props -> IO NewJsProps
 
 foreign import javascript unsafe
+  "$1['state'].hs"
+  js_NewStateDict :: ReactThis state props -> IO JsState
+
+foreign import javascript unsafe
   "$1[$2]"
   js_getPropFromList :: NewJsProps -> Int -> IO (Export a)
 
@@ -643,6 +655,10 @@ foreign import javascript unsafe
 foreign import javascript unsafe
     "hsreact$mk_new_view($1, $2)"
     js_createNewView :: JSString -> Callback (JSVal -> JSVal -> IO ()) -> IO (ReactViewRef props)
+
+foreign import javascript unsafe
+    "(typeof ReactDOM === 'object' ? ReactDOM : React)['render']($1, document.getElementById($2))"
+    js_ReactRender :: ReactElementRef -> JSString -> IO ()
 #endif
 
 getProp :: Typeable a => NewJsProps -> Int -> IO a
@@ -670,19 +686,15 @@ pushProp _ = return
 
 
 
-data StoreToState = StoreToState
-  { resultTy :: TypeRep
-  , storeToState :: JSVal -> JSVal
-  }
-
 newtype JsState = JsState JSVal -- javascript map from store typerep fingerprint to value
+instance IsJSVal JsState
 data StoreArg store
-data DerivedFrom store a
+data StoreField store (field :: k) a
 
 type family ControllerViewToElement (stores :: [*]) (props :: [*]) (handler :: *) where
   ControllerViewToElement '[] props handler = ViewPropsToElement props handler
   ControllerViewToElement (StoreArg store ': rest) props handler = store -> ControllerViewToElement rest props handler
-  ControllerViewToElement (DerivedFrom store a ': rest) props handler = a -> ControllerViewToElement rest props handler
+  ControllerViewToElement (StoreField store field a ': rest) props handler = a -> ControllerViewToElement rest props handler
 
 class ControllerViewStores (stores :: [*]) where
   applyControllerViewFromJs :: forall props handler. ViewProps props
@@ -691,31 +703,138 @@ class ControllerViewStores (stores :: [*]) where
                             -> ControllerViewToElement stores props handler
                             -> JsState
                             -> NewJsProps
+                            -> Int
                             -> IO (ReactElementM handler ())
-  stateForView :: Proxy stores -> M.HashMap TypeRep [StoreToState]
+  stateForView :: Proxy stores -> Int -> M.HashMap TypeRep [StoreToState]
 
 
 instance ControllerViewStores '[] where
-  applyControllerViewFromJs _ p f _ props = applyViewPropsFromJs p f props 0
-  stateForView _ = mempty
+  applyControllerViewFromJs _ p f _ props _ = applyViewPropsFromJs p f props 0
+  stateForView _ _ = mempty
 
-class DerivedFromStore store a | store -> a, a -> store where
-  type IntermediateValue store a
-  extractValue :: store -> IntermediateValue store a
-  deriveFromValue :: IntermediateValue store a -> a
+data StoreToState = StoreState Int
+                  | StoreDerivedState
+                    { storeDerivedOffset :: Int
+                    , storeToStateCallback :: IO (Callback (JSVal -> IO ()))
+                    }
 
-findFromState :: Typeable a => Proxy a -> JsState -> IO a
-findFromState = error "Undefined"
 
-instance (ControllerViewStores rest, StoreData store, DerivedFromStore store a, Typeable (IntermediateValue store a), Typeable a)
-   => ControllerViewStores (DerivedFrom store a ': (rest :: [*])) where
-  applyControllerViewFromJs _ p f st props = do
-    sval <- findFromState (Proxy :: Proxy (IntermediateValue store a)) st
-    applyControllerViewFromJs (Proxy :: Proxy rest) p (f $ deriveFromValue sval) st props
+class HasField (x :: k) r a | x r -> a where
+  getField :: r -> a
 
-  stateForView _ = M.insertWith (++) storeTy [StoreToState aTy derive] (stateForView (Proxy :: Proxy rest))
+--class DerivedFromStore store a | store -> a, a -> store where
+--  type IntermediateValue store a
+--  extractValue :: store -> IntermediateValue store a
+--  deriveFromValue :: IntermediateValue store a -> a
+
+findFromState :: Typeable a => Int -> JsState -> IO a
+#ifdef __GHCJS__
+findFromState i s = js_findFromState i s >>= unsafeDerefExport
+
+foreign import javascript unsafe
+  "$2[$1]"
+  js_findFromState :: Int -> JsState -> IO (Export a)
+
+#else
+findFromState _ _ = error "Can't use views from GHC, only GHCJS"
+#endif
+
+instance (ControllerViewStores rest, StoreData store, Typeable store)
+   => ControllerViewStores (StoreArg store ': (rest :: [*])) where
+  applyControllerViewFromJs _ p f st props i = do
+    sval <- findFromState i st
+    applyControllerViewFromJs (Proxy :: Proxy rest) p (f sval) st props (i+1)
+
+  stateForView _ i = M.insertWith (++) storeT [StoreState i] (stateForView (Proxy :: Proxy rest) (i+1))
     where
-      storeTy = typeRep (Proxy :: Proxy store)
-      aTy = typeRep (Proxy :: Proxy a)
-      derive = error "Not implemented" --deriveFromValue
+      storeT = typeRep (Proxy :: Proxy store)
 
+instance (ControllerViewStores rest, StoreData store, HasField field store a, Typeable store, Typeable a)
+   => ControllerViewStores (StoreField store field a ': (rest :: [*])) where
+  applyControllerViewFromJs _ p f st props i = do
+    sval <- findFromState i st
+    applyControllerViewFromJs (Proxy :: Proxy rest) p (f sval) st props (i+1)
+
+  stateForView _ i = M.insertWith (++) storeT [StoreDerivedState i derive] (stateForView (Proxy :: Proxy rest) (i+1))
+    where
+      storeT = typeRep (Proxy :: Proxy store)
+      derive =
+#ifdef __GHCJS__
+        syncCallback1 ThrowWouldBlock $ \arg -> do
+          mstoreD :: Maybe store <- js_getDeriveInput arg >>= derefExport
+          storeD <- maybe (error "Can't decode store") return mstoreD
+          let a :: a = getField @field storeD
+          aE <- a `seq` unsafeExport a
+          js_setDeriveOutput arg aE
+
+foreign import javascript unsafe
+  "$1.input"
+  js_getDeriveInput :: JSVal -> IO (Export storeData)
+
+foreign import javascript unsafe
+  "$1.output = $2"
+  js_setDeriveOutput :: JSVal -> Export a -> IO ()
+#else
+        return ()
+#endif
+
+mkControllerView :: forall (stores :: [*]) (props :: [*]). (ViewProps props, ControllerViewStores stores)
+                 => JSString -> ControllerViewToElement stores props ViewEventHandler -> View props
+#ifdef __GHCJS__
+mkControllerView name buildNode = unsafePerformIO $ do
+  renderCb <- syncCallback2 ContinueAsync $ \thisRef argRef -> do
+    let this = ReactThis thisRef
+        arg = RenderCbArg argRef
+    props <- js_PropsList this
+    st <- js_NewStateDict this
+    node <- applyControllerViewFromJs (Proxy :: Proxy stores) (Proxy :: Proxy props) buildNode st props 0
+    (element, evtCallbacks) <- mkReactElement (runViewHandler this) this node
+    evtCallbacksRef <- toJSVal evtCallbacks
+    js_RenderCbSetResults arg evtCallbacksRef element
+
+  artifacts <- js_emptyArtifacts
+  forM_ (M.toList $ stateForView (Proxy :: Proxy stores) 0) $ \(ty, states) -> do
+    art <- js_newArtifact
+    forM_ states $ \s ->
+      case s of
+        StoreState i -> js_addStoreState art i
+        StoreDerivedState i mkCall -> do
+          callback <- mkCall
+          js_addStoreDerivedState art i callback
+    js_setArtifact artifacts (typeJsKey ty) art
+
+  View <$> js_createNewCtrlView name renderCb artifacts
+
+
+newtype Artifacts = Artifacts JSVal
+instance IsJSVal Artifacts
+
+newtype Artifact = Artifact JSVal
+instance IsJSVal Artifact
+
+foreign import javascript unsafe
+  "{}"
+  js_emptyArtifacts :: IO Artifacts
+
+foreign import javascript unsafe
+  "[]"
+  js_newArtifact :: IO Artifact
+
+foreign import javascript unsafe
+  "$1.push({i: $2})"
+  js_addStoreState :: Artifact -> Int -> IO ()
+
+foreign import javascript unsafe
+  "$1.push({i: $2, call: $3})"
+  js_addStoreDerivedState :: Artifact -> Int -> Callback (JSVal -> IO ()) -> IO ()
+
+foreign import javascript unsafe
+  "$1[$2] = $3"
+  js_setArtifact :: Artifacts -> JSString -> Artifact -> IO ()
+
+foreign import javascript unsafe
+  "hsreact$mk_new_ctrl_view($1, $2, $3)"
+  js_createNewCtrlView :: JSString -> Callback (JSVal -> JSVal -> IO ()) -> Artifacts -> IO (ReactViewRef props)
+#else
+mkControllerView _ _ = View (ReactViewRef ())
+#endif

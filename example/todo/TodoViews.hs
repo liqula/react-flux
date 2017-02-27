@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings, BangPatterns, DataKinds #-}
+{-# LANGUAGE OverloadedStrings, BangPatterns, DataKinds, TypeApplications #-}
 -- | The views for the TODO app
 module TodoViews where
 
@@ -12,8 +12,8 @@ import TodoComponents
 
 -- | The controller view and also the top level of the TODO app.  This controller view registers
 -- with the store and will be re-rendered whenever the store changes.
-todoApp :: ReactView ()
-todoApp = defineControllerView "todo app" todoStore $ \todoState () ->
+todoApp :: View '[]
+todoApp = mkControllerView @'[StoreArg TodoState] "todo app" $ \todoState ->
     div_ $ do
         view_ todoHeader "header"
         mainSection_ todoState

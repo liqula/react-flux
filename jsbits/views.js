@@ -190,8 +190,18 @@ var hsreact$children_to_array = typeof React !== "object" ? null : (React['Child
         return ret;
     }));
 
+function hsreact$checkPropsDifferent(newPropsI, oldPropsI) {
+    var newProps = newPropsI.hs;
+    var oldProps = oldPropsI.hs;
+    if (newProps.length !== oldProps.length) return true;
+    for (var i = 0; i < oldProps.length; i++) {
+        if (newProps[i].root != oldProps[i].root) //Use != here to check if objects are the same
+            return true;
+    }
+    return false;
+}
 
-function hsreact$mk_new_view(name, renderCb) {
+function hsreact$mk_new_class(name, renderCb) {
     var cl = {
         'displayName': name,
         'componentWillReceiveProps': function() {
@@ -211,16 +221,6 @@ function hsreact$mk_new_view(name, renderCb) {
             this._currentCallbacks = arg.newCallbacks;
             return arg.elem;
         },
-        'shouldComponentUpdate': function(newPropsI) {
-            var newProps = newPropsI.hs;
-            var oldProps = this['props'].hs;
-            if (newProps.length !== oldProps.length) return true;
-            for (var i = 0; i < oldProps.length; i++) {
-                if (newProps[i].root != oldProps[i].root) //Use != here to check if objects are the same
-                    return true;
-            }
-            return false;
-        },
         _currentCallbacks: []
     };
 
@@ -230,5 +230,73 @@ function hsreact$mk_new_view(name, renderCb) {
         };
     }
 
+    return cl;
+}
+
+function hsreact$mk_new_view(name, renderCb) {
+    var cl = hsreact$mk_new_class(name, renderCb);
+    cl['shouldComponentUpdate'] = function(newPropsI) {
+        return hsreact$checkPropsDifferent(newPropsI, this['props']);
+    };
+    return React['createClass'](cl);
+}
+
+function hsreact$mk_new_ctrl_view(name, renderCb, artifacts) {
+    var cl = hsreact$mk_new_class(name, renderCb);
+    cl['shouldComponentUpdate'] = function(newPropsI, newStateI) {
+        if (hsreact$checkPropsDifferent(newPropsI, this['props'])) return true;
+        var newState = newStateI.hs;
+        var oldState = this['state'].hs;
+        for (var k in newState) {
+            if (newState[k] != oldState[k]) return true; //Use != here to check if objects are the same
+        }
+        return false;
+    };
+    cl['getInitialState'] = function() {
+        var reactState = {};
+        for (var storeTy in artifacts) {
+            var store = hsreact$storedata[storeTy];
+            artifacts[storeTy].forEach(function(st) {
+                if (st.call) {
+                    var arg = {input: store.sdata, output: null};
+                    st.call(arg);
+                    reactState[st.i] = arg.output;
+                } else {
+                    reactState[st.i] = store.sdata.root;
+                }
+            });
+        };
+        return {hs: reactState};
+    };
+    cl['componentDidMount'] = function() {
+        this._hsreactViewCallbacks = {};
+        var that = this;
+        for (var storeTy in artifacts) {
+            var store = hsreact$storedata[storeTy];
+            var artifact = artifacts[storeTy];
+            this._hsreactViewCallbacks[storeTy] =
+                hsreact$register_view(store, function(newStoreData) {
+                    var newState = Object.assign({}, that['state'].hs);
+                    artifact.forEach(function(st) {
+                        if (st.call) {
+                            var arg = {input: newStoreData, output: null};
+                            st.call(arg);
+                            newState[st.i] = arg.output;
+                        } else {
+                            newState[st.i] = newStoreData.root;
+                        }
+                    });
+                    that['setState']({hs:newState});
+                });
+        };
+    };
+    cl['componentWillUnmount'] = function() {
+        for (var storeTy in artifacts) {
+            var store = hsreact$storedata[storeTy];
+            hsreact$clear_view(store, this._hsreactViewCallbacks[storeTy]);
+        }
+        this._currentCallbacks.map(h$release);
+        this['props'].hs.map(h$release);
+    };
     return React['createClass'](cl);
 }

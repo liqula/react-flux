@@ -25,4 +25,19 @@ foreign import javascript unsafe
 derefExport :: Typeable a => Export a -> IO (Maybe a)
 derefExport e = (Just . unsafeCoerce) <$> js_deref e
 
+foreign import javascript unsafe
+    "$r = $1"
+    js_unsafeExport :: Double -> IO (Export a)
+
+-- | A variation on export which does not retain the value for garbage collection
+unsafeExport :: Typeable a => a -> IO (Export a)
+unsafeExport = js_unsafeExport . unsafeCoerce
+
+foreign import javascript unsafe
+    "$r = $1"
+    js_unsafeDeref :: Export a -> IO Double
+
+unsafeDerefExport :: Typeable a => Export a -> IO a
+unsafeDerefExport e = unsafeCoerce <$> js_unsafeDeref e
+
 #endif

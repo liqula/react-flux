@@ -72,6 +72,11 @@ module React.Flux (
   , SomeStoreAction(..)
   , executeAction
 
+  , someStoreAction
+  , registerInitialStore
+  , transformStore
+  , readStoreData
+
   -- * Views
   , ReactView
   , defineControllerView
@@ -84,6 +89,10 @@ module React.Flux (
   , ViewProps
   , mkView
   , view_
+  , StoreArg
+  , ControllerViewToElement
+  , HasField(..)
+  , mkControllerView
 
   -- * Elements
   , ReactElement
@@ -106,6 +115,7 @@ module React.Flux (
 
   -- * Main
   , reactRender
+  , reactRenderView
   , reactRenderToString
   , exportViewToJavaScript
   , ArgumentsToProps
@@ -119,7 +129,7 @@ module React.Flux (
   , ReactViewKey
 ) where
 
-import Data.Typeable (Typeable)
+import Data.Typeable (Typeable, Proxy(..))
 import Data.Text (Text)
 
 import React.Flux.Views
@@ -154,13 +164,28 @@ reactRender htmlId rc props = do
     (e, _) <- mkReactElement id (ReactThis nullRef) $ view rc props mempty
     js_ReactRender e (toJSString htmlId)
 
-foreign import javascript unsafe
-    "(typeof ReactDOM === 'object' ? ReactDOM : React)['render']($1, document.getElementById($2))"
-    js_ReactRender :: ReactElementRef -> JSString -> IO ()
-
 #else
 
 reactRender _ _ _ = error "reactRender only works when compiled with GHCJS, because we rely on the javascript React code."
+
+#endif
+
+-- | Render your React application into the DOM.  Use this from your @main@ function, and only in the browser.
+-- 'reactRender' only works when compiled with GHCJS (not GHC), because we rely on the React javascript code
+-- to actually perform the rendering.
+reactRenderView :: forall props. ViewProps (props :: [*])
+                => JSString -- ^ The ID of the HTML element to render the application into.
+                      -- (This string is passed to @document.getElementById@)
+                -> View props -- ^ A single instance of this view is created
+                -> ViewPropsToRender props -- ^ the properties to pass to the view
+
+#ifdef __GHCJS__
+
+reactRenderView htmlId (View rc) = renderViewProps (Proxy :: Proxy props) rc htmlId return
+
+#else
+
+reactRenderView _ _ _ = error "reactRender only works when compiled with GHCJS, because we rely on the javascript React code."
 
 #endif
 
