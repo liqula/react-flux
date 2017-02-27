@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings, BangPatterns #-}
+{-# LANGUAGE OverloadedStrings, BangPatterns, DataKinds #-}
 
 -- | The division between a view and a component is arbitrary, but for me components are pieces that
 -- are re-used many times for different purposes.  In the TODO app, there is one component for the
@@ -23,8 +23,8 @@ data TextInputArgs = TextInputArgs {
 -- | The text input stateful view.  The state is the text that has been typed into the textbox
 -- but not yet saved.  The save is triggered either on enter or blur, which resets the state/content
 -- of the text box to the empty string.
-todoTextInput :: ReactView TextInputArgs
-todoTextInput = defineStatefulView "todo text input" "" $ \curText args ->
+todoTextInput :: View '[TextInputArgs]
+todoTextInput = mkStatefulView "todo text input" "" $ \curText args ->
     input_ $
         maybe [] (\i -> ["id" &= i]) (tiaId args)
         ++
@@ -49,4 +49,4 @@ todoTextInput = defineStatefulView "todo text input" "" $ \curText args ->
 
 -- | A combinator suitible for use inside rendering functions.
 todoTextInput_ :: TextInputArgs -> ReactElementM eventHandler ()
-todoTextInput_ !args = view todoTextInput args mempty
+todoTextInput_ !args = view_ todoTextInput "todo-input" args

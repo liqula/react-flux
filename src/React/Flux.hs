@@ -88,6 +88,7 @@ module React.Flux (
   , ViewPropsToElement
   , ViewProps
   , mkView
+  , mkStatefulView
   , view_
   , StoreArg
   , ControllerViewToElement

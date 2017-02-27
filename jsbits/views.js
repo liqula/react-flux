@@ -207,10 +207,6 @@ function hsreact$mk_new_class(name, renderCb) {
         'componentWillReceiveProps': function() {
             this['props'].hs.map(h$release);
         },
-        'componentWillUnmount': function() {
-            this._currentCallbacks.map(h$release);
-            this['props'].hs.map(h$release);
-        },
         'render': function() {
             var arg = {
                 newCallbacks: [],
@@ -237,6 +233,32 @@ function hsreact$mk_new_view(name, renderCb) {
     var cl = hsreact$mk_new_class(name, renderCb);
     cl['shouldComponentUpdate'] = function(newPropsI) {
         return hsreact$checkPropsDifferent(newPropsI, this['props']);
+    };
+    cl['componentWillUnmount'] = function() {
+        this._currentCallbacks.map(h$release);
+        this['props'].hs.map(h$release);
+    };
+    return React['createClass'](cl);
+}
+
+function hsreact$mk_new_stateful_view(name, initialState, renderCb) {
+    var cl = hsreact$mk_new_class(name, renderCb);
+    cl['getInitialState'] = function() {
+        return { hs: initialState };
+    };
+    cl['_updateAndReleaseState'] = function(s) {
+        h$release(this['state'].hs);
+        this['setState']({hs: s});
+    };
+    cl['shouldComponentUpdate'] = function(newPropsI, newStateI) {
+        if (hsreact$checkPropsDifferent(newPropsI, this['props'])) return true;
+        if (newStateI.hs.root != this['state'].hs.root) return true;
+        return false;
+    };
+    cl['componentWillUnmount'] = function() {
+        this._currentCallbacks.map(h$release);
+        h$release(this['state'].hs);
+        this['props'].hs.map(h$release);
     };
     return React['createClass'](cl);
 }

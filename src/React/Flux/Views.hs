@@ -632,6 +632,32 @@ mkView name buildNode = unsafePerformIO $ do
 mkView _ _ = View (ReactViewRef ())
 #endif
 
+mkStatefulView :: forall (state :: *) (props :: [*]). (Typeable state, NFData state, ViewProps props)
+               => JSString -- ^ A name for this view, used only for debugging/console logging
+               -> state -- ^ The initial state
+               -> (state -> ViewPropsToElement props (StatefulViewEventHandler state))
+               -> View props
+
+#ifdef __GHCJS__
+
+mkStatefulView name initial buildNode = unsafePerformIO $ do
+    initialRef <- export initial
+    renderCb <- syncCallback2 ContinueAsync $ \thisRef argRef -> do
+      let this = ReactThis thisRef
+          arg = RenderCbArg argRef
+      props <- js_PropsList this
+      state <- js_ReactGetState this >>= parseExport
+      node <- applyViewPropsFromJs (Proxy :: Proxy props) (buildNode state) props 0
+      (element, evtCallbacks) <- mkReactElement (runStateViewHandler this) this node
+      evtCallbacksRef <- toJSVal evtCallbacks
+      js_RenderCbSetResults arg evtCallbacksRef element
+
+    View <$> js_createNewStatefulView name initialRef renderCb
+
+#else
+mkStatefulView _ _ _ = View (ReactViewRef ())
+#endif
+
 view_ :: forall props handler. ViewProps (props :: [*]) => View props -> JSString -> ViewPropsToElement props handler
 view_ (View ref) key = viewPropsToJs (Proxy :: Proxy props) (Proxy :: Proxy handler) ref key return
 
@@ -655,6 +681,10 @@ foreign import javascript unsafe
 foreign import javascript unsafe
     "hsreact$mk_new_view($1, $2)"
     js_createNewView :: JSString -> Callback (JSVal -> JSVal -> IO ()) -> IO (ReactViewRef props)
+
+foreign import javascript unsafe
+    "hsreact$mk_new_stateful_view($1, $2, $3)"
+    js_createNewStatefulView :: JSString -> Export state -> Callback (JSVal -> JSVal -> IO ()) -> IO (ReactViewRef props)
 
 foreign import javascript unsafe
     "(typeof ReactDOM === 'object' ? ReactDOM : React)['render']($1, document.getElementById($2))"
@@ -687,7 +717,6 @@ pushProp _ = return
 
 
 newtype JsState = JsState JSVal -- javascript map from store typerep fingerprint to value
-instance IsJSVal JsState
 data StoreArg store
 data StoreField store (field :: k) a
 
