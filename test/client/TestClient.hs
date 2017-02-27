@@ -11,7 +11,7 @@ import Debug.Trace
 import GHC.Generics (Generic)
 import Data.Time (UTCTime(..), fromGregorian)
 import React.Flux
-import React.Flux.Lifecycle
+import React.Flux.Outdated
 import React.Flux.Addons.React
 import React.Flux.Addons.Intl
 import qualified Data.Text as T

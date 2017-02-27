@@ -78,16 +78,12 @@ module React.Flux (
   , readStoreData
 
   -- * Views
-  , ReactView
-  , defineControllerView
-  , defineView
-  , defineStatefulView
   , ViewEventHandler
-  , StatefulViewEventHandler
   , View
   , ViewPropsToElement
   , ViewProps
   , mkView
+  , StatefulViewEventHandler
   , mkStatefulView
   , view_
   , StoreArg
@@ -102,10 +98,6 @@ module React.Flux (
   , elemText
   , elemJSString
   , elemShow
-  , view
-  , viewWithSKey
-  , viewWithIKey
-  , childrenPassedToView
   , foreignClass
   , rawJsRendering
   , transHandler
@@ -115,23 +107,13 @@ module React.Flux (
   , module React.Flux.Combinators
 
   -- * Main
-  , reactRender
   , reactRenderView
-  , reactRenderToString
-  , exportViewToJavaScript
-  , ArgumentsToProps
-  , ReturnProps(..)
 
   -- * Performance
   -- $performance
-
-  -- * Depracated
-  , viewWithKey
-  , ReactViewKey
 ) where
 
-import Data.Typeable (Typeable, Proxy(..))
-import Data.Text (Text)
+import Data.Typeable (Proxy(..))
 
 import React.Flux.Views
 import React.Flux.DOM
@@ -139,37 +121,6 @@ import React.Flux.Internal
 import React.Flux.PropertiesAndEvents
 import React.Flux.Combinators
 import React.Flux.Store
-
-#ifdef __GHCJS__
-import GHCJS.Types (JSVal, nullRef)
-import GHCJS.Marshal (fromJSVal)
-#endif
-
-----------------------------------------------------------------------------------------------------
--- reactRender has two versions
-----------------------------------------------------------------------------------------------------
-
--- | Render your React application into the DOM.  Use this from your @main@ function, and only in the browser.
--- 'reactRender' only works when compiled with GHCJS (not GHC), because we rely on the React javascript code
--- to actually perform the rendering.
-reactRender :: Typeable props
-            => String -- ^ The ID of the HTML element to render the application into.
-                      -- (This string is passed to @document.getElementById@)
-            -> ReactView props -- ^ A single instance of this view is created
-            -> props -- ^ the properties to pass to the view
-            -> IO ()
-
-#ifdef __GHCJS__
-
-reactRender htmlId rc props = do
-    (e, _) <- mkReactElement id (ReactThis nullRef) $ view rc props mempty
-    js_ReactRender e (toJSString htmlId)
-
-#else
-
-reactRender _ _ _ = error "reactRender only works when compiled with GHCJS, because we rely on the javascript React code."
-
-#endif
 
 -- | Render your React application into the DOM.  Use this from your @main@ function, and only in the browser.
 -- 'reactRender' only works when compiled with GHCJS (not GHC), because we rely on the React javascript code
@@ -190,45 +141,6 @@ reactRenderView _ _ _ = error "reactRender only works when compiled with GHCJS, 
 
 #endif
 
--- | Render your React application to a string using either @ReactDOMServer.renderToString@ if the first
--- argument is false or @ReactDOMServer.renderToStaticMarkup@ if the first argument is true.
--- Use this only on the server when running with node.
--- 'reactRenderToString' only works when compiled with GHCJS (not GHC), because we rely on the React javascript code
--- to actually perform the rendering.
---
--- If you are interested in isomorphic React, I suggest instead of using 'reactRenderToString' you use
--- 'exportViewToJavaScript' and then write a small top-level JavaScript view which can then integrate with
--- all the usual isomorphic React tools.
-reactRenderToString :: Typeable props
-                    => Bool -- ^ Render to static markup?  If true, this won't create extra DOM attributes
-                            -- that React uses internally.
-                    -> ReactView props -- ^ A single instance of this view is created
-                    -> props -- ^ the properties to pass to the view
-                    -> IO Text
-
-#ifdef __GHCJS__
-
-reactRenderToString includeStatic rc props = do
-    (e, _) <- mkReactElement id (ReactThis nullRef) $ view rc props mempty
-    sRef <- (if includeStatic then js_ReactRenderStaticMarkup else js_ReactRenderToString) e
-    --return sRef
-    --return $ JSS.unpack sRef
-    mtxt <- fromJSVal sRef
-    maybe (error "Unable to convert string return to Text") return mtxt
-
-foreign import javascript unsafe
-    "(typeof ReactDOMServer === 'object' ? ReactDOMServer : (typeof ReactDOM === 'object' ? ReactDOM : React))['renderToString']($1)"
-    js_ReactRenderToString :: ReactElementRef -> IO JSVal
-
-foreign import javascript unsafe
-    "(typeof ReactDOMServer === 'object' ? ReactDOMServer : (typeof ReactDOM === 'object' ? ReactDOM : React))['renderToStaticMarkup']($1)"
-    js_ReactRenderStaticMarkup :: ReactElementRef -> IO JSVal
-
-#else
-
-reactRenderToString _ _ _ = error "reactRenderToString only works when compiled with GHCJS, because we rely on the javascript React code."
-
-#endif
 
 -- $performance 
 --

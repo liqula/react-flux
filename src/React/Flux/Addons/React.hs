@@ -17,6 +17,7 @@ import Control.DeepSeq (NFData)
 import Control.Monad (forM_)
 import GHC.Generics (Generic)
 import React.Flux
+import React.Flux.Outdated
 
 #ifdef __GHCJS__
 import GHCJS.Types (JSVal, JSString)

@@ -10,8 +10,10 @@
 
 module Clock where
 
-import           React.Flux         hiding (view)
-import qualified React.Flux         as RF
+import           React.Flux
+import           React.Flux.Outdated hiding (view)
+import qualified React.Flux                   as RF
+import qualified React.Flux.Outdated          as RF
 
 import           Control.Concurrent (forkIO, threadDelay)
 import           Control.DeepSeq

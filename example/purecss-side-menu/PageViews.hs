@@ -5,6 +5,7 @@
 module PageViews where
 
 import React.Flux
+import React.Flux.Outdated
 import Dispatcher
 
 page1 :: ReactView ()

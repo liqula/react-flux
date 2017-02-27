@@ -15,7 +15,6 @@ import Data.Monoid ((<>))
 import React.Flux.DOM
 import React.Flux.Internal
 import React.Flux.PropertiesAndEvents
-import React.Flux.Views
 
 #ifdef __GHCJS__
 import GHCJS.Types (JSVal)

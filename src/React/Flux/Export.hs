@@ -1,5 +1,6 @@
 -- | At some point this should be replaced by GHCJS.Foreign.Export, but GHCJS.Foreign.Export
 -- currently causes a bug in the Todo example application to appear.
+{-# OPTIONS_GHC -fno-warn-redundant-constraints #-}
 module React.Flux.Export where
 
 #ifdef __GHCJS__
@@ -17,6 +18,11 @@ foreign import javascript unsafe
 
 export :: Typeable a => a -> IO (Export a)
 export = js_export . unsafeCoerce
+
+parseExport :: Typeable a => Export a -> IO a
+parseExport a = do
+    mdata <- derefExport a
+    maybe (error "Unable to load export from javascript") return mdata
 
 foreign import javascript unsafe
     "hsreact$derefExport($1)"

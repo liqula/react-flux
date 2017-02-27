@@ -2,6 +2,7 @@
 module App (myApp) where
 
 import React.Flux
+import React.Flux.Outdated
 import NavStore
 import Dispatcher
 import PageViews

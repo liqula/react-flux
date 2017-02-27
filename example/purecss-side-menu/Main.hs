@@ -1,6 +1,6 @@
 module Main (main) where
 
-import React.Flux
+import React.Flux.Outdated
 import App
 import NavStore (initHistory)
 

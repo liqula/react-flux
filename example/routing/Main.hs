@@ -4,6 +4,7 @@
 module Main where
 
 import           React.Flux
+import           React.Flux.Outdated
 
 import qualified Clock      as Clock
 import qualified EventTest  as EventTest

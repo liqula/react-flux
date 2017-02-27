@@ -10,6 +10,7 @@
 module Types where
 
 import           React.Flux
+import           React.Flux.Outdated
 
 
 import qualified Data.Text     as T

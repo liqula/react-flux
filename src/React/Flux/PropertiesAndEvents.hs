@@ -11,10 +11,8 @@ module React.Flux.PropertiesAndEvents (
   , nestedProperty
   , CallbackFunction
   , callback
-  , callbackView
-  , ArgumentsToProps
-  , ReturnProps(..)
-  , callbackViewWithProps
+  , foreignClass
+  , rawJsRendering
 
   -- ** Combinators
   , (@=)
@@ -92,19 +90,17 @@ module React.Flux.PropertiesAndEvents (
 
 import           Control.Monad (forM)
 import           Control.Concurrent.MVar (newMVar)
+import           Control.Monad.Writer (runWriter)
 import           Control.DeepSeq
 import           System.IO.Unsafe (unsafePerformIO)
-import           Data.Typeable (Typeable)
 import           Data.Monoid ((<>))
 import qualified Data.Text as T
 import qualified Data.Aeson as A
 import qualified Data.HashMap.Strict as M
-import           Data.Word
-import           Data.Int
 
 import           React.Flux.Internal
 import           React.Flux.Store
-import           React.Flux.Views (ReactView(..), ViewEventHandler, StatefulViewEventHandler, ArgumentsToProps(..), ReturnProps(..))
+import           React.Flux.Views (ViewEventHandler, StatefulViewEventHandler)
 
 #ifdef __GHCJS__
 import           Data.Maybe (fromMaybe)
@@ -212,55 +208,48 @@ instance {-# OVERLAPPABLE #-} (FromJSVal a, CallbackFunction handler b) => Callb
 callback :: CallbackFunction handler func => JSString -> func -> PropertyOrHandler handler
 callback name func = CallbackPropertyWithArgumentArray name $ \arr -> applyFromArguments arr 0 func
 
--- | Create a zero-argument callback property.  When this callback function is executed, it
--- will render the given view and return the resulting React element.  If you need to 
--- create a callback which expects arguments, use 'callbackViewWithProps' instead.
-callbackView :: JSString -> ReactView () -> PropertyOrHandler handler
-callbackView name v = CallbackPropertyReturningView name (const $ return ()) (reactView v)
 
--- | Create a callback that when called will render a view.  This is useful for interacting with third-party React classes that expect
--- a property which is a function which when called returns a React element.   The way this works is
--- as follows:
---
--- 1. You create a Haskell function which translates the javascript arguments of the callback into a Haskell
--- value of type @ReturnProps props@.  This is a variable-argument function using the 'ArgumentsToProps' class.
--- For example,
---
---       @
---       data MyProps = MyProps { theInt :: Int, theString :: String }
---       myArgsToProps :: Int -> String -> ReturnProps MyProps
---       myArgsToProps i s = ReturnProps $ MyProps i s
---       @
---
--- 2. You create a view which receives these properties and renders itself.  This view will not
--- receive any children.
---
---       @
---       myView :: ReactView MyProps
---       mYView = defineView "my view" $ \\myProps -> ...
---       @
---
--- 3. You can then use 'callbackViewWithProps' to create a property which is a JavaScript function.
--- When this JavaScript function is executed, the JavaScript arguments are converted to the props,
--- the view is rendered using the props, and the resulting React element is returned from the
--- JavaScript function.
---
---       @
---       someOtherView :: ReactView ()
---       someOtherView = defineView "some other view" $ \\() ->
---           div_ $
---              foreignClass_ "theForeginThing"
---                  [ callbackViewWithProps "the_propname_to_pass_to_theForeignThing" myView myArgsToProps
---                  , "hello" $= "world"
---                  ] mempty
---      @
---
---      @theForeignThing@ React class will receive a property called
---      @the_propname_to_pass_to_theForeignThing@.  The value of this property is a JavaScript
---      function which when executed will convert the arguments to @props@, render the view, and
---      return the resulting React element.
-callbackViewWithProps :: (Typeable props, ArgumentsToProps props func) => JSString -> ReactView props -> func -> PropertyOrHandler handler
-callbackViewWithProps name v func = CallbackPropertyReturningView name (\arr -> returnViewFromArguments arr 0 func) (reactView v)
+-- | Create a 'ReactElement' for a class defined in javascript.  See
+-- 'React.Flux.Combinators.foreign_' for a convenient wrapper and some examples.
+foreignClass :: JSVal -- ^ The javascript reference to the class
+             -> [PropertyOrHandler eventHandler] -- ^ properties and handlers to pass when creating an instance of this class.
+             -> ReactElementM eventHandler a -- ^ The child element or elements
+             -> ReactElementM eventHandler a
+
+#if __GHCJS__
+
+foreignClass name attrs (ReactElementM child) =
+    let (a, childEl) = runWriter child
+     in elementToM a $ ForeignElement (Right $ ReactViewRef name) attrs childEl
+
+#else
+foreignClass _ _ x = x
+#endif
+
+-- | Inject arbitrary javascript code into the rendering function.  This is very low level and should only
+-- be used as a last resort when interacting with complex third-party react classes.  For the most part,
+-- third-party react classes can be interacted with using 'foreignClass' and the various ways of creating
+-- properties.
+rawJsRendering :: (JSVal -> JSArray -> IO JSVal)
+                  -- ^ The raw code to inject into the rendering function.  The first argument is the 'this' value
+                  -- from the rendering function so points to the react class.  The second argument is the result of
+                  -- rendering the children so is an array of react elements.  The return value must be a React element.
+               -> ReactElementM handler () -- ^ the children
+               -> ReactElementM handler ()
+
+#ifdef __GHCJS__
+
+rawJsRendering trans (ReactElementM child) =
+    let (a, childEl) = runWriter child
+        trans' thisVal childLst =
+          ReactElementRef <$> trans thisVal (JSA.fromList $ map reactElementRef childLst)
+     in elementToM a $ RawJsElement trans' childEl
+
+#else
+
+rawJsRendering _ x = x
+
+#endif
 
 ----------------------------------------------------------------------------------------------------
 --- Combinators

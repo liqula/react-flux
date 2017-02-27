@@ -17,7 +17,6 @@ import Data.Typeable (Typeable)
 import GHC.Generics (Generic)
 import React.Flux.Internal
 import React.Flux.Store
-import React.Flux.Views
 
 #ifdef __GHCJS__
 import Control.Arrow ((***))
