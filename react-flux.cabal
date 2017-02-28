@@ -82,7 +82,7 @@ library
                       DataKinds
                       TypeOperators
 
-  build-depends: base >=4.8 && < 5
+  build-depends: base >=4.9 && < 5
                , deepseq
                , mtl >= 2.1
                , aeson >= 0.8
