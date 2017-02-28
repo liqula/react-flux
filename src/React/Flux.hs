@@ -64,16 +64,11 @@ module React.Flux (
   -- $dispatcher
 
   -- * Stores
-    ReactStore
-  , StoreData(..)
-  , mkStore
-  , getStoreData
-  , alterStore
-  , SomeStoreAction(..)
-  , executeAction
-
-  , someStoreAction
+    StoreData(..)
   , registerInitialStore
+  , SomeStoreAction
+  , someStoreAction
+  , executeAction
   , transformStore
   , readStoreData
 

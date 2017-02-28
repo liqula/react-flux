@@ -5,6 +5,7 @@ module Dispatcher (
 ) where
 
 import React.Flux
+import React.Flux.Outdated
 import NavStore
 
 changePageTo :: NavPageId -> [SomeStoreAction]

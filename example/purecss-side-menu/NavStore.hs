@@ -7,6 +7,7 @@ import Data.Maybe (fromMaybe)
 import Data.Typeable (Typeable)
 import GHC.Generics (Generic)
 import React.Flux
+import React.Flux.Outdated
 
 import GHCJS.Types (JSVal, JSString)
 import GHCJS.Foreign.Callback (Callback, syncCallback1, OnBlocked(..))

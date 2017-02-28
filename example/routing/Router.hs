@@ -16,6 +16,7 @@ module Router (setLocationHash
               ) where
 
 import           React.Flux
+import           React.Flux.Outdated
 
 import qualified Data.Text as T
 import qualified Data.ByteString.Char8 as BC
