@@ -3,6 +3,7 @@
 -- Normally you should not need to use anything in this module.  This module is only needed if you have
 -- complicated interaction with third-party javascript rendering code.
 
+{-# OPTIONS_GHC -fno-warn-redundant-constraints #-}
 module React.Flux.Internal(
     ReactViewRef(..)
   , NewJsProps(..)
@@ -229,7 +230,7 @@ instance (a ~ ()) => IsString (ReactElementM eventHandler a) where
 
 -- | Transform the event handler for a 'ReactElementM'.
 transHandler :: (handler1 -> handler2) -> ReactElementM handler1 a -> ReactElementM handler2 a
-transHandler f (ReactElementM writer) = ReactElementM $ mapWriter f' writer
+transHandler f (ReactElementM w) = ReactElementM $ mapWriter f' w
   where
     f' (a, x) = (a, fmap f x)
 

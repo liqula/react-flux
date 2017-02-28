@@ -31,7 +31,7 @@ import System.IO.Unsafe (unsafePerformIO)
 
 #ifdef __GHCJS__
 import Data.Monoid ((<>))
-import GHCJS.Types (JSVal, isNull, IsJSVal, JSString, jsval)
+import GHCJS.Types (JSVal, isNull, IsJSVal, JSString)
 import React.Flux.Export (Export, export, derefExport)
 import GHC.Fingerprint.Type
 import Data.JSString.Int (decimal)
