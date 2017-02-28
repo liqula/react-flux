@@ -1,11 +1,11 @@
 {-# LANGUAGE OverloadedStrings, TypeFamilies, ScopedTypeVariables, DeriveAnyClass,
-             FlexibleInstances, DeriveGeneric, BangPatterns, TemplateHaskell #-}
+             FlexibleInstances, DeriveGeneric, BangPatterns, TemplateHaskell, DataKinds, TypeApplications, MultiParamTypeClasses #-}
 module Main (main) where
 
 import Control.DeepSeq (NFData)
 import Control.Monad
 import Data.Monoid ((<>))
-import Data.Typeable (Typeable)
+import Data.Typeable (Typeable, Proxy(..))
 import Data.Maybe
 import Debug.Trace
 import GHC.Generics (Generic)
@@ -38,11 +38,11 @@ instance StoreData OutputStoreData where
         mapM_ (js_output . JSS.textToJSString) ss
         trace (unlines $ map T.unpack ss) $ return OutputStoreData
 
-outputStore :: ReactStore OutputStoreData
-outputStore = mkStore OutputStoreData
+initOutputStore :: IO ()
+initOutputStore = registerInitialStore OutputStoreData
 
 output :: [T.Text] -> [SomeStoreAction]
-output s = [SomeStoreAction outputStore s]
+output s = [someStoreAction @OutputStoreData s]
 
 outputIO :: [T.Text] -> IO ()
 outputIO ss = void $ transform ss OutputStoreData
@@ -64,11 +64,11 @@ logT t = eventTargetProp t "id"
 tshow :: Show a => a -> T.Text
 tshow = T.pack . show
 
-rawShowView :: ReactView Int
-rawShowView = defineView "raw show view" elemShow
+rawShowView :: View '[Int]
+rawShowView = mkView "raw show view" elemShow
 
-eventsView :: ReactView ()
-eventsView = defineView "events" $ \() ->
+eventsView :: View '[]
+eventsView = mkView "events" $
     div_ $ do
         p_ $ input_ [ "type" $= "text"
                     , "id" $= "keyinput"
@@ -129,226 +129,190 @@ eventsView = defineView "events" $ \() ->
                       ]
                       "Testing stopPropagation"
 
-        p_ [ "id" $= "raw-show-view"] $ view rawShowView 42 mempty
-
-eventsView_ :: ReactElementM eventHandler ()
-eventsView_ = view eventsView () mempty
-
---------------------------------------------------------------------------------
---- Lifecycle
---------------------------------------------------------------------------------
-
-logPandS :: LPropsAndState T.Text Int -> IO ()
-logPandS ps = do
-    p <- lGetProps ps
-    st <- lGetState ps
-    outputIO ["Current props and state: " <> p <> ", " <> (T.pack $ show st)]
-
-foreign import javascript unsafe
-    "$1.id"
-    js_domGetId :: JSVal -> IO JSVal
-
-logDOM :: LDOM -> IO ()
-logDOM dom = do
-    this <- lThis dom >>= js_domGetId >>= fromJSVal
-    x <- lRef dom "refSt" >>= js_domGetId >>= fromJSVal
-    y <- lRef dom "refProps" >>= js_domGetId >>= fromJSVal
-    outputIO [ "this id = " <> fromMaybe "Nothing" this
-             , "refStr id = " <> fromMaybe "Nothing" x
-             , "refProps id = " <> fromMaybe "Nothing" y
-             ]
-
-
-testLifecycle :: ReactView T.Text
-testLifecycle = defineLifecycleView "testlifecycle" (12 :: Int) lifecycleConfig
-    { lRender = \s p -> p_ ["id" $= "lifecycle-p"] $ do
-        span_ "Current state: "
-        span_ ["ref" $= "refSt", "id" $= "hello"] (elemShow s)
-        span_ ["ref" $= "refProps", "id" $= "world"] $ elemText $ "Current props: " <> p
-        button_ [ "id" $= "increment-state"
-                , onClick $ \_ _ st -> ([], Just $ st + 1)
-                ] "Incr"
-
-    , lComponentWillMount = Just $ \pAndS setStateFn -> do
-        outputIO ["will mount"]
-        logPandS pAndS
-        setStateFn 100
-
-    , lComponentDidMount = Just $ \pAndS dom _setStateFn -> do
-        outputIO ["did mount"]
-        logPandS pAndS
-        logDOM dom
-
-    , lComponentWillReceiveProps = Just $ \pAndS _dom _setStateFn newProps -> do
-        outputIO ["will recv props"]
-        logPandS pAndS
-        outputIO ["New props: " <> newProps]
-
-    , lComponentWillUpdate = Just $ \pAndS _dom newProps newState -> do
-        outputIO ["will update"]
-        logPandS pAndS
-        outputIO ["New props: " <> newProps, "New state: " <> tshow newState]
-
-    , lComponentDidUpdate = Just $ \pAndS _dom _setStateFn oldProps oldState -> do
-        outputIO ["did update"]
-        logPandS pAndS
-        outputIO ["Old props: " <> oldProps, "Old state: " <> tshow oldState]
-
-    , lComponentWillUnmount = Just $ \pAndS _dom -> do
-        outputIO ["will unmount"]
-        logPandS pAndS
-    }
-
-testLifecycle_ :: T.Text -> ReactElementM eventHandler ()
-testLifecycle_ s = view testLifecycle s $ span_ ["id" $= "child-passed-to-view"] "I am a child!!!"
-
---------------------------------------------------------------------------------
---- Children passed to view
---------------------------------------------------------------------------------
-
-displayChildren :: ReactView String
-displayChildren = defineView "display children" $ \ident ->
-    span_ [classNames [("display-children", True), ("missing-name", False)], "id" @= ident]
-        childrenPassedToView
-
-displayChildren_ :: String -> ReactElementM handler () -> ReactElementM handler ()
-displayChildren_ = view displayChildren
-
-displayChildrenSpec :: ReactElementM handler ()
-displayChildrenSpec = ul_ $ do
-    li_ $ displayChildren_ "empty-children" mempty
-    li_ $ displayChildren_ "single-child-wrapper" $ span_ ["id" $= "single-child"] "Single Child!!"
-    li_ $ displayChildren_ "multi-child" $ span_ ["id" $= "child1"] "Child 1" <> span_ ["id" $= "child2"] "Child 2"
+        p_ [ "id" $= "raw-show-view"] $ view_ rawShowView "raw" 42
 
 --------------------------------------------------------------------------------
 --- CSS Transitions
 --------------------------------------------------------------------------------
 
-cssTransitions :: ReactView [T.Text]
-cssTransitions = defineView "css transitions" $ \items ->
+cssTransitions :: View '[[T.Text]]
+cssTransitions = mkView "css transitions" $ \items ->
     div_ ["id" $= "css-transitions"] $
         cssTransitionGroup ["transitionName" $= "example"] $
             forM_ (zip items [(0 :: Int)..]) $ \(txt, key) ->
                 div_ ["key" @= key] $ span_ ["className" $= "css-transition-entry"] $ elemText txt
 
 --------------------------------------------------------------------------------
---- shouldComponentUpdate
+--- Stores and should component update
 --------------------------------------------------------------------------------
 
-data ShouldComponentUpdateData = ShouldComponentUpdateData Int String
+data Character = Character Int String
     deriving (Typeable, Show)
 
--- | The data in the store is four 'ShouldComponentUpdateData's.  The reason is we test
--- views with tuples of size up to 3, and so we want 4 entries in the store to be able to
--- test editing the store but not changing anything that is passed to a view, to test that
--- the shouldComponentUpdate function is working properly.
-data ShouldComponentUpdate = ShouldComponentUpdate {
-    scu1 :: !ShouldComponentUpdateData -- ^ passed to all three views
-  , scu2 :: !ShouldComponentUpdateData -- ^ only passed to the pair view
-  , scu3 :: !ShouldComponentUpdateData -- ^ only passed to the triple view
-  , scu4 :: !ShouldComponentUpdateData -- ^ not passed to any view
+data CharacterPair = CharacterPair {
+    c1 :: !Character
+  , c2 :: !Character
 } deriving (Typeable, Show)
 
-data SCUIndex = SCU1 | SCU2 | SCU3 | SCU4
+data Humans = Humans
+  { h1 :: !CharacterPair
+  , h2 :: !CharacterPair
+  } deriving (Typeable, Show)
+
+instance HasField "h1" Humans CharacterPair where
+  getField = h1
+instance HasField "h2" Humans CharacterPair where
+  getField = h2
+
+data Tiste = Tiste
+  { t1 :: !CharacterPair
+  , t2 :: !CharacterPair
+  } deriving (Typeable, Show)
+
+data CharacterIndex = P1_C1 | P1_C2 | P2_C1 | P2_C2
     deriving (Show, Eq, Typeable, Generic, NFData, Bounded, Enum)
 
-data ShouldComponentUpdateAction = IncrementAllSCUData SCUIndex
-                                 | IncrementFirstSCUData SCUIndex
-                                 | NoChangeToSCUData
-    deriving (Show, Typeable, Generic, NFData) 
+data TestStoreAction = IncrementCharacter CharacterIndex
+                     | NoChangeToCharacters
+    deriving (Show, Typeable, Generic, NFData)
 
-toggleSCU :: ShouldComponentUpdateData -> ShouldComponentUpdateData
-toggleSCU (ShouldComponentUpdateData i s) = ShouldComponentUpdateData (i+1) s
+incrChar :: Character -> Character
+incrChar (Character i s) = Character (i+1) s
 
-instance StoreData [ShouldComponentUpdate] where
-    type StoreAction [ShouldComponentUpdate] = ShouldComponentUpdateAction
-    transform _ [] = error "Will never happen"
-    transform action ds@(first:rest) =
-        pure $ case action of 
-            NoChangeToSCUData -> ds
-            (IncrementAllSCUData SCU1) -> [ShouldComponentUpdate (toggleSCU s1) s2 s3 s4 | ShouldComponentUpdate s1 s2 s3 s4 <- ds]
-            (IncrementAllSCUData SCU2) -> [ShouldComponentUpdate s1 (toggleSCU s2) s3 s4  | ShouldComponentUpdate s1 s2 s3 s4 <- ds]
-            (IncrementAllSCUData SCU3) -> [ShouldComponentUpdate s1 s2 (toggleSCU s3) s4 | ShouldComponentUpdate s1 s2 s3 s4 <- ds]
-            (IncrementAllSCUData SCU4) -> [ShouldComponentUpdate s1 s2 s3 (toggleSCU s4) | ShouldComponentUpdate s1 s2 s3 s4 <- ds]
-            (IncrementFirstSCUData SCU1) -> first { scu1 = toggleSCU $ scu1 first } : rest
-            (IncrementFirstSCUData SCU2) -> first { scu2 = toggleSCU $ scu2 first } : rest
-            (IncrementFirstSCUData SCU3) -> first { scu3 = toggleSCU $ scu3 first } : rest
-            (IncrementFirstSCUData SCU4) -> first { scu4 = toggleSCU $ scu4 first } : rest
+instance StoreData Humans where
+    type StoreAction Humans = TestStoreAction
+    transform NoChangeToCharacters cg = return cg
+    -- normally would use lenses to update part of the store
+    transform (IncrementCharacter P1_C1) cg = return $ cg { h1 = (h1 cg) { c1 = incrChar (c1 $ h1 cg) }}
+    transform (IncrementCharacter P1_C2) cg = return $ cg { h1 = (h1 cg) { c2 = incrChar (c2 $ h1 cg) }}
+    transform (IncrementCharacter P2_C1) cg = return $ cg { h2 = (h2 cg) { c1 = incrChar (c1 $ h2 cg) }}
+    transform (IncrementCharacter P2_C2) cg = return $ cg { h2 = (h2 cg) { c2 = incrChar (c2 $ h2 cg) }}
 
-shouldComponentUpdateStore :: ReactStore [ShouldComponentUpdate]
-shouldComponentUpdateStore = mkStore
-        [ ShouldComponentUpdate (mkS 1 "Quick Ben") (mkS 2 "Whiskeyjack") (mkS 3 "Fiddler") (mkS 4 "Kellanved")
-        , ShouldComponentUpdate (mkS 5 "Karsa") (mkS 6 "Tehol") (mkS 7 "Tayschrenn") (mkS 8 "Kruppe")
-        , ShouldComponentUpdate (mkS 9 "Anomander Rake") (mkS 10 "Iskaral Pust") (mkS 11 "Dujek") (mkS 12 "Tavore")
+instance StoreData Tiste where
+    type StoreAction Tiste = TestStoreAction
+    transform NoChangeToCharacters cg = return cg
+    -- normally would use lenses to update part of the store
+    transform (IncrementCharacter P1_C1) cg = return $ cg { t1 = (t1 cg) { c1 = incrChar (c1 $ t1 cg) }}
+    transform (IncrementCharacter P1_C2) cg = return $ cg { t1 = (t1 cg) { c2 = incrChar (c2 $ t2 cg) }}
+    transform (IncrementCharacter P2_C1) cg = return $ cg { t2 = (t2 cg) { c1 = incrChar (c1 $ t2 cg) }}
+    transform (IncrementCharacter P2_C2) cg = return $ cg { t2 = (t2 cg) { c2 = incrChar (c2 $ t2 cg) }}
+
+initCharacterStore :: IO ()
+initCharacterStore = do
+  registerInitialStore $
+    Humans
+      { h1 = CharacterPair
+        { c1 = Character 10 "Quick Ben"
+        , c2 = Character 20 "Whiskeyjack"
+        }
+      , h2 = CharacterPair
+        { c1 = Character 30 "Fiddler"
+        , c2 = Character 40 "Kruppe"
+        }
+      }
+  registerInitialStore $
+    Tiste
+      { t1 = CharacterPair
+        { c1 = Character 100 "Andarist"
+        , c2 = Character 110 "Osseric"
+        }
+      , t2 = CharacterPair
+        { c1 = Character 120 "Anomander Rake"
+        , c2 = Character 130 "Korlot"
+        }
+      }
+
+logWhenUpdated_ :: String -> ReactElementM handler ()
+logWhenUpdated_ m = foreign_ "hsreact$log_when_updated" ["key" $= "log", "message" &= m] mempty
+
+singleCharacterView :: View '[Character]
+singleCharacterView = mkView "single-character" $ \c ->
+  logWhenUpdated_ $ "Single character " ++ show c
+
+twoCharacterView :: View '[Character, Character]
+twoCharacterView = mkView "two-character" $ \ch1 ch2 ->
+  logWhenUpdated_ $ "Two characters " ++ show ch1 ++ " and " ++ show ch2
+
+pairCharacterView :: View '[CharacterPair]
+pairCharacterView = mkView "pair-characters" $ \p ->
+  logWhenUpdated_ $ "Pair of characters " ++ show p
+
+statefulCharacterView :: View '[Character]
+statefulCharacterView = mkStatefulView "stateful-char" (-100 :: Int) $ \s c ->
+  p_ $ do
+    logWhenUpdated_ ("Stateful character " ++ show c)
+    span_ ["className" $= "state", "key" $= "cur state"] $ elemShow s
+    button_ [ "className" $= "incr-state"
+            , onClick $ \_ _ s' -> ([], Just $ s' + 1)
+            , "key" $= "btn"
+            ]
+      "Incr"
+
+fullHumanView :: View '[Character, Character]
+fullHumanView = mkControllerView @'[StoreArg Humans] "full humans" $ \humans extra1 extra2 ->
+  ul_ ["id" $= "full-humans-view"] $ do
+    li_ ["key" $= "header"] $ logWhenUpdated_ "All the humans"
+    li_ ["key" $= "11"] $ view_ singleCharacterView "11" (c1 $ h1 humans)
+    li_ ["key" $= "12"] $ view_ singleCharacterView "12" (c2 $ h1 humans)
+    li_ ["key" $= "21"] $ view_ singleCharacterView "21" (c1 $ h2 humans)
+    li_ ["key" $= "22"] $ view_ singleCharacterView "22" (c2 $ h2 humans)
+    li_ ["key" $= "112"] $ view_ twoCharacterView "112" (c1 $ h1 humans) (c2 $ h1 humans)
+    li_ ["key" $= "212"] $ view_ pairCharacterView "212" (h2 $ humans)
+    li_ ["key" $= "extra1"] $ view_ singleCharacterView "extra1" extra1
+    li_ ["key" $= "extra2"] $ view_ singleCharacterView "extra2" extra2
+
+tisteAndHumansView :: View '[]
+tisteAndHumansView = mkControllerView @'[StoreArg Tiste] "tiste-and-humans" $ \tiste ->
+  div_ ["id" $= "tiste-view"] $ do
+    ul_ ["id" $= "tiste-sub-view", "key" $= "tiste-sub-view"] $ do
+      li_ ["key" $= "header"] $ logWhenUpdated_ "All the tiste"
+      li_ ["key" $= "11"] $ view_ singleCharacterView "11" (c1 $ t1 tiste)
+      li_ ["key" $= "12"] $ view_ singleCharacterView "12" (c2 $ t1 tiste)
+      li_ ["key" $= "21"] $ view_ singleCharacterView "21" (c1 $ t2 tiste)
+      li_ ["key" $= "22"] $ view_ singleCharacterView "22" (c2 $ t2 tiste)
+    view_ fullHumanView "humans" (c1 $ t1 tiste) (c1 $ t2 tiste)
+
+dualCharacterView :: View '[]
+dualCharacterView = mkControllerView @'[StoreArg Humans, StoreArg Tiste] "dual-characters" $ \humans tiste ->
+  ul_ ["id" $= "dual-character-view"] $ do
+    li_ ["key" $= "header"] $ logWhenUpdated_ "Both humans and tiste"
+    li_ ["key" $= "human11"] $ view_ singleCharacterView "11" (c1 $ h1 humans)
+    li_ ["key" $= "tiste11"] $ view_ singleCharacterView "11" (c1 $ t1 tiste)
+    li_ ["key" $= "state"] $ view_ statefulCharacterView "state" (c1 $ t2 tiste)
+
+tisteAndSomeHumansView :: View '[]
+tisteAndSomeHumansView = mkControllerView @'[StoreArg Tiste, StoreField Humans "h1" CharacterPair] "tiste-and-some-humans" $ \tiste humanPair ->
+  ul_ ["id" $= "tiste-and-some-humans"] $ do
+    li_ ["key" $= "header"] $ logWhenUpdated_ "All the tiste and first two humans"
+    li_ ["key" $= "t21"] $ view_ singleCharacterView "21" (c1 $ t2 tiste)
+    li_ ["key" $= "t22"] $ view_ singleCharacterView "22" (c2 $ t2 tiste)
+    li_ ["key" $= "h11"] $ view_ singleCharacterView "11" (c1 humanPair)
+    li_ ["key" $= "h12"] $ view_ singleCharacterView "12" (c2 humanPair)
+
+buttons_ :: forall s. (StoreData s, TestStoreAction ~ StoreAction s) => Proxy s -> T.Text -> ReactElementM ViewEventHandler ()
+buttons_ _ lbl =
+  ul_ ["id" &= lbl, "key" &= lbl] $ do
+    li_ ["key" $= "none"] $
+      button_
+        [ "id" &= (lbl <> "-none")
+        , onClick $ \_ _ -> [someStoreAction @s NoChangeToCharacters]
         ]
-    where
-        mkS = ShouldComponentUpdateData
+        (elemText $ lbl <> " No Change")
+    forM_ [minBound..maxBound] $ \idx ->
+      li_ ["key" &= (lbl <> "-change-" <> tshow idx)] $
+        button_
+          [ "id" &= (lbl <> "-" <> tshow idx)
+          , onClick $ \_ _ -> [someStoreAction @s $ IncrementCharacter idx]
+          ] (elemText $ lbl <> tshow idx)
 
--- | This will log wheenver componentWillUpdate lifecycle event occurs
-logComponentWillUpdate :: ReactView ShouldComponentUpdateData
-logComponentWillUpdate = defineLifecycleView "shouldComponentUpdate single spec" () lifecycleConfig
-    { lRender = \() (ShouldComponentUpdateData i s) ->
-                    span_ (elemShow i) <> span_ (elemString s)
-    , lComponentWillUpdate = Just $ \curProps _ (ShouldComponentUpdateData newI newS) () -> do
-          ShouldComponentUpdateData curI curS <- lGetProps curProps
-          outputIO [ "Component will update single"
-                   , "current props: " <> tshow curI <> " " <> T.pack curS
-                   , "new props: " <> tshow newI <> " " <> T.pack newS
-                   ]
-    }
-
-logComp1_ :: ShouldComponentUpdateData -> Int -> ReactElementM handler ()
-logComp1_ !sc i = viewWithKey logComponentWillUpdate i sc mempty
-
-logComponentWillUpdatePair :: ReactView (ShouldComponentUpdateData, ShouldComponentUpdateData)
-logComponentWillUpdatePair = defineLifecycleView "shouldComponentUpdate pair spec" () lifecycleConfig
-    { lRender = \() (ShouldComponentUpdateData i1 s1, ShouldComponentUpdateData i2 s2) ->
-                    span_ (elemShow i1) <> span_ (elemString s1) <> span_ (elemShow i2) <> span_ (elemString s2)
-    , lComponentWillUpdate = Just $ \curProps _ (ShouldComponentUpdateData newI1 newS1, ShouldComponentUpdateData newI2 newS2) () -> do
-          (ShouldComponentUpdateData curI1 curS1, ShouldComponentUpdateData curI2 curS2) <- lGetProps curProps
-          outputIO [ "Component will update for pair input view"
-                   , T.pack $ "current props: " ++ show curI1 ++ " " ++ curS1 ++ " " ++ show curI2 ++ " " ++ curS2
-                   , T.pack $ "new props: " ++ show newI1 ++ " " ++ newS1 ++ " " ++ show newI2 ++ " " ++ newS2
-                   ]
-    }
-
-logComp2_ :: ShouldComponentUpdateData -> ShouldComponentUpdateData -> Int -> ReactElementM handler ()
-logComp2_ !sc1 !sc2 i = viewWithKey logComponentWillUpdatePair i (sc1, sc2) mempty
-
-logComponentWillUpdateTriple :: ReactView (ShouldComponentUpdateData, ShouldComponentUpdateData, ShouldComponentUpdateData)
-logComponentWillUpdateTriple = defineLifecycleView "shouldComponentUpdate triple spec" () lifecycleConfig
-    { lRender = \() (ShouldComponentUpdateData i1 s1, ShouldComponentUpdateData i2 s2, ShouldComponentUpdateData i3 s3) ->
-                  span_ (elemShow i1) <> span_ (elemString s1) <> span_ (elemShow i2) <> span_ (elemString s2) <> span_ (elemShow i3) <> span_ (elemString s3)
-    , lComponentWillUpdate = Just $ \curProps _
-        (ShouldComponentUpdateData newI1 newS1, ShouldComponentUpdateData newI2 newS2, ShouldComponentUpdateData newI3 newS3) () -> do
-            (ShouldComponentUpdateData curI1 curS1, ShouldComponentUpdateData curI2 curS2, ShouldComponentUpdateData curI3 curS3) <- lGetProps curProps
-            outputIO [ "Component will update for triple input view"
-                     , T.pack $ "current props: " ++ show curI1 ++ " " ++ curS1 ++ " " ++ show curI2 ++ " " ++ curS2 ++ " " ++ show curI3 ++ " " ++ curS3
-                     , T.pack $ "new props: " ++ show newI1 ++ " " ++ newS1 ++ " " ++ show newI2 ++ " " ++ newS2 ++ " " ++ show newI3 ++ " " ++ newS3
-                     ]
-    }
-
-logComp3_ :: ShouldComponentUpdateData -> ShouldComponentUpdateData -> ShouldComponentUpdateData -> Int -> ReactElementM handler ()
-logComp3_ !sc1 !sc2 !sc3 i = viewWithKey logComponentWillUpdateTriple i (sc1, sc2, sc3) mempty
-
-shouldComponentUpdateSpec :: ReactView ()
-shouldComponentUpdateSpec = defineControllerView "should component update" shouldComponentUpdateStore $ \ds () -> 
-    div_ ["id" $= "should-component-update"] $ do
-        ul_ ["id" $= "should-component-update-single"] $ forM_ (zip ds [(0 :: Int)..]) $ \(d,i)  ->
-            li_ $ logComp1_ (scu1 d) i
-        ul_ ["id" $= "should-component-update-pair"]  $ forM_ (zip ds [(0 :: Int)..]) $ \(d,i)  ->
-            li_ $ logComp2_ (scu1 d) (scu2 d) i
-        ul_ ["id" $= "should-component-update-triple"]  $ forM_ (zip ds [(0 :: Int)..]) $ \(d, i)  ->
-            li_ $ logComp3_ (scu1 d) (scu2 d) (scu3 d) i
-
-        button_ ["id" $= "no-change-scu", onClick $ \_ _ -> [SomeStoreAction shouldComponentUpdateStore NoChangeToSCUData]]
-            "No change to data"
-
-        forM_ [minBound..maxBound] $ \idx -> do
-            button_ ["id" @= ("change-all-scu-" ++ show idx), onClick $ \_ _ -> [SomeStoreAction shouldComponentUpdateStore $ IncrementAllSCUData idx]] $
-                elemString $ "Increment all " ++ show idx
-            button_ ["id" @=("increment-first-scu" ++ show idx), onClick $ \_ _ -> [SomeStoreAction shouldComponentUpdateStore $ IncrementFirstSCUData idx]] $
-                elemString $ "Increment first entry's integer" ++ show idx
+storeSpec :: View '[]
+storeSpec = mkView "store spec" $
+  div_ ["id" $= "store-spec"] $ do
+    buttons_ (Proxy :: Proxy Humans) "Humans"
+    buttons_ (Proxy :: Proxy Tiste) "Tiste"
+    view_ tisteAndHumansView "tiste-and-human"
+    view_ dualCharacterView "dual"
+    view_ tisteAndSomeHumansView "tiste-and-some"
 
 --------------------------------------------------------------------------------
 --- Callback returning view
@@ -384,13 +348,13 @@ foreign import javascript unsafe
     "{'with_trans': 'message from translation {abc}'}"
     js_translations :: JSVal
 
-intlSpec :: ReactView ()
-intlSpec = defineView "intl" $ \() ->
+intlSpec :: View '[]
+intlSpec = mkView "intl" $
     intlProvider_ "en" (Just js_translations) Nothing $
-        view intlSpecBody () mempty
+        view_ intlSpecBody "intl-body"
 
-intlSpecBody :: ReactView ()
-intlSpecBody = defineView "intl body" $ \() -> div_ ["id" $= "intl-spec"] $ 
+intlSpecBody :: View '[]
+intlSpecBody = mkView "intl body" $ div_ ["id" $= "intl-spec"] $
     ul_ $ do
         li_ ["id" $= "f-number"] $
             formattedNumber_ [ "value" @= (0.9 :: Double), "style" $= "percent" ]
@@ -410,7 +374,9 @@ intlSpecBody = defineView "intl body" $ \() -> div_ ["id" $= "intl-spec"] $
             input_ [formattedDateProp "placeholder" (Left moon) []]
 
         let step = UTCTime moon (2*60*60 + 56*60) -- 1969-7-20 02:56 UTC
-            fullT = (fullDayF, TimeFormat { hourF = Just "numeric", minuteF = Just "2-digit", secondF = Just "numeric", timeZoneNameF = Just "long" })
+            fullT = ( fullDayF
+                    , TimeFormat { hourF = Just "numeric", minuteF = Just "2-digit", secondF = Just "numeric", timeZoneNameF = Just "long" }
+                    )
 
         li_ ["id" $= "f-shorttime"] $ utcTime_ shortDateTime step
         li_ ["id" $= "f-fulltime"] $ utcTime_ fullT step
@@ -480,38 +446,25 @@ intlSpecBody = defineView "intl body" $ \() -> div_ ["id" $= "intl-spec"] $
 --------------------------------------------------------------------------------
 
 -- | Test a lifecycle view with all lifecycle methods nothing
-testClient :: ReactView ()
-testClient = defineLifecycleView "app" "Hello" lifecycleConfig
-    { lRender = \s () -> do
-        eventsView_
+testClient :: View '[]
+testClient = mkView "app" $
+  div_ $ do
+    view_ eventsView "events"
+    view_ cssTransitions "transitions" ["A", "B"]
+    view_ storeSpec "store"
+    view_ intlSpec "intl"
 
-        when (s /= "") $
-            testLifecycle_ s
-        button_ [ "id" $= "add-app-str"
-                , onClick $ \_ _ s' -> ([], Just $ s' <> "o")
-                ]
-                "Add o"
-        button_ [ "id" $= "clear-app-str"
-                , onClick $ \_ _ _ -> ([], Just "")
-                ] "Clear"
+    view callbackViewWrapper () mempty
 
-        displayChildrenSpec
-
-        view cssTransitions ["A", "B"] mempty
-
-        view shouldComponentUpdateSpec () mempty
-
-        view callbackViewWrapper () mempty
-
-        view intlSpec () mempty
-
-        rawJsRendering js_testRawJs $
-          span_ ["id" $= "test-raw-js-body"]
-            "Raw Javascript Render Body"
-    }
+    rawJsRendering js_testRawJs $
+      span_ ["id" $= "test-raw-js-body"]
+        "Raw Javascript Render Body"
 
 main :: IO ()
-main = reactRender "app" testClient ()
+main = do
+  initOutputStore
+  initCharacterStore
+  reactRenderView "app" testClient
 
 writeIntlMessages (intlFormatJson "test/client/msgs/jsonmsgs.json")
 writeIntlMessages (intlFormatJsonWithoutDescription "test/client/msgs/jsonnodescr.json")

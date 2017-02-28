@@ -220,7 +220,7 @@ mkStore initial = unsafePerformIO $ do
 
 -- new store API
 registerInitialStore initial = do
-    dataRef <- export initial
+    dataRef <- initial `seq` export initial
     store <- NewReactStoreHS 152 <$> newMVar ()
     storeE <- export store
     js_createNewStore (storeJsKey (Proxy :: Proxy storeData)) dataRef storeE

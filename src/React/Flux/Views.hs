@@ -141,7 +141,7 @@ instance ExportViewProps '[] where
 
 instance (ViewProps rest, Typeable a) => ViewProps (a ': (rest :: [*])) where
 #ifdef __GHCJS__
-  viewPropsToJs _ h ref k props = \a -> viewPropsToJs (Proxy :: Proxy rest) h ref k (props >=> pushProp a)
+  viewPropsToJs _ h ref k props = \a -> a `seq` viewPropsToJs (Proxy :: Proxy rest) h ref k (props >=> pushProp a)
 
   renderViewProps _ ref k props = \a -> a `seq` renderViewProps (Proxy :: Proxy rest) ref k (props >=> pushProp a)
 

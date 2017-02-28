@@ -82,6 +82,7 @@ module React.Flux (
   , mkStatefulView
   , view_
   , StoreArg
+  , StoreField
   , ControllerViewToElement
   , HasField(..)
   , mkControllerView

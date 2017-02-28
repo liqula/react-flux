@@ -89,7 +89,7 @@ function hsreact$mk_class(name, renderCb, checkState, releaseState) {
             'intl': ReactIntl['intlShape']
         };
     }
-    
+
     return cl;
 }
 
@@ -263,6 +263,22 @@ function hsreact$mk_new_stateful_view(name, initialState, renderCb) {
     return React['createClass'](cl);
 }
 
+function hsreact$make_ctrl_view_callback(elem, artifact) {
+    return function(newStoreData) {
+        var newState = Object.assign({}, elem['state'].hs);
+        artifact.forEach(function(st) {
+            if (st.call) {
+                var arg = {input: newStoreData, output: null};
+                st.call(arg);
+                newState[st.i] = arg.output;
+            } else {
+                newState[st.i] = newStoreData.root;
+            }
+        });
+        elem['setState']({hs:newState});
+    };
+}
+
 function hsreact$mk_new_ctrl_view(name, renderCb, artifacts) {
     var cl = hsreact$mk_new_class(name, renderCb);
     cl['shouldComponentUpdate'] = function(newPropsI, newStateI) {
@@ -292,24 +308,11 @@ function hsreact$mk_new_ctrl_view(name, renderCb, artifacts) {
     };
     cl['componentDidMount'] = function() {
         this._hsreactViewCallbacks = {};
-        var that = this;
         for (var storeTy in artifacts) {
             var store = hsreact$storedata[storeTy];
             var artifact = artifacts[storeTy];
             this._hsreactViewCallbacks[storeTy] =
-                hsreact$register_view(store, function(newStoreData) {
-                    var newState = Object.assign({}, that['state'].hs);
-                    artifact.forEach(function(st) {
-                        if (st.call) {
-                            var arg = {input: newStoreData, output: null};
-                            st.call(arg);
-                            newState[st.i] = arg.output;
-                        } else {
-                            newState[st.i] = newStoreData.root;
-                        }
-                    });
-                    that['setState']({hs:newState});
-                });
+                hsreact$register_view(store, hsreact$make_ctrl_view_callback(this, artifact));
         };
     };
     cl['componentWillUnmount'] = function() {
