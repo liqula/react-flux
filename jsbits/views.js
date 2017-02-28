@@ -246,7 +246,7 @@ function hsreact$mk_new_stateful_view(name, initialState, renderCb) {
     cl['getInitialState'] = function() {
         return { hs: initialState };
     };
-    cl['_updateAndReleaseState'] = function(s) {
+    cl._updateAndReleaseState = function(s) {
         h$release(this['state'].hs);
         this['setState']({hs: s});
     };

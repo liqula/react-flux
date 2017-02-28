@@ -112,7 +112,7 @@ testClientSpec filename = session " for the test client" $ using allBrowsers $ d
         [keydown, evt, keyEvt, modState, target, curTarget] <- loadLog
         keydown `shouldBe` "keydown"
         evt `shouldBeEvent` ("keydown", True, 3)
-        keyEvt `shouldBe` "(False,0,False,\"Unidentified\",88,Nothing,0,False,False,False,88)"
+        keyEvt `shouldBe` "(False,0,False,\"x\",88,Nothing,0,False,False,False,88)"
         modState `shouldBe` "alt modifier: False"
         target `shouldBe` "keyinput"
         curTarget `shouldBe` "keyinput"
@@ -123,7 +123,7 @@ testClientSpec filename = session " for the test client" $ using allBrowsers $ d
         [_, _, keyEvt, modState, _, _, _, _, keyEvt2, modState2, _, _] <- loadLog
         keyEvt `shouldBe` "(True,0,False,\"Alt\",18,Nothing,0,False,False,False,18)"
         modState `shouldBe` "alt modifier: True"
-        keyEvt2 `shouldBe` "(True,0,False,\"Unidentified\",82,Nothing,0,False,False,False,82)"
+        keyEvt2 `shouldBe` "(True,0,False,\"r\",82,Nothing,0,False,False,False,82)"
         modState2 `shouldBe` "alt modifier: True"
 
     it "processes a click event" $ runWD $ do

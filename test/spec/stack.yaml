@@ -1,5 +1,3 @@
-resolver: nightly-2016-08-28
+resolver: lts-7.18
 packages:
 - '.'
-extra-deps:
-- hspec-webdriver-1.2.0
