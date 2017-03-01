@@ -192,7 +192,7 @@ var hsreact$children_to_array = typeof React !== "object" ? null : (React['Child
 
 function hsreact$check_ghcjs_obj_equal(x, y) {
     //Use != here to check if objects are the same
-    return x == y || (x.d1 == y.d1 && x.d2 == y.d2);
+    return x == y || (x.d1 && x.d1 == y.d1 && x.d2 == y.d2);
 }
 
 function hsreact$checkPropsDifferent(newPropsI, oldPropsI) {

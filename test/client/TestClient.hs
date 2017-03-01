@@ -182,7 +182,7 @@ instance StoreData Tiste where
     transform NoChangeToCharacters cg = return cg
     -- normally would use lenses to update part of the store
     transform (IncrementCharacter P1_C1) cg = return $ cg { t1 = (t1 cg) { c1 = incrChar (c1 $ t1 cg) }}
-    transform (IncrementCharacter P1_C2) cg = return $ cg { t1 = (t1 cg) { c2 = incrChar (c2 $ t2 cg) }}
+    transform (IncrementCharacter P1_C2) cg = return $ cg { t1 = (t1 cg) { c2 = incrChar (c2 $ t1 cg) }}
     transform (IncrementCharacter P2_C1) cg = return $ cg { t2 = (t2 cg) { c1 = incrChar (c1 $ t2 cg) }}
     transform (IncrementCharacter P2_C2) cg = return $ cg { t2 = (t2 cg) { c2 = incrChar (c2 $ t2 cg) }}
 
@@ -240,7 +240,7 @@ statefulCharacterView = mkStatefulView "stateful-char" (-100 :: Int) $ \s c ->
 fullHumanView :: View '[Character, Character]
 fullHumanView = mkControllerView @'[StoreArg Humans] "full humans" $ \humans extra1 extra2 ->
   ul_ ["id" $= "full-humans-view"] $ do
-    li_ ["key" $= "header"] $ logWhenUpdated_ "All the humans"
+    li_ ["key" $= "header"] $ logWhenUpdated_ "All the humans, plus Andarist and Rake"
     li_ ["key" $= "11"] $ view_ singleCharacterView "11" (c1 $ h1 humans)
     li_ ["key" $= "12"] $ view_ singleCharacterView "12" (c2 $ h1 humans)
     li_ ["key" $= "21"] $ view_ singleCharacterView "21" (c1 $ h2 humans)
@@ -264,7 +264,7 @@ tisteAndHumansView = mkControllerView @'[StoreArg Tiste] "tiste-and-humans" $ \t
 dualCharacterView :: View '[]
 dualCharacterView = mkControllerView @'[StoreArg Humans, StoreArg Tiste] "dual-characters" $ \humans tiste ->
   ul_ ["id" $= "dual-character-view"] $ do
-    li_ ["key" $= "header"] $ logWhenUpdated_ "Both humans and tiste"
+    li_ ["key" $= "header"] $ logWhenUpdated_ "Quick Ben and Andarist"
     li_ ["key" $= "human11"] $ view_ singleCharacterView "11" (c1 $ h1 humans)
     li_ ["key" $= "tiste11"] $ view_ singleCharacterView "11" (c1 $ t1 tiste)
     li_ ["key" $= "state"] $ view_ statefulCharacterView "state" (c1 $ t2 tiste)
@@ -272,7 +272,7 @@ dualCharacterView = mkControllerView @'[StoreArg Humans, StoreArg Tiste] "dual-c
 tisteAndSomeHumansView :: View '[]
 tisteAndSomeHumansView = mkControllerView @'[StoreArg Tiste, StoreField Humans "h1" CharacterPair] "tiste-and-some-humans" $ \tiste humanPair ->
   ul_ ["id" $= "tiste-and-some-humans"] $ do
-    li_ ["key" $= "header"] $ logWhenUpdated_ "All the tiste and first two humans"
+    li_ ["key" $= "header"] $ logWhenUpdated_ "Just Rake, Korlot, Quick Ben, and Whiskeyjack"
     li_ ["key" $= "t21"] $ view_ singleCharacterView "21" (c1 $ t2 tiste)
     li_ ["key" $= "t22"] $ view_ singleCharacterView "22" (c2 $ t2 tiste)
     li_ ["key" $= "h11"] $ view_ singleCharacterView "11" (c1 humanPair)

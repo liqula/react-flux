@@ -50,6 +50,7 @@ clickNoChangeTiste :: WD ()
 clickNoChangeTiste = findElem (ById "Tiste-none") >>= click
 
 data HumanNames = QuickBen | Whiskeyjack | Fiddler | Kruppe
+data TisteNames = Andarist | Osseric | AnomanderRake | Korlot
 
 incrementHuman :: HumanNames -> WD ()
 incrementHuman n = findElem (ById i) >>= click
@@ -60,6 +61,14 @@ incrementHuman n = findElem (ById i) >>= click
       Fiddler -> "P2_C1"
       Kruppe -> "P2_C2"
 
+incrementTiste :: TisteNames -> WD ()
+incrementTiste n = findElem (ById i) >>= click
+  where
+    i = "Tiste-" <> case n of
+      Andarist -> "P1_C1"
+      Osseric -> "P1_C2"
+      AnomanderRake -> "P2_C1"
+      Korlot -> "P2_C2"
 
 cUpdate :: T.Text -> T.Text -> String
 cUpdate ulId msg = T.unpack $ "Update in ul " <> ulId <> ": " <> msg
@@ -77,7 +86,7 @@ charactersShouldBe (HumanNums{..}) (TisteNums{..}) = do
   characterShouldBe allTiste 4 $ "Single character C" <> tshow korlot <> " - Korlot"
 
   allHumans <- characterList "full-humans-view"
-  characterShouldBe allHumans 0 "All the humans"
+  characterShouldBe allHumans 0 "All the humans, plus Andarist and Rake"
   characterShouldBe allHumans 1 $ "Single character C" <> tshow quickBen <> " - Quick Ben"
   characterShouldBe allHumans 2 $ "Single character C" <> tshow whiskeyjack <> " - Whiskeyjack"
   characterShouldBe allHumans 3 $ "Single character C" <> tshow fiddler <> " - Fiddler"
@@ -88,7 +97,7 @@ charactersShouldBe (HumanNums{..}) (TisteNums{..}) = do
   characterShouldBe allHumans 8 $ "Single character C" <> tshow rake <> " - Anomander Rake"
 
   both <- characterList "dual-character-view"
-  characterShouldBe both 0 "Both humans and tiste"
+  characterShouldBe both 0 "Quick Ben and Andarist"
   characterShouldBe both 1 $ "Single character C" <> tshow quickBen <> " - Quick Ben"
   characterShouldBe both 2 $ "Single character C" <> tshow andarist <> " - Andarist"
   stateRake <- findElemFrom (characterLis both !! 3) $ ByCSS "p > span:first-child"
@@ -97,7 +106,7 @@ charactersShouldBe (HumanNums{..}) (TisteNums{..}) = do
   getText stateSpan `shouldReturn` (tshow rakeState)
 
   some <- characterList "tiste-and-some-humans"
-  characterShouldBe some 0 "All the tiste and first two humans"
+  characterShouldBe some 0 "Just Rake, Korlot, Quick Ben, and Whiskeyjack"
   characterShouldBe some 1 $ "Single character C" <> tshow rake <> " - Anomander Rake"
   characterShouldBe some 2 $ "Single character C" <> tshow korlot <> " - Korlot"
   characterShouldBe some 3 $ "Single character C" <> tshow quickBen <> " - Quick Ben"
@@ -218,15 +227,142 @@ testClientSpec filename = session " for the test client" $ using allBrowsers $ d
           (HumanNums { quickBen = 11, whiskeyjack = 20, fiddler = 30, kruppe = 40})
           (TisteNums { andarist = 100, osseric = 110, rake = 120, korlot = 130, rakeState = -100})
         loadLog `shouldReturn`
-          [ cUpdate "full-humans-view" "All the humans"
+          [ cUpdate "full-humans-view" "All the humans, plus Andarist and Rake"
           , cUpdate "full-humans-view" "Single character C10 - Quick Ben"
           , cUpdate "full-humans-view" "Two characters C10 - Quick Ben and C20 - Whiskeyjack"
-          , cUpdate "dual-character-view" "Both humans and tiste"
+          , cUpdate "dual-character-view" "Quick Ben and Andarist"
           , cUpdate "dual-character-view" "Single character C10 - Quick Ben"
-          , cUpdate "tiste-and-some-humans" "All the tiste and first two humans"
+          , cUpdate "tiste-and-some-humans" "Just Rake, Korlot, Quick Ben, and Whiskeyjack"
           , cUpdate "tiste-and-some-humans" "Single character C10 - Quick Ben"
           ]
 
+      it "increments Whiskeyjack" $ runWD $ do
+        incrementHuman Whiskeyjack
+        charactersShouldBe
+          (HumanNums { quickBen = 11, whiskeyjack = 21, fiddler = 30, kruppe = 40})
+          (TisteNums { andarist = 100, osseric = 110, rake = 120, korlot = 130, rakeState = -100})
+        loadLog `shouldReturn`
+          [ cUpdate "full-humans-view" "All the humans, plus Andarist and Rake"
+          , cUpdate "full-humans-view" "Single character C20 - Whiskeyjack"
+          , cUpdate "full-humans-view" "Two characters C11 - Quick Ben and C20 - Whiskeyjack"
+          , cUpdate "dual-character-view" "Quick Ben and Andarist" -- just the view itself, not any sub-views
+          , cUpdate "tiste-and-some-humans" "Just Rake, Korlot, Quick Ben, and Whiskeyjack"
+          , cUpdate "tiste-and-some-humans" "Single character C20 - Whiskeyjack"
+          ]
+
+      it "increments Fiddler" $ runWD $ do
+        incrementHuman Fiddler
+        charactersShouldBe
+          (HumanNums { quickBen = 11, whiskeyjack = 21, fiddler = 31, kruppe = 40})
+          (TisteNums { andarist = 100, osseric = 110, rake = 120, korlot = 130, rakeState = -100})
+        loadLog `shouldReturn`
+          [ cUpdate "full-humans-view" "All the humans, plus Andarist and Rake"
+          , cUpdate "full-humans-view" "Single character C30 - Fiddler"
+          , cUpdate "full-humans-view" "Pair of characters C30 - Fiddler, C40 - Kruppe"
+          , cUpdate "dual-character-view" "Quick Ben and Andarist" -- just the view itself, not any sub-views
+
+          -- tiste-and-some-humans should have nothing, even though the human store is there,
+          -- because only the first two humans are extracted before shouldComponentUpdate
+          ]
+
+      it "increments Kruppe" $ runWD $ do
+        incrementHuman Kruppe
+        charactersShouldBe
+          (HumanNums { quickBen = 11, whiskeyjack = 21, fiddler = 31, kruppe = 41})
+          (TisteNums { andarist = 100, osseric = 110, rake = 120, korlot = 130, rakeState = -100})
+        loadLog `shouldReturn`
+          [ cUpdate "full-humans-view" "All the humans, plus Andarist and Rake"
+          , cUpdate "full-humans-view" "Single character C40 - Kruppe"
+          , cUpdate "full-humans-view" "Pair of characters C31 - Fiddler, C40 - Kruppe"
+          , cUpdate "dual-character-view" "Quick Ben and Andarist" -- just the view itself, not any sub-views
+
+          -- tiste-and-some-humans should have nothing, even though the human store is there,
+          -- because only the first two humans are extracted before shouldComponentUpdate
+          ]
+
+      it "does nothing when clicking no-change button" $ runWD $ do
+        clickNoChangeHuman
+        charactersShouldBe
+          (HumanNums { quickBen = 11, whiskeyjack = 21, fiddler = 31, kruppe = 41})
+          (TisteNums { andarist = 100, osseric = 110, rake = 120, korlot = 130, rakeState = -100})
+        loadLog `shouldReturn` []
+
+        clickNoChangeTiste
+        charactersShouldBe
+          (HumanNums { quickBen = 11, whiskeyjack = 21, fiddler = 31, kruppe = 41})
+          (TisteNums { andarist = 100, osseric = 110, rake = 120, korlot = 130, rakeState = -100})
+        loadLog `shouldReturn` []
+
+      it "increments Andarist" $ runWD $ do
+        incrementTiste Andarist
+        charactersShouldBe
+          (HumanNums { quickBen = 11, whiskeyjack = 21, fiddler = 31, kruppe = 41})
+          (TisteNums { andarist = 101, osseric = 110, rake = 120, korlot = 130, rakeState = -100})
+        loadLog `shouldReturn`
+          [ cUpdate "tiste-sub-view" "All the tiste"
+          , cUpdate "tiste-sub-view" "Single character C100 - Andarist"
+
+          -- Andarist is a parameter to the human view
+          , cUpdate "full-humans-view" "All the humans, plus Andarist and Rake"
+          , cUpdate "full-humans-view" "Single character C100 - Andarist"
+
+          , cUpdate "dual-character-view" "Quick Ben and Andarist"
+          , cUpdate "dual-character-view" "Single character C100 - Andarist"
+
+          , cUpdate "tiste-and-some-humans" "Just Rake, Korlot, Quick Ben, and Whiskeyjack" -- just the view, no subviews
+          ]
+
+      it "increments Osseric" $ runWD $ do
+        incrementTiste Osseric
+        charactersShouldBe
+          (HumanNums { quickBen = 11, whiskeyjack = 21, fiddler = 31, kruppe = 41})
+          (TisteNums { andarist = 101, osseric = 111, rake = 120, korlot = 130, rakeState = -100})
+        loadLog `shouldReturn`
+          [ cUpdate "tiste-sub-view" "All the tiste"
+          , cUpdate "tiste-sub-view" "Single character C110 - Osseric"
+          -- nothing to full-humans-view
+          , cUpdate "dual-character-view" "Quick Ben and Andarist" -- just the view, no subviews
+          , cUpdate "tiste-and-some-humans" "Just Rake, Korlot, Quick Ben, and Whiskeyjack" -- just the view, no subviews
+          ]
+
+      it "increments Anomander Rake" $ runWD $ do
+        incrementTiste AnomanderRake
+        charactersShouldBe
+          (HumanNums { quickBen = 11, whiskeyjack = 21, fiddler = 31, kruppe = 41})
+          (TisteNums { andarist = 101, osseric = 111, rake = 121, korlot = 130, rakeState = -100})
+        loadLog `shouldReturn`
+          [ cUpdate "tiste-sub-view" "All the tiste"
+          , cUpdate "tiste-sub-view" "Single character C120 - Anomander Rake"
+          , cUpdate "full-humans-view" "All the humans, plus Andarist and Rake"
+          , cUpdate "full-humans-view" "Single character C120 - Anomander Rake"
+          , cUpdate "dual-character-view" "Quick Ben and Andarist"
+          , cUpdate "dual-character-view" "Stateful character C120 - Anomander Rake"
+          , cUpdate "tiste-and-some-humans" "Just Rake, Korlot, Quick Ben, and Whiskeyjack"
+          , cUpdate "tiste-and-some-humans" "Single character C120 - Anomander Rake"
+          ]
+
+      it "increments Korlot" $ runWD $ do
+        incrementTiste Korlot
+        charactersShouldBe
+          (HumanNums { quickBen = 11, whiskeyjack = 21, fiddler = 31, kruppe = 41})
+          (TisteNums { andarist = 101, osseric = 111, rake = 121, korlot = 131, rakeState = -100})
+        loadLog `shouldReturn`
+          [ cUpdate "tiste-sub-view" "All the tiste"
+          , cUpdate "tiste-sub-view" "Single character C130 - Korlot"
+          -- nothing for the humans view
+          , cUpdate "dual-character-view" "Quick Ben and Andarist"
+          , cUpdate "tiste-and-some-humans" "Just Rake, Korlot, Quick Ben, and Whiskeyjack"
+          , cUpdate "tiste-and-some-humans" "Single character C130 - Korlot"
+          ]
+
+      it "increments Anomander Rake's state" $ runWD $ do
+        findElem (ByCSS "button.incr-state") >>= click
+        charactersShouldBe
+          (HumanNums { quickBen = 11, whiskeyjack = 21, fiddler = 31, kruppe = 41})
+          (TisteNums { andarist = 101, osseric = 111, rake = 121, korlot = 131, rakeState = -99})
+        loadLog `shouldReturn`
+          [ cUpdate "dual-character-view" "Stateful character C121 - Anomander Rake"
+          ]
 
     describe "i18n" $ do
         it "opens the page" $ runWD $ do
