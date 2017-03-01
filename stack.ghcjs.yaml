@@ -3,7 +3,6 @@ packages:
     - .
 flags:
   react-flux:
-    example: true
     test-client: true
 
 compiler: ghcjs-0.2.1.9007013_ghc-8.0.1
