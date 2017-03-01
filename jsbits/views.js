@@ -190,12 +190,17 @@ var hsreact$children_to_array = typeof React !== "object" ? null : (React['Child
         return ret;
     }));
 
+function hsreact$check_ghcjs_obj_equal(x, y) {
+    //Use != here to check if objects are the same
+    return x == y || (x.d1 == y.d1 && x.d2 == y.d2);
+}
+
 function hsreact$checkPropsDifferent(newPropsI, oldPropsI) {
     var newProps = newPropsI.hs;
     var oldProps = oldPropsI.hs;
     if (newProps.length !== oldProps.length) return true;
     for (var i = 0; i < oldProps.length; i++) {
-        if (newProps[i].root != oldProps[i].root) //Use != here to check if objects are the same
+        if (!hsreact$check_ghcjs_obj_equal(newProps[i].root, oldProps[i].root))
             return true;
     }
     return false;
@@ -252,7 +257,7 @@ function hsreact$mk_new_stateful_view(name, initialState, renderCb) {
     };
     cl['shouldComponentUpdate'] = function(newPropsI, newStateI) {
         if (hsreact$checkPropsDifferent(newPropsI, this['props'])) return true;
-        if (newStateI.hs.root != this['state'].hs.root) return true;
+        if (!hsreact$check_ghcjs_obj_equal(newStateI.hs.root, this['state'].hs.root)) return true;
         return false;
     };
     cl['componentWillUnmount'] = function() {
@@ -286,7 +291,7 @@ function hsreact$mk_new_ctrl_view(name, renderCb, artifacts) {
         var newState = newStateI.hs;
         var oldState = this['state'].hs;
         for (var k in newState) {
-            if (newState[k] != oldState[k]) return true; //Use != here to check if objects are the same
+            if (!hsreact$check_ghcjs_obj_equal(newState[k], oldState[k])) return true;
         }
         return false;
     };

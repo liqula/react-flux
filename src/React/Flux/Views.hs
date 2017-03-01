@@ -1,5 +1,5 @@
 -- | Internal module containing the view definitions
-{-# LANGUAGE UndecidableInstances, AllowAmbiguousTypes, TypeApplications, MagicHash #-}
+{-# LANGUAGE UndecidableInstances, AllowAmbiguousTypes, TypeApplications, BangPatterns #-}
 {-# OPTIONS_GHC -fno-warn-redundant-constraints #-}
 module React.Flux.Views
   ( View(..)
@@ -129,7 +129,7 @@ instance ExportViewProps '[] where
 
 instance (ViewProps rest, Typeable a) => ViewProps (a ': (rest :: [*])) where
 #ifdef __GHCJS__
-  viewPropsToJs _ h ref k props = \a -> a `seq` viewPropsToJs (Proxy :: Proxy rest) h ref k (\p -> props p >> pushProp a p)
+  viewPropsToJs _ h ref k props = \a -> viewPropsToJs (Proxy :: Proxy rest) h ref k (\p -> props p >> pushProp a p)
   {-# INLINE viewPropsToJs #-}
 
   applyViewPropsFromJs _ f props i = do
@@ -374,7 +374,7 @@ getProp p i = js_getPropFromList p i >>= parseExport
 
 pushProp :: Typeable a => a -> NewJsProps -> IO ()
 pushProp val props = do
-  valE <- export val -- this will be released in the lifecycle callbacks of the class
+  valE <- val `seq` export val -- this will be released in the lifecycle callbacks of the class
   js_pushProp props valE
 
 findFromState :: Typeable a => Int -> JsState -> IO a

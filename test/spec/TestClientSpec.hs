@@ -43,8 +43,26 @@ characterShouldBe (CharacterUL es) idx msg = do
   let e = es !! idx
   getText e `shouldReturn` msg
 
---characterUpdate :: T.Text -> T.Text -> T.Text
---characterUpdate ulId msg = "Update in ul " <> ulId <> ": " <> msg
+clickNoChangeHuman :: WD ()
+clickNoChangeHuman = findElem (ById "Humans-none") >>= click
+
+clickNoChangeTiste :: WD ()
+clickNoChangeTiste = findElem (ById "Tiste-none") >>= click
+
+data HumanNames = QuickBen | Whiskeyjack | Fiddler | Kruppe
+
+incrementHuman :: HumanNames -> WD ()
+incrementHuman n = findElem (ById i) >>= click
+  where
+    i = "Humans-" <> case n of
+      QuickBen -> "P1_C1"
+      Whiskeyjack -> "P1_C2"
+      Fiddler -> "P2_C1"
+      Kruppe -> "P2_C2"
+
+
+cUpdate :: T.Text -> T.Text -> String
+cUpdate ulId msg = T.unpack $ "Update in ul " <> ulId <> ": " <> msg
 
 data TisteNums = TisteNums { andarist :: Int, osseric :: Int, rake :: Int, korlot :: Int, rakeState :: Int}
 data HumanNums = HumanNums { quickBen :: Int, whiskeyjack :: Int, fiddler :: Int, kruppe :: Int}
@@ -180,6 +198,34 @@ testClientSpec filename = session " for the test client" $ using allBrowsers $ d
         charactersShouldBe
           (HumanNums { quickBen = 10, whiskeyjack = 20, fiddler = 30, kruppe = 40})
           (TisteNums { andarist = 100, osseric = 110, rake = 120, korlot = 130, rakeState = -100})
+
+      it "does nothing when clicking no-change button" $ runWD $ do
+        clickNoChangeHuman
+        charactersShouldBe
+          (HumanNums { quickBen = 10, whiskeyjack = 20, fiddler = 30, kruppe = 40})
+          (TisteNums { andarist = 100, osseric = 110, rake = 120, korlot = 130, rakeState = -100})
+        loadLog `shouldReturn` []
+
+        clickNoChangeTiste
+        charactersShouldBe
+          (HumanNums { quickBen = 10, whiskeyjack = 20, fiddler = 30, kruppe = 40})
+          (TisteNums { andarist = 100, osseric = 110, rake = 120, korlot = 130, rakeState = -100})
+        loadLog `shouldReturn` []
+
+      it "increments Quick Ben" $ runWD $ do
+        incrementHuman QuickBen
+        charactersShouldBe
+          (HumanNums { quickBen = 11, whiskeyjack = 20, fiddler = 30, kruppe = 40})
+          (TisteNums { andarist = 100, osseric = 110, rake = 120, korlot = 130, rakeState = -100})
+        loadLog `shouldReturn`
+          [ cUpdate "full-humans-view" "All the humans"
+          , cUpdate "full-humans-view" "Single character C10 - Quick Ben"
+          , cUpdate "full-humans-view" "Two characters C10 - Quick Ben and C20 - Whiskeyjack"
+          , cUpdate "dual-character-view" "Both humans and tiste"
+          , cUpdate "dual-character-view" "Single character C10 - Quick Ben"
+          , cUpdate "tiste-and-some-humans" "All the tiste and first two humans"
+          , cUpdate "tiste-and-some-humans" "Single character C10 - Quick Ben"
+          ]
 
 
     describe "i18n" $ do

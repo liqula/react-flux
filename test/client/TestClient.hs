@@ -129,7 +129,7 @@ eventsView = mkView "events" $
 --- Stores and should component update
 --------------------------------------------------------------------------------
 
-data Character = Character Int String
+data Character = Character !Int !String
     deriving (Typeable)
 
 instance Show Character where
