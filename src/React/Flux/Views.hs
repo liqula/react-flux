@@ -211,13 +211,17 @@ instance (ControllerViewStores rest, StoreData store, HasField field store a, Ty
       storeT = typeRep (Proxy :: Proxy store)
       derive =
         syncCallback1 ThrowWouldBlock $ \arg -> do
-          mstoreD :: Maybe store <- js_getDeriveInput arg >>= derefExport
-          storeD <- maybe (error "Can't decode store") return mstoreD
+          storeD :: store <- getStoreJs arg
           let a :: a = getField @field storeD
           aE <- a `seq` unsafeExport a
           js_setDeriveOutput arg aE
   {-# INLINE applyControllerViewFromJs #-}
   {-# INLINE stateForView #-}
+
+getStoreJs :: Typeable store => JSVal -> IO store
+getStoreJs arg = js_getDeriveInput arg >>= parseExport
+{-# NOINLINE getStoreJs #-} -- if this is inlined, GHCJS does not properly compile the getField callback
+
 #else
   applyControllerViewFromJs _ _ _ _ _ _ = error "Views work only with GHCJS"
   stateForView _ _ = error "Views work only with GHCJS"

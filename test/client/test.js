@@ -1,17 +1,32 @@
 window.hsreact$log_when_updated = React['createClass']({
     'displayName': "log-when-updated",
     'componentWillUpdate': function() {
-        hsreact$log_message("Update: " + this['props']['message']);
-        console.log("Update: " + this['props']['message']);
+        var msg;
+        if (this.ulId) {
+            msg = "Update in ul " + this.ulId + ": " + this['props']['message'];
+        } else {
+            msg = "Update: " + this['props']['message'];
+        }
+        hsreact$log_message(msg);
+        console.log(msg);
     },
     'render': function() {
-        return React['createElement']('span', {}, this['props']['message']);
+        var that = this;
+        return React['createElement']('span',
+                                      { 'ref': function(r) {
+                                          if (r) {
+                                            var e = r.closest("ul");
+                                            if (e) that.ulId = e.id;
+                                          }
+                                        }
+                                      },
+                                      this['props']['message']);
     }
 });
 
 function hsreact$log_message(m) {
   if (!window.test_client_output) window.test_client_output = [];
-  window.test_client_output.push(x);
+  window.test_client_output.push(m);
 }
 
 window.hsreact$callback_wrapper = React['createClass']({

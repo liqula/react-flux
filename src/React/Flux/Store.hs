@@ -32,7 +32,7 @@ import System.IO.Unsafe (unsafePerformIO)
 #ifdef __GHCJS__
 import Data.Monoid ((<>))
 import GHCJS.Types (JSVal, isNull, IsJSVal, JSString)
-import React.Flux.Export (Export, export, derefExport)
+import React.Flux.Export
 import GHC.Fingerprint.Type
 import Data.JSString.Int (decimal)
 #else
@@ -133,8 +133,7 @@ newtype ReactStoreRef storeData = ReactStoreRef JSVal
 instance IsJSVal (ReactStoreRef storeData)
 
 data NewReactStoreHS = NewReactStoreHS {
-    newStoreBlank :: Int
-  , newStoreLock :: MVar ()
+    newStoreLock :: MVar ()
   } deriving Typeable
 
 data ReactStore storeData = ReactStore {
@@ -221,7 +220,7 @@ mkStore initial = unsafePerformIO $ do
 -- new store API
 registerInitialStore initial = do
     dataRef <- initial `seq` export initial
-    store <- NewReactStoreHS 152 <$> newMVar ()
+    store <- NewReactStoreHS <$> newMVar ()
     storeE <- export store
     js_createNewStore (storeJsKey (Proxy :: Proxy storeData)) dataRef storeE
 
@@ -242,14 +241,13 @@ alterStore store action = modifyMVar_ (storeData store) $ \oldData -> do
 -- new transform
 transformStore _ action = do
     store :: NewReactStore storeData <- js_getNewStore (storeJsKey (Proxy :: Proxy storeData))
-    --storeHS <- js_getNewStoreHS store >>= derefExport
-    --newStoreHS <- maybe (error "Can't access store data") return storeHS
-    --modifyMVar_ (newStoreLock newStoreHS) $ \() -> do
-    mold <- js_getNewStoreData store >>= derefExport
-    oldData <- maybe (error "Unable to decode store data") return mold
-    newData <- transform action oldData
-    newDataE <- newData `seq` export newData
-    js_UpdateNewStore store newDataE
+    storeHS <- getNewStoreHS store
+    modifyMVar_ (newStoreLock storeHS) $ \() -> do
+      mold <- js_getNewStoreData store >>= derefExport
+      oldData <- maybe (error "Unable to decode store data") return mold
+      newData <- transform action oldData
+      newDataE <- newData `seq` export newData
+      js_UpdateNewStore store newDataE
 
 readStoreData = do
     store :: NewReactStore storeData <- js_getNewStore (storeJsKey (Proxy :: Proxy storeData))
@@ -268,6 +266,10 @@ foreign import javascript unsafe
 foreign import javascript unsafe
     "$1.hs"
     js_getNewStoreHS :: NewReactStore storeData -> IO (Export NewReactStoreHS)
+
+getNewStoreHS :: NewReactStore storeData -> IO NewReactStoreHS
+getNewStoreHS s = js_getNewStoreHS s >>= parseExport
+{-# NOINLINE getNewStoreHS #-}
 
 foreign import javascript unsafe
     "$1.sdata"

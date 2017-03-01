@@ -19,17 +19,15 @@ foreign import javascript unsafe
 export :: Typeable a => a -> IO (Export a)
 export = js_export . unsafeCoerce
 
-parseExport :: Typeable a => Export a -> IO a
-parseExport a = do
-    mdata <- derefExport a
-    maybe (error "Unable to load export from javascript") return mdata
-
 foreign import javascript unsafe
     "hsreact$derefExport($1)"
     js_deref :: Export a -> IO Double
 
 derefExport :: Typeable a => Export a -> IO (Maybe a)
 derefExport e = (Just . unsafeCoerce) <$> js_deref e
+
+parseExport :: Typeable a => Export a -> IO a
+parseExport a = (unsafeCoerce <$> js_deref a)
 
 foreign import javascript unsafe
     "$r = $1"

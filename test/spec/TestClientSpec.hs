@@ -3,6 +3,7 @@
 module TestClientSpec (spec) where
 
 import           Control.Monad
+import           Data.Monoid ((<>))
 import           Control.Monad.IO.Class (liftIO)
 import           Data.List
 import           Data.Time
@@ -28,12 +29,15 @@ shouldBeEvent evt (expectedType, evtBandC, evtPhase) = do
     let suffix = dropWhile (/= ' ') $ drop (length prefix) evt
     suffix `shouldBe` " evtHandlerArg = HandlerArg}"
 
-lifecyclePropsAndStateAre :: String -> Int -> WD ()
-lifecyclePropsAndStateAre props st = do
-    stE <- findElem (ById "hello")
-    getText stE `shouldReturn` (T.pack $ show st)
-    p <- findElem (ById "world")
-    getText p `shouldReturn` (T.pack $ "Current props: " ++ props)
+newtype CharacterUL = CharacterUL [Element]
+
+characterList :: T.Text -> WD CharacterUL
+characterList ulId = CharacterUL <$> findElems (ByCSS $ "ul#" <> ulId <> " > li")
+
+characterShouldBe :: CharacterUL -> Int -> T.Text -> WD ()
+characterShouldBe (CharacterUL es) idx msg = do
+  let e = es !! idx
+  getText e `shouldReturn` msg
 
 scuShouldBe :: String -> [String] -> WD ()
 scuShouldBe ident items = do
