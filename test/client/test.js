@@ -1,4 +1,4 @@
-window.hsreact$log_when_updated = React['createClass']({
+window['hsreact$log_when_updated'] = React['createClass']({
     'displayName': "log-when-updated",
     'componentWillUpdate': function() {
         var msg;
@@ -25,11 +25,11 @@ window.hsreact$log_when_updated = React['createClass']({
 });
 
 function hsreact$log_message(m) {
-  if (!window.test_client_output) window.test_client_output = [];
-  window.test_client_output.push(m);
+  if (!window['test_client_output']) window['test_client_output'] = [];
+  window['test_client_output']['push'](m);
 }
 
-window.hsreact$callback_wrapper = React['createClass']({
+window['hsreact$callback_wrapper'] = React['createClass']({
     'displayName':'callback wrapper',
     'render': function() {
         return React['createElement']('div', {}, [ React['createElement']('p', {'key': 'para'}, 'From Callback')
