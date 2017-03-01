@@ -130,12 +130,18 @@ eventsView = mkView "events" $
 --------------------------------------------------------------------------------
 
 data Character = Character Int String
-    deriving (Typeable, Show)
+    deriving (Typeable)
+
+instance Show Character where
+  show (Character i s) = "C" ++ show i ++ " - " ++ s
 
 data CharacterPair = CharacterPair {
     c1 :: !Character
   , c2 :: !Character
-} deriving (Typeable, Show)
+} deriving (Typeable)
+
+instance Show CharacterPair where
+  show (CharacterPair x1 x2) = show x1 ++ ", " ++ show x2
 
 data Humans = Humans
   { h1 :: !CharacterPair
