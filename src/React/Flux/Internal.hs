@@ -122,6 +122,11 @@ data PropertyOrHandler handler =
       , cretArgToProp :: JSArray -> IO props
       , cretView :: ReactViewRef props
       }
+  | CallbackPropertyReturningNewView
+      { cretNewName :: JSString
+      , cretNewView :: ReactViewRef ()
+      , cretNewViewProps :: (JSArray -> IO NewJsProps)
+      }
 
 instance Functor PropertyOrHandler where
     fmap _ (Property name val) = Property name val
@@ -132,6 +137,7 @@ instance Functor PropertyOrHandler where
     fmap f (CallbackPropertyWithArgumentArray name h) = CallbackPropertyWithArgumentArray name (fmap f . h)
     fmap f (CallbackPropertyWithSingleArgument name h) = CallbackPropertyWithSingleArgument name (f . h)
     fmap _ (CallbackPropertyReturningView name f v) = CallbackPropertyReturningView name f v
+    fmap _ (CallbackPropertyReturningNewView name v p) = CallbackPropertyReturningNewView name v p
 
 -- | Create a property from anything that can be converted to a JSVal
 property :: ToJSVal val => JSString -> val -> PropertyOrHandler handler
@@ -162,7 +168,7 @@ data ReactElement eventHandler
     | NewViewElement
         { newClass :: ReactViewRef ()
         , newViewKey :: JSString
-        , newViewProps :: NewJsProps -> IO NewJsProps
+        , newViewProps :: NewJsProps -> IO ()
         }
     | RawJsElement
         { rawTransform :: JSVal -> [ReactElementRef] -> IO ReactElementRef
@@ -345,6 +351,11 @@ mkReactElement runHandler this = runWriterT . mToElem
             tell [cb]
             lift $ JSO.setProp name wrappedCb obj
 
+        addPropOrHandlerToObj obj (CallbackPropertyReturningNewView name v toProps) = do
+            (cb, wrappedCb) <- lift $ exportNewViewToJs v toProps
+            tell [cb]
+            lift $ JSO.setProp name wrappedCb obj
+
         -- call React.createElement
         createElement :: ReactElement eventHandler -> MkReactElementM [ReactElementRef]
         createElement EmptyElement = return []
@@ -381,8 +392,8 @@ mkReactElement runHandler this = runWriterT . mToElem
 
         createElement (NewViewElement { newClass = rc, newViewKey = k, newViewProps = buildProps}) = do
             keyRef <- lift $ toJSVal k
-            emptyLst <- lift $ js_emptyList
-            props <- lift $ buildProps emptyLst
+            props <- lift $ js_emptyList
+            lift $ buildProps props
             e <- lift $ js_ReactNewViewElement rc keyRef props
             return [e]
 

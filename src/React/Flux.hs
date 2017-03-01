@@ -98,18 +98,19 @@ module React.Flux (
   , rawJsRendering
   , transHandler
   , liftViewToStateHandler
+  , callbackRenderingView
   , module React.Flux.DOM
   , module React.Flux.PropertiesAndEvents
   , module React.Flux.Combinators
 
   -- * Main
   , reactRenderView
+  , reactRenderViewToString
+  , exportReactViewToJavaScript
 
   -- * Performance
   -- $performance
 ) where
-
-import Data.Typeable (Proxy(..))
 
 import React.Flux.Views
 import React.Flux.DOM
@@ -117,19 +118,58 @@ import React.Flux.Internal
 import React.Flux.PropertiesAndEvents
 import React.Flux.Combinators
 import React.Flux.Store
+import Data.Text (Text)
+
+#ifdef __GHCJS__
+import GHCJS.Types (nullRef, JSVal)
+import GHCJS.Marshal (fromJSVal)
+#endif
 
 -- | Render your React application into the DOM.  Use this from your @main@ function, and only in the browser.
 -- 'reactRender' only works when compiled with GHCJS (not GHC), because we rely on the React javascript code
 -- to actually perform the rendering.
-reactRenderView :: forall props. ViewProps (props :: [*])
-                => JSString -- ^ The ID of the HTML element to render the application into.
+reactRenderView :: JSString -- ^ The ID of the HTML element to render the application into.
                       -- (This string is passed to @document.getElementById@)
-                -> View props -- ^ A single instance of this view is created
-                -> ViewPropsToRender props -- ^ the properties to pass to the view
+                -> View '[] -- ^ A single instance of this view is created
+                -> IO ()
+
+-- | Render your React application to a string using either @ReactDOMServer.renderToString@ if the first
+-- argument is false or @ReactDOMServer.renderToStaticMarkup@ if the first argument is true.
+-- Use this only on the server when running with node.
+-- 'reactRenderToString' only works when compiled with GHCJS (not GHC), because we rely on the React javascript code
+-- to actually perform the rendering.
+--
+-- If you are interested in isomorphic React, I suggest instead of using 'reactRenderToString' you use
+-- 'exportViewToJavaScript' and then write a small top-level JavaScript view which can then integrate with
+-- all the usual isomorphic React tools.
+reactRenderViewToString :: Bool -- ^ Render to static markup?  If true, this won't create extra DOM attributes
+                                -- that React uses internally.
+                        -> View '[] -- ^ A single instance of this view is created
+                        -> IO Text
 
 #ifdef __GHCJS__
 
-reactRenderView htmlId (View rc) = renderViewProps (Proxy :: Proxy props) rc htmlId return
+reactRenderView htmlId (View rc) = do
+  (e, _) <- mkReactElement id (ReactThis nullRef) $ elementToM () $ NewViewElement rc htmlId (const $ return ())
+  js_ReactRender e htmlId
+
+reactRenderViewToString includeStatic (View rc) = do
+  (e, _) <- mkReactElement id (ReactThis nullRef) $ elementToM () $ NewViewElement rc "main" (const $ return ())
+  sRef <- (if includeStatic then js_ReactRenderStaticMarkup else js_ReactRenderToString) e
+  mtxt <- fromJSVal sRef
+  maybe (error "Unable to convert string return to Text") return mtxt
+
+foreign import javascript unsafe
+    "(typeof ReactDOM === 'object' ? ReactDOM : React)['render']($1, document.getElementById($2))"
+    js_ReactRender :: ReactElementRef -> JSString -> IO ()
+
+foreign import javascript unsafe
+    "(typeof ReactDOMServer === 'object' ? ReactDOMServer : (typeof ReactDOM === 'object' ? ReactDOM : React))['renderToString']($1)"
+    js_ReactRenderToString :: ReactElementRef -> IO JSVal
+
+foreign import javascript unsafe
+    "(typeof ReactDOMServer === 'object' ? ReactDOMServer : (typeof ReactDOM === 'object' ? ReactDOM : React))['renderToStaticMarkup']($1)"
+    js_ReactRenderStaticMarkup :: ReactElementRef -> IO JSVal
 
 #else
 

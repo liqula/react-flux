@@ -6,26 +6,19 @@ import Control.DeepSeq (NFData)
 import Control.Monad
 import Data.Monoid ((<>))
 import Data.Typeable (Typeable, Proxy(..))
-import Data.Maybe
 import Debug.Trace
 import GHC.Generics (Generic)
 import Data.Time (UTCTime(..), fromGregorian)
 import React.Flux
-import React.Flux.Outdated
-import React.Flux.Addons.React
 import React.Flux.Addons.Intl
 import qualified Data.Text as T
 
 import GHCJS.Types (JSVal, JSString)
-import GHCJS.Marshal (fromJSVal)
 import JavaScript.Array (JSArray)
 import qualified Data.JSString.Text as JSS
 
 foreign import javascript unsafe
-    "(function(x) { \
-    \    if (!window.test_client_output) window.test_client_output = []; \
-    \    window.test_client_output.push(x); \
-    \})($1)"
+    "hsreact$log_message($1)"
     js_output :: JSString -> IO ()
 
 data OutputStoreData = OutputStoreData
@@ -44,11 +37,8 @@ initOutputStore = registerInitialStore OutputStoreData
 output :: [T.Text] -> [SomeStoreAction]
 output s = [someStoreAction @OutputStoreData s]
 
-outputIO :: [T.Text] -> IO ()
-outputIO ss = void $ transform ss OutputStoreData
-
 foreign import javascript unsafe
-  "React['createElement']('p', {'id': 'test-raw-js-para'}, $2)"
+  "React['createElement']('p', {'id': 'test-raw-js-para', 'key': 'test-raw-para'}, $2)"
   js_testRawJs :: JSVal -> JSArray -> IO JSVal
 
 --------------------------------------------------------------------------------
@@ -70,7 +60,8 @@ rawShowView = mkView "raw show view" elemShow
 eventsView :: View '[]
 eventsView = mkView "events" $
     div_ $ do
-        p_ $ input_ [ "type" $= "text"
+        p_ ["key" $= "text"] $
+             input_ [ "type" $= "text"
                     , "id" $= "keyinput"
                     , "placeholder" $= "onKeyDown"
                     , onKeyDown $ \e k -> output
@@ -88,7 +79,8 @@ eventsView = mkView "events" $
                         ]
                     ]
 
-        p_ $ label_ [ "id" $= "clickinput"
+        p_ ["key" $= "click"] $
+             label_ [ "id" $= "clickinput"
                     , onClick $ \e m -> output
                         [ "click"
                         , tshow e
@@ -99,7 +91,8 @@ eventsView = mkView "events" $
                     ]
            "onClick"
 
-        p_ $ label_ [ "id" $= "touchinput"
+        p_ ["key" $= "touch"] $
+             label_ [ "id" $= "touchinput"
                     , onTouchStart $ \e t -> output
                         [ "touchstart"
                         , tshow e
@@ -111,13 +104,14 @@ eventsView = mkView "events" $
                     ]
            "onTouchStart"
 
-        p_ $ a_ [ "id" $= "some-link"
+        p_ ["key" $= "prevent"] $
+             a_ [ "id" $= "some-link"
                 , "href" $= "http://www.haskell.org"
                 , onClick $ \e _ -> output ["Click some-link"] ++ [preventDefault e]
                 ]
                 "Testing preventDefault"
 
-        div_ $
+        div_ ["key" $= "prop"] $
             div_ [ "id" $= "outer-div"
                  , onClick $ \_ _ -> output ["Click on outer div"]
                  , capturePhase $ onDoubleClick $ \e _ -> output ["Double click outer div"] ++ [stopPropagation e]
@@ -129,18 +123,7 @@ eventsView = mkView "events" $
                       ]
                       "Testing stopPropagation"
 
-        p_ [ "id" $= "raw-show-view"] $ view_ rawShowView "raw" 42
-
---------------------------------------------------------------------------------
---- CSS Transitions
---------------------------------------------------------------------------------
-
-cssTransitions :: View '[[T.Text]]
-cssTransitions = mkView "css transitions" $ \items ->
-    div_ ["id" $= "css-transitions"] $
-        cssTransitionGroup ["transitionName" $= "example"] $
-            forM_ (zip items [(0 :: Int)..]) $ \(txt, key) ->
-                div_ ["key" @= key] $ span_ ["className" $= "css-transition-entry"] $ elemText txt
+        p_ [ "id" $= "raw-show-view", "key" $= "raw"] $ view_ rawShowView "raw" 42
 
 --------------------------------------------------------------------------------
 --- Stores and should component update
@@ -318,27 +301,15 @@ storeSpec = mkView "store spec" $
 --- Callback returning view
 --------------------------------------------------------------------------------
 
-data CallbackViewProps = CallbackViewProps Int String
-    deriving (Show, Typeable)
-
-callbackArgsToProps :: Int -> String -> ReturnProps CallbackViewProps
-callbackArgsToProps i s = ReturnProps $ CallbackViewProps i s
-
-callbackViewTest :: ReactView CallbackViewProps
-callbackViewTest = defineView "callback view props test" $ \(CallbackViewProps i s) ->
+callbackViewTest :: View '[Int, String]
+callbackViewTest = mkView "callback view props test" $ \i s ->
     p_ [ "id" $= "callback-view-props-test"] $
         elemString $ "Props are " ++ show i ++ " and " ++ s
 
-foreign import javascript unsafe
-    "React['createClass']({'displayName':'callback wrapper', 'render': function() { \
-    \ return React['createElement']('div', {}, [React.createElement('p', {}, 'From Callback'), this.props.foo(5, 'Hello World')]); \
-    \ }})"
-    js_createWrapperClass :: JSVal
-
-callbackViewWrapper :: ReactView ()
-callbackViewWrapper = defineView "callback view wrapper" $ \() ->
+callbackViewWrapper :: View '[]
+callbackViewWrapper = mkView "callback view wrapper" $
     div_ ["id" $= "callback-view-wrapper"] $
-        foreignClass js_createWrapperClass [ callbackViewWithProps "foo" callbackViewTest callbackArgsToProps ] mempty
+        foreign_ "hsreact$callback_wrapper" [ callbackRenderingView "foo" callbackViewTest ] mempty
 
 --------------------------------------------------------------------------------
 --- Intl
@@ -356,21 +327,21 @@ intlSpec = mkView "intl" $
 intlSpecBody :: View '[]
 intlSpecBody = mkView "intl body" $ div_ ["id" $= "intl-spec"] $
     ul_ $ do
-        li_ ["id" $= "f-number"] $
+        li_ ["id" $= "f-number", "key" $= "f-number"] $
             formattedNumber_ [ "value" @= (0.9 :: Double), "style" $= "percent" ]
-        li_ ["id" $= "f-int"] $ int_ 100000
-        li_ ["id" $= "f-double"] $ double_ 40000.2
-        li_ ["id" $= "f-number-prop"] $
+        li_ ["id" $= "f-int", "key" $= "f-int"] $ int_ 100000
+        li_ ["id" $= "f-double", "key" $= "f-double"] $ double_ 40000.2
+        li_ ["id" $= "f-number-prop", "key" $= "f-number-prop"] $
             input_ [formattedNumberProp "placeholder" (123456 :: Int) []]
 
         let moon = fromGregorian 1969 7 20
             fullDayF = DayFormat { weekdayF = Just "long", eraF = Just "short", yearF = Just "2-digit", monthF = Just "long", dayF = Just "2-digit" }
 
-        li_ ["id" $= "f-shortday"] $ day_ shortDate moon
-        li_ ["id" $= "f-fullday"] $ day_ fullDayF moon
-        li_ ["id" $= "f-date"] $ formattedDate_ (Left moon)
+        li_ ["id" $= "f-shortday", "key" $= "f-shortday"] $ day_ shortDate moon
+        li_ ["id" $= "f-fullday", "key" $= "f-fullday"] $ day_ fullDayF moon
+        li_ ["id" $= "f-date", "key" $= "f-date"] $ formattedDate_ (Left moon)
                 [ "weekday" $= "short", "month" $= "short", "day" $= "numeric", "year" $= "2-digit" ]
-        li_ ["id" $= "f-date-prop"] $
+        li_ ["id" $= "f-date-prop", "key" $= "f-date-prop"] $
             input_ [formattedDateProp "placeholder" (Left moon) []]
 
         let step = UTCTime moon (2*60*60 + 56*60) -- 1969-7-20 02:56 UTC
@@ -378,15 +349,15 @@ intlSpecBody = mkView "intl body" $ div_ ["id" $= "intl-spec"] $
                     , TimeFormat { hourF = Just "numeric", minuteF = Just "2-digit", secondF = Just "numeric", timeZoneNameF = Just "long" }
                     )
 
-        li_ ["id" $= "f-shorttime"] $ utcTime_ shortDateTime step
-        li_ ["id" $= "f-fulltime"] $ utcTime_ fullT step
-        li_ ["id" $= "f-time"] $ formattedDate_ (Right step)
+        li_ ["id" $= "f-shorttime", "key" $= "f-shorttime"] $ utcTime_ shortDateTime step
+        li_ ["id" $= "f-fulltime", "key" $= "f-fulltime"] $ utcTime_ fullT step
+        li_ ["id" $= "f-time", "key" $= "f-time"] $ formattedDate_ (Right step)
                 [ "year" $= "2-digit", "month" $= "short", "day" $= "numeric"
                 , "hour" $= "numeric", "minute" $= "2-digit", "second" $= "numeric"
                 , "timeZoneName" $= "short"
                 , "timeZone" $= "Pacific/Tahiti"
                 ]
-        li_ ["id" $= "f-time-prop"] $
+        li_ ["id" $= "f-time-prop", "key" $= "f-time-prop"] $
             input_ [formattedDateProp "placeholder" (Right step)
                     [ "year" `iprop` ("2-digit" :: String)
                     , "month" `iprop` ("short" :: String)
@@ -396,48 +367,48 @@ intlSpecBody = mkView "intl body" $ div_ ["id" $= "intl-spec"] $
                     ]
                    ]
 
-        li_ ["id" $= "f-relative"] $ relativeTo_ step
-        li_ ["id" $= "f-relative-days"] $ formattedRelative_ step [ "units" $= "day" ]
+        li_ ["id" $= "f-relative", "key" $= "f-relative"] $ relativeTo_ step
+        li_ ["id" $= "f-relative-days", "key" $= "f-relative-days"] $ formattedRelative_ step [ "units" $= "day" ]
 
-        li_ ["id" $= "f-plural"] $ plural_ [ "value" @= (100 :: Int), "one" $= "plural one", "other" $= "plural other"]
-        li_ ["id" $= "f-plural-prop"] $
+        li_ ["id" $= "f-plural", "key" $= "f-plural"] $ plural_ [ "value" @= (100 :: Int), "one" $= "plural one", "other" $= "plural other"]
+        li_ ["id" $= "f-plural-prop", "key" $= "f-plural-prop"] $
             input_ [pluralProp "placeholder" (100 :: Int) ["one" `iprop` ("plural one" :: String), "other" `iprop` ("plural other" :: String)]]
 
-        li_ ["id" $= "f-msg"] $
+        li_ ["id" $= "f-msg", "key" $= "f-msg"] $
             $(message "photos" "{name} took {numPhotos, plural, =0 {no photos} =1 {one photo} other {# photos}} {takenAgo}.")
                 [ "name" $= "Neil Armstrong"
                 , "numPhotos" @= (100 :: Int)
                 , elementProperty "takenAgo" $ span_ ["id" $= "takenAgoSpan"] "years ago"
                 ]
 
-        li_ ["id" $= "f-msg-prop"] $
+        li_ ["id" $= "f-msg-prop", "key" $= "f-msg-prop"] $
             input_ [ $(messageProp "placeholder" "photosprop" "{name} took {numPhotos, plural, =0 {no photos} =1 {one photo} other {# photos}}")
                 [ "name" `iprop` ("Neil Armstrong" :: String)
                 , "numPhotos" `iprop` (100 :: Int)
                 ]
             ]
 
-        li_ ["id" $= "f-msg-with-trans"] $
+        li_ ["id" $= "f-msg-with-trans", "key" $= "f-msg-with-trans"] $
             $(message "with_trans" "this is not used {abc}") ["abc" $= "xxx"]
 
-        li_ ["id" $= "f-msg-with-descr"] $
+        li_ ["id" $= "f-msg-with-descr", "key" $= "f-msg-with-descr"] $
             $(message' "photos2" "How many photos?" "{name} took {numPhotos, plural, =0 {no photos} =1 {one photo} other {# photos}}.")
                 [ "name" $= "Neil Armstrong"
                 , "numPhotos" @= (0 :: Int)
                 ]
 
-        li_ ["id" $= "f-msg-prop-with-descr"] $
+        li_ ["id" $= "f-msg-prop-with-descr", "key" $= "f-msg-prop-with-descr"] $
             input_ [$(messageProp' "placeholder" "photosprop2" "How many photos?" "{name} took {numPhotos, number} photos")
                         [ "name" `iprop` ("Neil Armstrong" :: String)
                         , "numPhotos" `iprop` (0 :: Int)
                         ]
                    ]
 
-        li_ ["id" $= "f-html-msg"] $
+        li_ ["id" $= "f-html-msg", "key" $= "f-html-msg"] $
             $(htmlMsg "html1" "<b>{num}</b> is the answer to life, the universe, and everything")
                 [ "num" @= (42 :: Int) ]
 
-        li_ ["id" $= "f-html-msg-with-descr"] $
+        li_ ["id" $= "f-html-msg-with-descr", "key" $= "f-html-msg-with-descr"] $
             $(htmlMsg' "html2" "Hitchhiker's Guide" "{num} is the <b>answer</b> to life, the universe, and everything")
                 [ "num" @= (42 :: Int) ]
 
@@ -450,15 +421,14 @@ testClient :: View '[]
 testClient = mkView "app" $
   div_ $ do
     view_ eventsView "events"
-    view_ cssTransitions "transitions" ["A", "B"]
     view_ storeSpec "store"
     view_ intlSpec "intl"
+    view_ callbackViewWrapper "callback"
 
-    view callbackViewWrapper () mempty
-
-    rawJsRendering js_testRawJs $
-      span_ ["id" $= "test-raw-js-body"]
-        "Raw Javascript Render Body"
+    div_ ["key" $= "raw"] $
+      rawJsRendering js_testRawJs $
+        span_ ["id" $= "test-raw-js-body", "key" $= "raw-body"]
+          "Raw Javascript Render Body"
 
 main :: IO ()
 main = do
