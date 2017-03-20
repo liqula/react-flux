@@ -34,7 +34,32 @@ import Data.Monoid ((<>))
 import GHCJS.Types (JSVal, isNull, IsJSVal, JSString)
 import React.Flux.Export
 import GHC.Fingerprint.Type
-import Data.JSString.Int (decimal)
+import qualified Data.JSString.Int as JSString (decimal)
+import qualified Data.JSString as JSString
+import Data.Word (Word64)
+
+-- | See https://github.com/ghcjs/ghcjs/issues/570 for details.
+decimal_workaround_570 :: Word64 -> JSString
+decimal_workaround_570 w = dropleadingzeros . mconcat $ showpadded <$> chunks
+  where
+    n :: Integer -> Integer
+    n i = 10^(5 * i)
+
+    chunks :: [Integer]
+    chunks =
+      [ (fromIntegral w `div` (n 3)) `mod` n 1
+      , (fromIntegral w `div` (n 2)) `mod` n 1
+      , (fromIntegral w `div` (n 1)) `mod` n 1
+      , fromIntegral w               `mod` n 1
+      ]
+
+    showpadded :: Integer -> JSString
+    showpadded i = JSString.reverse . JSString.take 5 . JSString.reverse
+                 $ JSString.pack "00000" <> JSString.decimal i
+
+    dropleadingzeros :: JSString -> JSString
+    dropleadingzeros = JSString.dropWhile (== '0')
+
 #else
 type JSVal = ()
 type JSString = ()
@@ -206,7 +231,7 @@ instance IsJSVal (NewReactStore storeData)
 storeJsKey :: Typeable ty => Proxy ty -> JSString
 storeJsKey p = typeJsKey (typeRep p)
 
-typeJsKey t = decimal f1 <> "-" <> decimal f2
+typeJsKey t = decimal_workaround_570 f1 <> "-" <> decimal_workaround_570 f2
   where
     Fingerprint f1 f2 = typeRepFingerprint t
 
