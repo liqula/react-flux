@@ -180,15 +180,19 @@ function hsreact$mk_lifecycle_view(name, initialState, renderCb,
 }
 
 //React 0.14 introduced React.Children.toArray.  Also, to be able to run template haskell splices,
-//we need to defend againsg React not being defined.
-var hsreact$children_to_array = typeof React !== "object" ? null : (React['Children']['toArray'] ? React['Children']['toArray'] :
-    (function (children) {
-        var ret = [];
-        React['Children']['forEach'](children, function(x) {
-            ret.push(x);
-        });
-        return ret;
-    }));
+//we need to defend against React not being defined.  Finally, this code may be evaluated *before*
+//React is loaded, and since it's a function, we can defer referencing it until it's there.
+var hsreact$children_to_array = function() {
+    hsreact$children_to_array = (React['Children']['toArray'] ? React['Children']['toArray'] :
+        (function (children) {
+            var ret = [];
+            React['Children']['forEach'](children, function(x) {
+                ret.push(x);
+            });
+            return ret;
+        }));
+    return hsreact$children_to_array.apply(this, arguments);
+};
 
 function hsreact$check_ghcjs_obj_equal(x, y) {
     //Use != here to check if objects are the same
