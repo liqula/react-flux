@@ -14,6 +14,7 @@ module React.Flux.Ajax (
 import Data.Aeson
 import Data.Text (Text)
 import Data.Typeable (Typeable)
+import Data.String.Conversions (cs, (<>))
 import GHC.Generics (Generic)
 import React.Flux.Internal
 import React.Flux.Store
@@ -23,9 +24,9 @@ import Control.Arrow ((***))
 import Control.DeepSeq (deepseq)
 import GHCJS.Foreign.Callback
 import GHCJS.Foreign (jsNull)
-import GHCJS.Marshal (ToJSVal(..), toJSVal_aeson, FromJSVal(..))
+import GHCJS.Marshal (ToJSVal(..))
 import GHCJS.Types (JSVal)
-import qualified Data.Text as T
+import qualified Data.JSString as JSS
 import qualified Data.JSString.Text as JSS
 
 import React.Flux.Export
@@ -48,7 +49,7 @@ data AjaxRequest = AjaxRequest
   , reqURI :: JSString
   , reqTimeout :: RequestTimeout
   , reqHeaders :: [(JSString, JSString)]
-  , reqBody :: JSVal
+  , reqBody :: JSString
   } deriving (Typeable, Generic)
 
 -- | The response after @XMLHttpRequest@ indicates that the @readyState@ is done.
@@ -178,25 +179,20 @@ jsonAjax :: (ToJSON body, FromJSON response)
          -> IO ()
 #ifdef __GHCJS__
 jsonAjax timeout method uri headers body handler = do
-    bodyRef <- toJSVal_aeson body >>= js_JSONstringify
     let extraHeaders = [("Content-Type", "application/json"), ("Accept", "application/json")]
     let req = AjaxRequest
               { reqMethod = JSS.textToJSString method
               , reqURI = JSS.textToJSString uri
               , reqHeaders = extraHeaders ++ map (JSS.textToJSString *** JSS.textToJSString) headers
               , reqTimeout = timeout
-              , reqBody = bodyRef
+              , reqBody = JSS.pack . cs . encode $ body
               }
     ajax req $ \resp ->
         if respStatus resp < 300
             then do
-                j <- js_JSONParse $ respResponseText resp
-                mv <- fromJSVal j
-                case mv of
-                    Nothing -> handler $ Left (500, "Unable to convert response body")
-                    Just v -> case fromJSON v of
-                        Success v' -> handler $ Right v'
-                        Error e -> handler $ Left (500, T.pack e)
+                case eitherDecode . cs . JSS.unpack . respResponseText $ resp of
+                    Left err -> handler $ Left (500, "Unable to convert response body: " <> cs err)  -- TODO: this is not an HTTP error.
+                    Right v  -> handler $ Right v
             else handler $ Left (respStatus resp, JSS.textFromJSString $ respResponseText resp)
 #else
 jsonAjax _ _ _ _ _ _ = return ()
@@ -210,14 +206,6 @@ foreign import javascript unsafe
 foreign import javascript unsafe
     "hsreact$setAjaxCallback($1)"
     js_setAjaxCallback :: Callback (JSVal -> JSVal -> IO ()) -> IO ()
-
-foreign import javascript unsafe
-    "JSON['parse']($1)"
-    js_JSONParse :: JSString -> IO JSVal
-
-foreign import javascript unsafe
-    "JSON['stringify']($1)"
-    js_JSONstringify :: JSVal -> IO JSVal
 
 foreign import javascript unsafe
     "$1.hs"
