@@ -8,7 +8,7 @@ module React.Flux.Store (
   -- * Old Stores
   , SomeStoreAction(..)
   , ReactStore(..)
-  , mkStore
+  , unsafeMkStore
   , getStoreData
   , alterStore
   , executeAction
@@ -178,8 +178,9 @@ data ReactStore storeData = ReactStore {
 ----------------------------------------------------------------------------------------------------
 
 -- | Create a store from the initial data.
-mkStore :: StoreData storeData => storeData -> ReactStore storeData
-{-# NOINLINE mkStore #-}
+unsafeMkStore :: StoreData storeData => storeData -> ReactStore storeData
+{-# NOINLINE unsafeMkStore #-}
+mkStore :: StoreData storeData => storeData -> IO (ReactStore storeData)
 
 -- | Register the initial store data.  This function must be called exactly once from your main function before
 -- the initial rendering occurs.  Store data is global and so there can be only one store data value for each
@@ -236,7 +237,9 @@ typeJsKey t = decimal_workaround_570 f1 <> "-" <> decimal_workaround_570 f2
     Fingerprint f1 f2 = typeRepFingerprint t
 
 -- old store API
-mkStore initial = unsafePerformIO $ do
+unsafeMkStore = unsafePerformIO . mkStore
+
+mkStore initial = do
     i <- export initial
     ref <- js_createOldStore i
     storeMVar <- newMVar initial
@@ -316,9 +319,8 @@ foreign import javascript unsafe
 
 #else
 
-mkStore initial = unsafePerformIO $ do
-    storeMVar <- newMVar initial
-    return $ ReactStore (ReactStoreRef ()) storeMVar
+unsafeMkStore = undefined
+mkStore = undefined
 
 registerInitialStore _ = return ()
 

@@ -143,7 +143,7 @@ ajax _ _ = return ()
 -- >        return s { launchUpdate = PreviousUpdateHadError err }
 -- >
 -- >myStore :: ReactStore MyStore
--- >myStore = mkStore $ MyStore Nothing NoUpdatePending
+-- >myStore = unsafeMkStore $ MyStore Nothing NoUpdatePending
 --
 -- And then in your view, you can render this using something like:
 --
@@ -172,7 +172,7 @@ jsonAjax :: (ToJSON body, FromJSON response)
             --   * If the response status is @200@, the body will be parsed as JSON and a
             --     'Right' value will be passed to this handler.   If there is an
             --     error parsing the JSON response, a 'Left' value with @500@ and the error message
-            --     from aeson is given to the handler. 
+            --     from aeson is given to the handler.
             --
             --   * If the response status is anything besides @200@, a 'Left' value with a pair
             --     of the response status and response text is passed to the handler.

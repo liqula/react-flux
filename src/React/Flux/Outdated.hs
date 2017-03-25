@@ -4,7 +4,7 @@
 module React.Flux.Outdated
   ( ReactStore
   , SomeStoreAction(..)
-  , mkStore
+  , unsafeMkStore
   , getStoreData
   , alterStore
   , ReactView
@@ -516,7 +516,7 @@ instance (FromJSVal a, ArgumentsToProps props b) => ArgumentsToProps props (a ->
 --
 -- 4. Call the javascript function with two arguments to return a React element which can be used
 -- in a JavaScript React class rendering function.
--- 
+--
 --       @
 --       var myJsView = React.createClass({
 --           render: function() {
@@ -530,7 +530,7 @@ exportViewToJavaScript v func = do
     return wrappedCb
 
 -- | Create a zero-argument callback property.  When this callback function is executed, it
--- will render the given view and return the resulting React element.  If you need to 
+-- will render the given view and return the resulting React element.  If you need to
 -- create a callback which expects arguments, use 'callbackViewWithProps' instead.
 callbackView :: JSString -> ReactView () -> PropertyOrHandler handler
 callbackView name v = CallbackPropertyReturningView name (const $ return ()) (reactView v)

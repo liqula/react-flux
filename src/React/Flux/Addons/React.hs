@@ -83,7 +83,7 @@ instance StoreData PerfStoreData where
         return $ PerfStoreData False
 
 perfStore :: ReactStore PerfStoreData
-perfStore = mkStore $ PerfStoreData False
+perfStore = unsafeMkStore $ PerfStoreData False
 
 -- | Convert a performance action into a store action.   Use this if you are not using
 -- 'perfToggleButton_'.
