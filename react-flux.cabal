@@ -51,10 +51,11 @@ library
                    React.Flux.Addons.React
                    React.Flux.Addons.Bootstrap
                    React.Flux.Addons.Intl
-
-  other-modules: React.Flux.Views
-                 React.Flux.Store
-                 React.Flux.Export
+                   -- (internal)
+                   React.Flux.Export
+                   React.Flux.ForeignEq
+                   React.Flux.Store
+                   React.Flux.Views
 
   default-extensions: CPP
                       EmptyDataDecls

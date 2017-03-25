@@ -1,6 +1,6 @@
 /* jshint sub:true */
 
-function hsreact$mk_class(name, renderCb, checkState, releaseState) {
+function hsreact$mk_class(name, renderCb, checkState, releaseState, propsEq, stateEq) {
     var cl = {
         'displayName': name,
         'componentWillReceiveProps': function() {
@@ -33,54 +33,23 @@ function hsreact$mk_class(name, renderCb, checkState, releaseState) {
         _currentCallbacks: []
     };
 
-    //Checks if the javascript representations of two haskell values are the same.
-    //This can't check equality but just checks if the javascript object has not been
-    //changed.  We have special support for tuples of size 2 and 3, where we do check if the individual components of
-    //the tuple are equal.
-    var areValuesSame = function(obj1, obj2) {
-        if (obj1 == obj2) { //use two equal signs to test if the objects are the same
-            return true;
-
-        } else {
-
-            //check tuples of size two and 3.
-            //
-            //Tuples of size 2 are stored as
-            //  { d1: first value
-            //  , d2: second value
-            //  , f: constructor function
-            //  }
-            //
-            //Tuples of size 3 are stored as
-            //  { d1: first value
-            //  , d2: { d1: second value
-            //        , d2: third value
-            //        }
-            //  , f: constructor function
-            //  }
-            var obj1_f = (obj1['f'] || {})['name'];
-            var obj2_f = (obj2['f'] || {})['name'];
-
-            if (obj1_f === "h$ghczmprimZCGHCziTupleziZLz2cUZR_con_e" && obj1_f === obj2_f) {
-                //pair
-                return obj1['d1'] == obj2['d1'] && obj1['d2'] == obj2['d2']; //use two equal signs to test if the objects are the same
-
-            } else if (obj1_f === "h$ghczmprimZCGHCziTupleziZLz2cUz2cUZR_con_e" && obj1_f === obj2_f) {
-                var obj1_d2 = obj1['d2'] || {};
-                var obj2_d2 = obj2['d2'] || {};
-                return obj1['d1'] == obj2['d1'] && obj1_d2['d1'] == obj2_d2['d1'] && obj1_d2['d2'] == obj2_d2['d2'];
-            } else {
-                return false;
-            }
-        }
-    };
     if (checkState) {
         cl['shouldComponentUpdate'] = function(newProps, newState) {
-            return !areValuesSame(this['props'].hs.root, newProps.hs.root) || !areValuesSame(this['state'].hs.root, newState.hs.root);
+            try {
+                return !propsEq(this['props'].hs, newProps.hs) || !stateEq(this['state'].hs, newState.hs);
+            } catch(e) {
+                console.log('propsEq or stateEq failed on component', name);
+                throw e;
+            }
         };
     } else {
         cl['shouldComponentUpdate'] = function(newProps, newState) {
-            return !areValuesSame(this['props'].hs.root, newProps.hs.root);
+            try {
+                return !propsEq(this['props'].hs, newProps.hs);
+            } catch(e) {
+                console.log('propsEq failed on component', name);
+                throw e;
+            }
         };
     }
 
@@ -93,38 +62,9 @@ function hsreact$mk_class(name, renderCb, checkState, releaseState) {
     return cl;
 }
 
-function hsreact$mk_ctrl_view(name, store, renderCb) {
-    var cl = hsreact$mk_class(name, renderCb, true, false);
-    cl['getInitialState'] = function() {
-        return {hs: store.sdata};
-    };
-    cl['componentDidMount'] = function() {
-        store.views.push(this._updateState);
-    };
-    cl['componentWillUnmount'] = function() {
-        var idx = store.views.indexOf(this._updateState);
-        if (idx >= 0) { store.views.splice(idx, 1); }
-        this._currentCallbacks.map(h$release);
-        h$release(this['props'].hs);
-    };
-    return React['createClass'](cl);
-}
-
-function hsreact$mk_view(name, renderCb) {
-    return React['createClass'](hsreact$mk_class(name, renderCb, false, false));
-}
-
-function hsreact$mk_stateful_view(name, initialState, renderCb) {
-    var cl = hsreact$mk_class(name, renderCb, true, true);
-    cl['getInitialState'] = function() {
-        return { hs: initialState };
-    };
-    return React['createClass'](cl);
-}
-
 function hsreact$mk_lifecycle_view(name, initialState, renderCb,
-            willMountCb, didMountCb, willRecvPropsCb, willUpdateCb, didUpdateCb, willUnmountCb) {
-    var cl = hsreact$mk_class(name, renderCb, true, true);
+            willMountCb, didMountCb, willRecvPropsCb, willUpdateCb, didUpdateCb, willUnmountCb, propsEq, stateEq) {
+    var cl = hsreact$mk_class(name, renderCb, true, true, propsEq, stateEq);
 
     cl['getInitialState'] = function() {
         return { hs: initialState };
@@ -195,19 +135,18 @@ var hsreact$children_to_array = function() {
 };
 
 function hsreact$check_ghcjs_obj_equal(x, y) {
-    //Use != here to check if objects are the same
-    return x == y || (x.d1 && x.d1 == y.d1 && x.d2 == y.d2);
+    return x === y || (x.d1 && x.d1 === y.d1 && x.d2 === y.d2);
 }
 
-function hsreact$checkPropsDifferent(newPropsI, oldPropsI) {
+function hsreact$check_props_equal(newPropsI, oldPropsI) {
     var newProps = newPropsI.hs;
     var oldProps = oldPropsI.hs;
-    if (newProps.length !== oldProps.length) return true;
+    if (newProps.length !== oldProps.length) return false;
     for (var i = 0; i < oldProps.length; i++) {
         if (!hsreact$check_ghcjs_obj_equal(newProps[i].root, oldProps[i].root))
-            return true;
+            return false;
     }
-    return false;
+    return true;
 }
 
 function hsreact$mk_new_class(name, renderCb) {
@@ -219,7 +158,7 @@ function hsreact$mk_new_class(name, renderCb) {
         'render': function() {
             var arg = {
                 newCallbacks: [],
-                elem:null
+                elem: null
             };
             renderCb(this, arg);
             this._currentCallbacks.map(h$release);
@@ -238,10 +177,12 @@ function hsreact$mk_new_class(name, renderCb) {
     return cl;
 }
 
-function hsreact$mk_new_view(name, renderCb) {
+function hsreact$mk_new_view(name, renderCb, propsEq) {
     var cl = hsreact$mk_new_class(name, renderCb);
     cl['shouldComponentUpdate'] = function(newPropsI) {
-        return hsreact$checkPropsDifferent(newPropsI, this['props']);
+        if (!hsreact$check_props_equal(newPropsI, this['props'])) return true;
+        if (!propsEq(newPropsI, this['props'])) return true;
+        return false;
     };
     cl['componentWillUnmount'] = function() {
         this._currentCallbacks.map(h$release);
@@ -250,7 +191,7 @@ function hsreact$mk_new_view(name, renderCb) {
     return React['createClass'](cl);
 }
 
-function hsreact$mk_new_stateful_view(name, initialState, renderCb) {
+function hsreact$mk_new_stateful_view(name, initialState, renderCb, propsEq, stateEq) {
     var cl = hsreact$mk_new_class(name, renderCb);
     cl['getInitialState'] = function() {
         return { hs: initialState };
@@ -260,8 +201,10 @@ function hsreact$mk_new_stateful_view(name, initialState, renderCb) {
         this['setState']({hs: s});
     };
     cl['shouldComponentUpdate'] = function(newPropsI, newStateI) {
-        if (hsreact$checkPropsDifferent(newPropsI, this['props'])) return true;
+        if (!hsreact$check_props_equal(newPropsI, this['props'])) return true;
+        if (!propsEq(newPropsI, this['props'])) return true;
         if (!hsreact$check_ghcjs_obj_equal(newStateI.hs.root, this['state'].hs.root)) return true;
+        if (!stateEq(newStateI.hs, this['state'].hs)) return true;
         return false;
     };
     cl['componentWillUnmount'] = function() {
@@ -288,14 +231,16 @@ function hsreact$make_ctrl_view_callback(elem, artifact) {
     };
 }
 
-function hsreact$mk_new_ctrl_view(name, renderCb, artifacts) {
+function hsreact$mk_new_ctrl_view(name, renderCb, artifacts, propsEq, statesEq) {
     var cl = hsreact$mk_new_class(name, renderCb);
     cl['shouldComponentUpdate'] = function(newPropsI, newStateI) {
-        if (hsreact$checkPropsDifferent(newPropsI, this['props'])) return true;
+        if (!hsreact$check_props_equal(newPropsI, this['props'])) return true;
+        if (!propsEq(newPropsI.hs, this['props'].hs)) return true;
         var newState = newStateI.hs;
         var oldState = this['state'].hs;
         for (var k in newState) {
             if (!hsreact$check_ghcjs_obj_equal(newState[k], oldState[k])) return true;
+            // TODO: statesEq (see comments in the beginning of src/React/Flux/ForeignEq.hs for context.)
         }
         return false;
     };

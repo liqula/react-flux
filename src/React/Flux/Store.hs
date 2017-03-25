@@ -11,6 +11,9 @@ module React.Flux.Store (
   , unsafeMkStore
   , getStoreData
   , alterStore
+  , modifyStore
+  , modifyStoreNoCommit
+  , storeCommit
   , executeAction
 
   -- * New Stores
@@ -24,9 +27,10 @@ module React.Flux.Store (
   , typeJsKey
 ) where
 
-import Control.Concurrent.MVar (MVar, newMVar, modifyMVar_, readMVar)
+import Control.Concurrent.MVar (MVar, newMVar, modifyMVar, modifyMVar_, readMVar, withMVar)
 import Control.DeepSeq
 import Data.Typeable
+import GHC.Generics (Generic)
 import System.IO.Unsafe (unsafePerformIO)
 
 #ifdef __GHCJS__
@@ -155,6 +159,7 @@ executeAction (SomeNewStoreAction p a) = transformStore p a
 
 -- | This type is used to represent the foreign javascript object part of the store.
 newtype ReactStoreRef storeData = ReactStoreRef JSVal
+  deriving (Generic)
 instance IsJSVal (ReactStoreRef storeData)
 
 data NewReactStoreHS = NewReactStoreHS {
@@ -171,7 +176,7 @@ data ReactStore storeData = ReactStore {
     -- effectively operates as a lock allowing only one thread to modify the store at any one time.
     -- This lock is safe because only the 'alterStore' function ever writes this MVar.
   , storeData :: MVar storeData
-}
+} deriving (Generic)
 
 ----------------------------------------------------------------------------------------------------
 -- Store operations
@@ -194,6 +199,9 @@ registerInitialStore :: forall storeData. (Typeable storeData, StoreData storeDa
 -- Only a single thread can be transforming the store at any one time, so this function will block
 -- on an 'MVar' waiting for a previous transform to complete if one is in process.
 alterStore :: StoreData storeData => ReactStore storeData -> StoreAction storeData -> IO ()
+modifyStoreNoCommit :: Typeable storeData => ReactStore storeData -> (storeData -> IO (storeData, result)) -> IO result
+modifyStore :: Typeable storeData => ReactStore storeData -> (storeData -> IO (storeData, result)) -> IO result
+storeCommit :: Typeable storeData => ReactStore storeData -> IO ()
 
 -- | First, 'transform' the store data according to the given action and then notify all registered
 -- controller-views to re-render themselves.
@@ -255,7 +263,21 @@ registerInitialStore initial = do
 -- old transform
 alterStore store action = modifyMVar_ (storeData store) $ \oldData -> do
     newData <- transform action oldData
+    updateStoreInternal store newData
+    return newData
 
+modifyStoreNoCommit store action = modifyMVar (storeData store) action
+
+storeCommit store = withMVar (storeData store) $ \dat ->
+    updateStoreInternal store dat
+
+modifyStore store action = modifyMVar (storeData store) $ \oldData -> do
+    result@(newData, _) <- action oldData
+    updateStoreInternal store newData
+    return result
+
+updateStoreInternal :: forall storeData. Typeable storeData => ReactStore storeData -> storeData -> IO ()
+updateStoreInternal store newData = do
     -- There is a hack in PropertiesAndEvents that the fake event store for propagation and prevent
     -- default does not have a javascript store, so the store is nullRef.
     case storeRef store of
@@ -263,8 +285,6 @@ alterStore store action = modifyMVar_ (storeData store) $ \oldData -> do
             newDataE <- export newData
             js_UpdateStore (storeRef store) newDataE
         _ -> return ()
-
-    return newData
 
 -- new transform
 transformStore _ action = do
