@@ -96,8 +96,8 @@ mkStatefulView :: forall (state :: *) (props :: [*]).
 data StoreArg store
 data StoreField store (field :: k) a
 
-instance Eq store => Eq (StoreArg store) where _ (==) _ = undefined
-instance (Eq store, Eq a) => Eq (StoreField store field a) where _ (==) _ = undefined
+instance Eq store => Eq (StoreArg store) where _ == _ = undefined
+instance (Eq store, Eq a) => Eq (StoreField store field a) where _ == _ = undefined
   -- (FIXME: what is this?  why does `Eq field` not hold in test suite?)
 
 class HasField (x :: k) r a | x r -> a where
