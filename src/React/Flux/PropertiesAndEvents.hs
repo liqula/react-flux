@@ -95,8 +95,6 @@ import           Control.DeepSeq
 import           System.IO.Unsafe (unsafePerformIO)
 import           Data.Monoid ((<>))
 import qualified Data.Text as T
-import qualified Data.Aeson as A
-import qualified Data.HashMap.Strict as M
 import           GHC.Generics
 
 import           React.Flux.Internal

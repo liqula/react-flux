@@ -37,7 +37,8 @@ module React.Flux.Internal(
 
 import           Control.DeepSeq
 import           Data.String (IsString(..))
-import           Data.Aeson
+import           Data.Aeson as A
+import qualified Data.HashMap.Strict as M
 import           Data.Typeable (Typeable)
 import           Control.Monad.Writer
 import           Control.Monad.Identity (Identity(..))
