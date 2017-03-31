@@ -42,7 +42,6 @@ import React.Flux.Views (ViewEventHandler, StatefulViewEventHandler)
 import React.Flux.ForeignEq (singleEq)
 import React.Flux.DOM (div_)
 
-#ifdef __GHCJS__
 import System.IO.Unsafe (unsafePerformIO)
 import React.Flux.Export
 import JavaScript.Array
@@ -52,14 +51,6 @@ import GHCJS.Types (JSVal, IsJSVal, nullRef, jsval)
 import GHCJS.Marshal (ToJSVal(..), FromJSVal(..))
 import GHCJS.Marshal.Pure (PToJSVal(..))
 import qualified JavaScript.Array as JSA
-
-#else
-type JSVal = ()
-type JSArray = ()
-class FromJSVal a
-pToJSVal :: a -> JSVal
-pToJSVal _ = ()
-#endif
 
 
 -- | A view is conceptually a rendering function from @props@ and some internal state to a tree of elements.  The function
@@ -107,8 +98,6 @@ runStateViewHandler this handler = do
 --- Various GHCJS only utilities
 ---------------------------------------------------------------------------------------------------
 
-#ifdef __GHCJS__
-
 foreign import javascript unsafe
     "$1['state'].hs"
     js_ReactGetState :: ReactThis state props -> IO (Export state)
@@ -152,8 +141,6 @@ mkRenderCallback parseState runHandler render = syncCallback2 ContinueAsync $ \t
     evtCallbacksRef <- toJSVal evtCallbacks
     js_RenderCbSetResults arg evtCallbacksRef element
 
-#endif
-
 
 ----------------------------------------------------------------------------------------------------
 --- Element creation for views
@@ -174,19 +161,11 @@ view rc props (ReactElementM child) =
 -- | Keys in React can either be strings or integers
 class ReactViewKey key where
     toKeyRef :: key -> JSVal
-#if __GHCJS__
 instance ReactViewKey String where
     toKeyRef = pToJSVal
 
 instance ReactViewKey Int where
     toKeyRef = pToJSVal
-#else
-instance ReactViewKey String where
-    toKeyRef = const ()
-
-instance ReactViewKey Int where
-    toKeyRef = const ()
-#endif
 
 -- | A deprecated way to create a view with a key which has problems when OverloadedStrings is
 -- active.  Use 'viewWithSKey' or 'viewWithIKey' instead.
@@ -246,14 +225,10 @@ instance ArgumentsToProps props (ReturnProps props) where
     returnViewFromArguments _ _ (ReturnProps v) = return v
 
 instance (FromJSVal a, ArgumentsToProps props b) => ArgumentsToProps props (a -> b) where
-#if __GHCJS__
     returnViewFromArguments args k f = do
         ma <- fromJSVal $ if k >= JSA.length args then nullRef else JSA.index k args
         a <- maybe (error "Unable to decode callback argument") return ma
         returnViewFromArguments args (k+1) $ f a
-#else
-    returnViewFromArguments _ _ _ = error "Not supported in GHC"
-#endif
 
 -- | Export a Haskell view to a JavaScript function.  This allows you to embed a Haskell react-flux
 -- application into a larger existing JavaScript React application.  If you want to use JavaScript
@@ -418,10 +393,9 @@ lifecycleConfig = LifecycleViewConfig
 -- >            { lRender = \state props -> ...
 -- >            , lComponentWillMount = \propsAndState setStateFn -> ...
 -- >            }
+{-# NOINLINE defineLifecycleView #-}
 defineLifecycleView :: forall props state . (Typeable props, Eq props, Typeable state, NFData state, Eq state)
               => String -> state -> LifecycleViewConfig props state -> ReactView props
-
-#ifdef __GHCJS__
 
 defineLifecycleView name initialState cfg = unsafePerformIO $ do
     initialRef <- export initialState
@@ -512,13 +486,6 @@ foreign import javascript unsafe
     "typeof ReactDOM === 'object' ? $1['refs'][$2] : React['findDOMNode']($1['refs'][$2])"
     js_ReactGetRef :: ReactThis state props -> JSString -> IO JSVal
 
-#else
-
-defineLifecycleView _ _ _ = ReactView $ ReactViewRef ()
-
-#endif
-
-{-# NOINLINE defineLifecycleView #-}
 
 ----------------------------------------------------------------------------------------------------
 -- reactRender has two versions
@@ -533,9 +500,6 @@ reactRender :: Typeable props
             -> ReactView props -- ^ A single instance of this view is created
             -> props -- ^ the properties to pass to the view
             -> IO ()
-
-#ifdef __GHCJS__
-
 reactRender htmlId rc props = do
     (e, _) <- mkReactElement id (ReactThis nullRef) $ view rc props mempty
     js_ReactRender e (toJSString htmlId)
@@ -543,12 +507,6 @@ reactRender htmlId rc props = do
 foreign import javascript unsafe
     "(typeof ReactDOM === 'object' ? ReactDOM : React)['render']($1, document.getElementById($2))"
     js_ReactRender :: ReactElementRef -> JSString -> IO ()
-
-#else
-
-reactRender _ _ _ = error "reactRender only works when compiled with GHCJS, because we rely on the javascript React code."
-
-#endif
 
 -- | Render your React application to a string using either @ReactDOMServer.renderToString@ if the first
 -- argument is false or @ReactDOMServer.renderToStaticMarkup@ if the first argument is true.
@@ -565,9 +523,6 @@ reactRenderToString :: Typeable props
                     -> ReactView props -- ^ A single instance of this view is created
                     -> props -- ^ the properties to pass to the view
                     -> IO Text
-
-#ifdef __GHCJS__
-
 reactRenderToString includeStatic rc props = do
     (e, _) <- mkReactElement id (ReactThis nullRef) $ view rc props mempty
     sRef <- (if includeStatic then js_ReactRenderStaticMarkup else js_ReactRenderToString) e
@@ -583,9 +538,3 @@ foreign import javascript unsafe
 foreign import javascript unsafe
     "(typeof ReactDOMServer === 'object' ? ReactDOMServer : (typeof ReactDOM === 'object' ? ReactDOM : React))['renderToStaticMarkup']($1)"
     js_ReactRenderStaticMarkup :: ReactElementRef -> IO JSVal
-
-#else
-
-reactRenderToString _ _ _ = error "reactRenderToString only works when compiled with GHCJS, because we rely on the javascript React code."
-
-#endif

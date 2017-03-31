@@ -39,7 +39,6 @@ import           Control.Monad.Identity (Identity(..))
 import qualified Data.Text as T
 import           GHC.Generics
 
-#ifdef __GHCJS__
 import           Unsafe.Coerce
 import qualified Data.JSString as JSS
 import qualified Data.JSString.Text as JSS
@@ -51,20 +50,6 @@ import           GHCJS.Types (JSVal, JSString, IsJSVal, jsval)
 import           GHCJS.Marshal (ToJSVal(..))
 import           GHCJS.Foreign (jsNull)
 import           React.Flux.Export
-#else
-import Data.Text (Text)
-type JSVal = ()
-class ToJSVal a
-instance ToJSVal Value
-instance ToJSVal Text
-instance ToJSVal ()
-class IsJSVal a
-type JSArray = JSVal
-type JSString = String
-instance IsJSVal JSVal
-instance IsJSVal JSString
-instance ToJSVal JSString
-#endif
 
 -- type JSObject a = JSO.Object a
 
@@ -253,11 +238,7 @@ elemString s = elementToM () $ Content $ toJSString s
 
 -- | Create a text element from a text value. The text content is escaped to be HTML safe.
 elemText :: T.Text -> ReactElementM eventHandler ()
-#ifdef __GHCJS__
 elemText s = elementToM () $ Content $ JSS.textToJSString s
-#else
-elemText s = elementToM () $ Content $ T.unpack s
-#endif
 
 -- | Create a text element from a @JSString@.  This is more efficient for hard-coded strings than
 -- converting from text to a JavaScript string.  The string is escaped to be HTML safe.
@@ -298,9 +279,6 @@ mkReactElement :: forall eventHandler state props.
                -> ReactThis state props -- ^ this
                -> ReactElementM eventHandler ()
                -> IO (ReactElementRef, [CallbackToRelease])
-
-#ifdef __GHCJS__
-
 mkReactElement runHandler this = runWriterT . mToElem
     where
         -- Run the ReactElementM monad to create a ReactElementRef.
@@ -493,16 +471,3 @@ exportNewViewToJs view toProps = do
         js_setElemReturnFromCallback ret e
     wrappedCb <- js_wrapCallbackReturningElement cb
     return (jsval cb, wrappedCb)
-
-#else
-mkReactElement _ _ _ = return (ReactElementRef (), [])
-
-toJSString :: String -> String
-toJSString = id
-
-exportViewToJs :: Typeable props => ReactViewRef props -> (JSArray -> IO props) -> IO (CallbackToRelease, JSVal)
-exportViewToJs _ _ = return ((), ())
-
-exportNewViewToJs :: Typeable props => ReactViewRef props -> (JSArray -> IO NewJsProps) -> IO (CallbackToRelease, JSVal)
-exportNewViewToJs _ _ = return ((), ())
-#endif

@@ -33,7 +33,6 @@ import Data.Typeable
 import GHC.Generics (Generic)
 import System.IO.Unsafe (unsafePerformIO)
 
-#ifdef __GHCJS__
 import Data.Monoid ((<>))
 import GHCJS.Types (JSVal, isNull, IsJSVal, JSString)
 import React.Flux.Export
@@ -64,11 +63,6 @@ decimal_workaround_570 w = dropleadingzeros . mconcat $ showpadded <$> chunks
     dropleadingzeros :: JSString -> JSString
     dropleadingzeros = JSString.dropWhile (== '0')
 
-#else
-type JSVal = ()
-type JSString = ()
-class IsJSVal a
-#endif
 
 -- | A store contains application state, receives actions from the dispatcher, and notifies
 -- controller-views to re-render themselves.  You can have multiple stores; it should be the case
@@ -229,8 +223,6 @@ getStoreData (ReactStore _ mvar) = readMVar mvar
 
 typeJsKey :: TypeRep -> JSString
 
-#ifdef __GHCJS__
-
 -- | The new type of stores, introduced in version 1.3, keep the data in a javascript dictionary indexed
 -- by the fingerprint of the type.  This allows any code to lookup the store by knowing the type.
 newtype NewReactStore storeData = NewReactStore JSVal
@@ -336,22 +328,3 @@ foreign import javascript unsafe
 foreign import javascript unsafe
     "hsreact$transform_new_store($1, $2)"
     js_UpdateNewStore :: NewReactStore storeData -> Export storeData -> IO ()
-
-#else
-
-unsafeMkStore = undefined
-mkStore = undefined
-
-registerInitialStore _ = return ()
-
-alterStore store action = modifyMVar_ (storeData store) (transform action)
-
-readStoreData = error "Can't call readStoreRef from GHC, only GHCJS"
-
-transformStore _ _ = return ()
-
-typeJsKey _ = ()
-
-getNewStoreJs _ = return $ ReactStoreRef ()
-
-#endif

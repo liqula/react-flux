@@ -19,7 +19,6 @@ import GHC.Generics (Generic)
 import React.Flux.Internal
 import React.Flux.Store
 
-#ifdef __GHCJS__
 import Control.Arrow ((***))
 import Control.DeepSeq (deepseq)
 import GHCJS.Foreign.Callback
@@ -30,18 +29,15 @@ import qualified Data.JSString as JSS
 import qualified Data.JSString.Text as JSS
 
 import React.Flux.Export
-#endif
 
 -- | An optional timeout to use for @XMLHttpRequest.timeout@.
 -- When a request times out, a status code of 504 is set in 'respStatus' and the
 -- response handler executes.
 data RequestTimeout = TimeoutMilliseconds Int | NoTimeout
 
-#ifdef __GHCJS__
 instance ToJSVal RequestTimeout where
     toJSVal (TimeoutMilliseconds i) = toJSVal i
     toJSVal NoTimeout = pure jsNull
-#endif
 
 -- | The input to an AJAX request built using @XMLHttpRequest@.
 data AjaxRequest = AjaxRequest
@@ -60,7 +56,6 @@ data AjaxResponse = AjaxResponse
                              --   such as response headers.
   } deriving (Typeable, Generic)
 
-#ifdef __GHCJS__
 -- | GHCJS panics if we export the function directly, so wrap it in a data struct
 data HandlerWrapper = HandlerWrapper (AjaxResponse -> IO [SomeStoreAction])
     deriving Typeable
@@ -72,12 +67,10 @@ useHandler r (HandlerWrapper h) = do
     actions <- h r
     actions `deepseq` mapM_ executeAction actions
 {-# NOINLINE useHandler #-} -- if this is inlined, there is a bug in ghcjs
-#endif
 
 -- | If you are going to use 'ajax' or 'jsonAjax', you must call 'initAjax' once from your main
 -- function.  The call should appear before the call to 'reactRender'.
 initAjax :: IO ()
-#ifdef __GHCJS__
 initAjax = do
     return ()
     a <- asyncCallback2 $ \rawXhr h -> do
@@ -89,23 +82,16 @@ initAjax = do
         parseExport e >>= useHandler resp
 
     js_setAjaxCallback a
-#else
-initAjax = return ()
-#endif
 
 -- | Use @XMLHttpRequest@ to send a request to the backend.  Once the response arrives
 -- and the @readyState@ is done, the response will be passed to the given handler and the resulting
 -- actions will be executed.  Note that 'ajax' returns immedietly and does not wait for the request
 -- to finish.
 ajax :: AjaxRequest -> (AjaxResponse -> IO [SomeStoreAction]) -> IO ()
-#ifdef __GHCJS__
 ajax req handler = do
     reqJson <- toJSVal req
     handlerE <- export $ HandlerWrapper handler
     js_ajax reqJson handlerE
-#else
-ajax _ _ = return ()
-#endif
 
 -- | Use @XMLHttpRequest@ to send a request with a JSON body, parse the response body as JSON, and
 -- then dispatch some actions with the response.  This should be used from within the transform
@@ -177,7 +163,6 @@ jsonAjax :: (ToJSON body, FromJSON response)
             --   * If the response status is anything besides @200@, a 'Left' value with a pair
             --     of the response status and response text is passed to the handler.
          -> IO ()
-#ifdef __GHCJS__
 jsonAjax timeout method uri headers body handler = do
     let extraHeaders = [("Content-Type", "application/json"), ("Accept", "application/json")]
     let req = AjaxRequest
@@ -194,11 +179,7 @@ jsonAjax timeout method uri headers body handler = do
                     Left err -> handler $ Left (500, "Unable to convert response body: " <> cs err)  -- TODO: this is not an HTTP error.
                     Right v  -> handler $ Right v
             else handler $ Left (respStatus resp, JSS.textFromJSString $ respResponseText resp)
-#else
-jsonAjax _ _ _ _ _ _ = return ()
-#endif
 
-#ifdef __GHCJS__
 foreign import javascript unsafe
     "hsreact$ajax($1, $2)"
     js_ajax :: JSVal -> Export HandlerWrapper -> IO ()
@@ -228,4 +209,3 @@ foreign import javascript unsafe
     js_release :: Export HandlerWrapper -> IO ()
 
 instance ToJSVal AjaxRequest
-#endif

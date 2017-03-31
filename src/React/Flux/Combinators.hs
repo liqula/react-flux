@@ -15,17 +15,11 @@ import Data.Monoid ((<>))
 import React.Flux.DOM
 import React.Flux.Internal
 import React.Flux.PropertiesAndEvents
-
-#ifdef __GHCJS__
 import GHCJS.Types (JSVal)
 
 foreign import javascript unsafe
     "$r = window[$1]"
     js_lookupWindow :: JSString -> JSVal
-#else
-js_lookupWindow :: a -> ()
-js_lookupWindow _ = ()
-#endif
 
 -- | A wrapper around 'foreignClass' that looks up the class on the `window`.  I use it for several
 -- third-party react components.  For example, with <https://github.com/reactjs/react-modal react-modal>,

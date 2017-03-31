@@ -103,7 +103,6 @@ import           React.Flux.Internal
 import           React.Flux.Store
 import           React.Flux.Views (ViewEventHandler, StatefulViewEventHandler)
 
-#ifdef __GHCJS__
 import           Data.Maybe (fromMaybe)
 
 import           GHCJS.Foreign (fromJSBool)
@@ -112,38 +111,6 @@ import           GHCJS.Types (JSVal, nullRef, IsJSVal)
 import           JavaScript.Array as JSA
 import qualified Data.JSString.Text as JSS
 
-#else
-type JSVal = ()
-type JSArray = ()
-class FromJSVal a
-instance FromJSVal ()
-instance FromJSVal a => FromJSVal [a]
-instance FromJSVal a => FromJSVal (Maybe a)
-instance FromJSVal T.Text
-instance FromJSVal Char
-instance FromJSVal Bool
-instance FromJSVal Int
-instance FromJSVal Int8
-instance FromJSVal Int16
-instance FromJSVal Int32
-instance FromJSVal Word
-instance FromJSVal Word8
-instance FromJSVal Word16
-instance FromJSVal Word32
-instance FromJSVal Float
-instance FromJSVal Double
-instance FromJSVal A.Value
-instance (FromJSVal a, FromJSVal b) => FromJSVal (a,b)
-instance (FromJSVal a, FromJSVal b, FromJSVal c) => FromJSVal (a,b,c)
-instance (FromJSVal a, FromJSVal b, FromJSVal c, FromJSVal d) => FromJSVal (a,b,c,d)
-instance (FromJSVal a, FromJSVal b, FromJSVal c, FromJSVal d, FromJSVal e) => FromJSVal (a,b,c,d,e)
-instance (FromJSVal a, FromJSVal b, FromJSVal c, FromJSVal d, FromJSVal e, FromJSVal f) => FromJSVal (a,b,c,d,e,f)
-instance (FromJSVal a, FromJSVal b, FromJSVal c, FromJSVal d, FromJSVal e, FromJSVal f, FromJSVal g) => FromJSVal (a,b,c,d,e,f,g)
-instance (FromJSVal a, FromJSVal b, FromJSVal c, FromJSVal d, FromJSVal e, FromJSVal f, FromJSVal g, FromJSVal h) => FromJSVal (a,b,c,d,e,f,g,h)
-class IsJSVal a
-nullRef :: ()
-nullRef = ()
-#endif
 
 -- | Some third-party React classes allow passing React elements as properties.  This function
 -- will first run the given 'ReactElementM' to obtain an element or elements, and then use that
@@ -178,14 +145,10 @@ instance {-# OVERLAPPING #-} CallbackFunction (StatefulViewEventHandler s) (Stat
     applyFromArguments _ _ h = return h
 
 instance {-# OVERLAPPABLE #-} (FromJSVal a, CallbackFunction handler b) => CallbackFunction handler (a -> b) where
-#if __GHCJS__
     applyFromArguments args k f = do
         ma <- fromJSVal $ if k >= JSA.length args then nullRef else JSA.index k args
         a <- maybe (error "Unable to decode callback argument") return ma
         applyFromArguments args (k+1) $ f a
-#else
-    applyFromArguments _ _ _ = error "Not supported in GHC"
-#endif
 
 -- | Create a callback property.  This is primarily intended for foreign React classes which expect
 -- callbacks to be passed to them as properties.  For events on DOM elements, you should instead use
@@ -216,16 +179,10 @@ foreignClass :: JSVal -- ^ The javascript reference to the class
              -> [PropertyOrHandler eventHandler] -- ^ properties and handlers to pass when creating an instance of this class.
              -> ReactElementM eventHandler a -- ^ The child element or elements
              -> ReactElementM eventHandler a
-
-#if __GHCJS__
-
 foreignClass name attrs (ReactElementM child) =
     let (a, childEl) = runWriter child
      in elementToM a $ ForeignElement (Right $ ReactViewRef name) attrs childEl
 
-#else
-foreignClass _ _ x = x
-#endif
 
 -- | Inject arbitrary javascript code into the rendering function.  This is very low level and should only
 -- be used as a last resort when interacting with complex third-party react classes.  For the most part,
@@ -237,20 +194,11 @@ rawJsRendering :: (JSVal -> JSArray -> IO JSVal)
                   -- rendering the children so is an array of react elements.  The return value must be a React element.
                -> ReactElementM handler () -- ^ the children
                -> ReactElementM handler ()
-
-#ifdef __GHCJS__
-
 rawJsRendering trans (ReactElementM child) =
     let (a, childEl) = runWriter child
         trans' thisVal childLst =
           ReactElementRef <$> trans thisVal (JSA.fromList $ map reactElementRef childLst)
      in elementToM a $ RawJsElement trans' childEl
-
-#else
-
-rawJsRendering _ x = x
-
-#endif
 
 ----------------------------------------------------------------------------------------------------
 --- Combinators
@@ -372,8 +320,6 @@ instance StoreData FakeEventStoreData where
     type StoreAction FakeEventStoreData = FakeEventStoreAction
     transform _ _ = return FakeEventStoreData
 
-#ifdef __GHCJS__
-
 -- | What a hack!  React re-uses event objects in a pool.  To make sure this is OK, we must perform
 -- all computation involving the event object before it is returned to React.  But the callback
 -- registered in the handler will return anytime the Haskell thread blocks, and the Haskell thread
@@ -392,13 +338,6 @@ foreign import javascript unsafe
 foreign import javascript unsafe
     "$1['stopPropagation']();"
     js_stopProp :: JSVal -> IO ()
-
-#else
-
-instance NFData FakeEventStoreAction where
-    rnf _ = ()
-
-#endif
 
 -- | Prevent the default browser action from occuring in response to this event.
 preventDefault :: Event -> SomeStoreAction
@@ -607,14 +546,9 @@ onMouseUp = on2 "onMouseUp" parseMouseEvent
 --------------------------------------------------------------------------------
 
 -- | Initialize touch events is only needed with React 0.13, in version 0.14 it was removed.
-#ifdef __GHCJS__
 foreign import javascript unsafe
     "React['initializeTouchEvents'] ? React['initializeTouchEvents'](true) : null"
     initializeTouchEvents :: IO ()
-#else
-initializeTouchEvents :: IO ()
-initializeTouchEvents = return ()
-#endif
 
 data Touch = Touch {
     touchIdentifier :: Int
@@ -738,8 +672,6 @@ onError = on "onError"
 --- JS Utils
 --------------------------------------------------------------------------------
 
-#ifdef __GHCJS__
-
 foreign import javascript unsafe
     "$1[$2]"
     js_getProp :: JSVal -> JSString -> JSVal
@@ -766,25 +698,3 @@ arrayLength = JSA.length
 
 arrayIndex :: Int -> JSArray -> JSVal
 arrayIndex = JSA.index
-
-#else
-
-js_getProp :: a -> JSString -> JSVal
-js_getProp _ _ = ()
-
-js_getArrayProp :: a -> JSString -> JSVal
-js_getArrayProp _ _ = ()
-
-(.:) :: JSVal -> JSString -> b
-_ .: _ = undefined
-
-getModifierState :: JSVal -> T.Text -> Bool
-getModifierState _ _ = False
-
-arrayLength :: JSArray -> Int
-arrayLength _ = 0
-
-arrayIndex :: Int -> JSArray -> JSVal
-arrayIndex _ _ = ()
-
-#endif

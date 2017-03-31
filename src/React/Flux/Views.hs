@@ -32,7 +32,6 @@ import React.Flux.Store
 import React.Flux.Internal
 import React.Flux.ForeignEq (AllEq, singleEq, allEq)
 
-#ifdef __GHCJS__
 import Control.Monad
 import System.IO.Unsafe (unsafePerformIO)
 import React.Flux.Export
@@ -42,12 +41,6 @@ import GHCJS.Types (JSVal, IsJSVal, nullRef)
 import GHCJS.Marshal (ToJSVal(..), FromJSVal(..))
 import qualified JavaScript.Array as JSA
 
-#else
-type JSVal = ()
-type JSArray = ()
-type Callback x = ()
-class FromJSVal a
-#endif
 
 ---------------------------------------------------------------------------------
 -- Public API
@@ -138,7 +131,6 @@ instance ExportViewProps '[] where
   applyViewPropsFromArray _ _ _ _ = return ()
 
 instance (ViewProps rest, Typeable a) => ViewProps (a ': (rest :: [*])) where
-#ifdef __GHCJS__
   viewPropsToJs _ h ref k props = \a -> viewPropsToJs (Proxy :: Proxy rest) h ref k (\p -> props p >> pushProp a p)
   {-# INLINE viewPropsToJs #-}
 
@@ -146,21 +138,13 @@ instance (ViewProps rest, Typeable a) => ViewProps (a ': (rest :: [*])) where
     val <- getProp props i
     applyViewPropsFromJs (Proxy :: Proxy rest) (f val) props (i+1)
   {-# INLINE applyViewPropsFromJs #-}
-#else
-  viewPropsToJs _ _ _ _ = error "Views work only with GHCJS"
-  applyViewPropsFromJs _ _ _ _ = error "Views work only with GHCJS"
-#endif
 
 instance forall (rest :: [*]) a. (ExportViewProps rest, Typeable a, FromJSVal a) => ExportViewProps (a ': rest) where
-#ifdef __GHCJS__
   applyViewPropsFromArray _ inputArr k outputArr =
     do ma <- fromJSVal $ if k >= JSA.length inputArr then nullRef else JSA.index k inputArr
        a :: a <- maybe (error "Unable to decode callback argument") return ma
        pushProp a outputArr
        applyViewPropsFromArray (Proxy :: Proxy rest) inputArr (k+1) outputArr
-#else
-  applyViewPropsFromArray _ _ _ _ = return ()
-#endif
 
 --------------------------------------------------------------------------------
 -- Controller View Props Classes
@@ -194,7 +178,6 @@ instance ControllerViewStores '[] where
 
 instance (ControllerViewStores rest, StoreData store, Typeable store)
    => ControllerViewStores (StoreArg store ': (rest :: [*])) where
-#ifdef __GHCJS__
   applyControllerViewFromJs _ p f st props i = do
     sval <- findFromState i st
     applyControllerViewFromJs (Proxy :: Proxy rest) p (f sval) st props (i+1)
@@ -204,14 +187,9 @@ instance (ControllerViewStores rest, StoreData store, Typeable store)
       storeT = typeRep (Proxy :: Proxy store)
   {-# INLINE applyControllerViewFromJs #-}
   {-# INLINE stateForView #-}
-#else
-  applyControllerViewFromJs _ _ _ _ _ _ = error "Views work only with GHCJS"
-  stateForView _ _ = error "Views work only with GHCJS"
-#endif
 
 instance (ControllerViewStores rest, StoreData store, HasField field store a, Typeable store, Typeable a)
    => ControllerViewStores (StoreField store field a ': (rest :: [*])) where
-#ifdef __GHCJS__
   applyControllerViewFromJs _ p f st props i = do
     sval <- findFromState i st
     applyControllerViewFromJs (Proxy :: Proxy rest) p (f sval) st props (i+1)
@@ -232,16 +210,10 @@ getStoreJs :: Typeable store => JSVal -> IO store
 getStoreJs arg = js_getDeriveInput arg >>= parseExport
 {-# NOINLINE getStoreJs #-} -- if this is inlined, GHCJS does not properly compile the getField callback
 
-#else
-  applyControllerViewFromJs _ _ _ _ _ _ = error "Views work only with GHCJS"
-  stateForView _ _ = error "Views work only with GHCJS"
-#endif
 
 ---------------------------------------------------------------------------------
 -- Public API Implementation
 ---------------------------------------------------------------------------------
-
-#ifdef __GHCJS__
 
 view_ (View ref) key = viewPropsToJs (Proxy :: Proxy props) (Proxy :: Proxy handler) ref key (const $ return ())
 
@@ -317,22 +289,10 @@ callbackRenderingView name (View v) = CallbackPropertyReturningNewView name v ge
       applyViewPropsFromArray (Proxy :: Proxy props) arr 0 props
       return props
 
-#else
-
-mkView _ _ = View (ReactViewRef ())
-view_ _ _ = error "Views work only in GHCJS"
-mkStatefulView _ _ _ = View (ReactViewRef ())
-mkControllerView _ _ = View (ReactViewRef ())
-exportReactViewToJavaScript _ = return ()
-callbackRenderingView _ _ = error "Views only work in GHCJS"
-
-#endif
 
 --------------------------------------------------------------------------------
 -- Helpers
 --------------------------------------------------------------------------------
-
-#ifdef __GHCJS__
 
 -- | Transform a controller view handler to a raw handler.
 runViewHandler :: ReactThis state props -> ViewEventHandler -> IO ()
@@ -467,5 +427,3 @@ instance IsJSVal RenderCbArg
 foreign import javascript unsafe
     "$1.newCallbacks = $2; $1.elem = $3;"
     js_RenderCbSetResults :: RenderCbArg -> JSVal -> ReactElementRef -> IO ()
-
-#endif

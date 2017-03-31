@@ -19,11 +19,7 @@ import Control.DeepSeq (NFData)
 import Control.Monad (forM_)
 import GHC.Generics (Generic)
 import React.Flux
-import React.Flux.Outdated
-
-#ifdef __GHCJS__
 import GHCJS.Types (JSVal, JSString)
-#endif
 
 -- | The <https://facebook.github.io/react/docs/animation.html ReactCSSTransitionGroup> element.
 -- For example in React 0.14,
@@ -32,16 +28,12 @@ import GHCJS.Types (JSVal, JSString)
 -- >    h1_ "Fading at initial mount"
 cssTransitionGroup :: [PropertyOrHandler eventHandler] -> ReactElementM eventHandler a -> ReactElementM eventHandler a
 
-#ifdef __GHCJS__
 cssTransitionGroup props children = foreignClass js_CSSTransitionGroup props children
 
 foreign import javascript unsafe
     "React['addons']['CSSTransitionGroup']"
     js_CSSTransitionGroup :: JSVal
 
-#else
-cssTransitionGroup _ x = x
-#endif
 
 --------------------------------------------------------------------------------
 -- Perf
@@ -109,15 +101,6 @@ perfToggleButton = mkControllerView @'[StoreArg PerfStoreData] "perf toggle butt
 perfToggleButton_ :: [PerfPrint] -> ReactElementM handler ()
 perfToggleButton_ toPrint = view_ perfToggleButton "perf-toggle-button" toPrint
 
-#ifdef __GHCJS__
-
 foreign import javascript unsafe
     "React['addons']['Perf'][$1]()"
     js_perf :: JSString -> IO ()
-
-#else
-
-js_perf :: String -> IO ()
-js_perf _ = return ()
-
-#endif
