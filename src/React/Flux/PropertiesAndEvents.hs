@@ -19,6 +19,8 @@ module React.Flux.PropertiesAndEvents (
   , ($=)
   , (&=)
   , classNames
+  , classNamesLast
+  , classNamesAny
 
   -- * Creating Events
   , Event(..)
