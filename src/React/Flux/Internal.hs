@@ -12,7 +12,6 @@ module React.Flux.Internal(
   , HandlerArg(..)
   , PropertyOrHandler(..)
   , property
-  , (&=)
   , ReactElement(..)
   , ReactElementM(..)
   , transHandler
@@ -28,6 +27,12 @@ module React.Flux.Internal(
   , exportNewViewToJs
   , toJSString
   , JSString
+  , ($=)
+  , (&=)
+  , (@=)
+  , classNames
+  , classNamesLast
+  , classNamesAny
 ) where
 
 import           Control.DeepSeq
@@ -131,11 +136,6 @@ instance Functor PropertyOrHandler where
 -- | Create a property from anything that can be converted to a JSVal
 property :: ToJSVal val => JSString -> val -> PropertyOrHandler handler
 property = Property
-
--- | Create a property for anything that can be converted to a javascript value using the @ToJSVal@
--- class from the @ghcjs-base@ package..  This is just an infix version of 'property'.
-(&=) :: ToJSVal a => JSString -> a -> PropertyOrHandler handler
-n &= a = Property n a
 
 -- | A React element is a node or list of nodes in a virtual tree.  Elements are the output of the
 -- rendering functions of classes.  React takes the output of the rendering function (which is a
@@ -471,3 +471,46 @@ exportNewViewToJs view toProps = do
         js_setElemReturnFromCallback ret e
     wrappedCb <- js_wrapCallbackReturningElement cb
     return (jsval cb, wrappedCb)
+
+
+----------------------------------------------------------------------------------------------------
+--- Combinators
+----------------------------------------------------------------------------------------------------
+
+-- | Create a text-valued property.  This is here to avoid problems when OverloadedStrings extension
+-- is enabled
+($=) :: JSString -> JSString -> PropertyOrHandler handler
+n $= a = Property n a
+infixr 0 $=
+
+-- | Create a property for anything that can be converted to a javascript value using the @ToJSVal@
+-- class from the @ghcjs-base@ package..  This is just an infix version of 'property'.
+(&=) :: ToJSVal a => JSString -> a -> PropertyOrHandler handler
+n &= a = Property n a
+infixr 0 &=
+
+-- | Create a property from any aeson value (the at sign looks like "A" for aeson)
+(@=) :: A.ToJSON a => JSString -> a -> PropertyOrHandler handler
+n @= a = Property n (A.toJSON a)
+infixr 0 @=
+
+{-# DEPRECATED classNames "use classNamesLast" #-}
+classNames :: [(T.Text, Bool)] -> PropertyOrHandler handler
+classNames = classNamesLast
+
+-- | Set the <https://facebook.github.io/react/docs/class-name-manipulation.html className> property to consist
+-- of all the names which are matched with True, allowing you to easily toggle class names based on
+-- a computation.
+--
+-- If a class is mentioned more than once, all but the *last* mentioning in the list are overruled.
+-- See also: 'classNameAny'.
+classNamesLast :: [(T.Text, Bool)] -> PropertyOrHandler handler
+classNamesLast xs = "className" @= T.intercalate " " names
+  where
+    names = M.keys $ M.filter id $ M.fromList xs
+
+-- | Variant of 'classNamesLast' that yields any class that has *any* flag set to 'True'.
+classNamesAny :: [(T.Text, Bool)] -> PropertyOrHandler handler
+classNamesAny xs = "className" @= T.intercalate " " names
+  where
+    names = M.keys $ M.fromList $ filter snd xs

@@ -201,27 +201,6 @@ rawJsRendering trans (ReactElementM child) =
      in elementToM a $ RawJsElement trans' childEl
 
 ----------------------------------------------------------------------------------------------------
---- Combinators
-----------------------------------------------------------------------------------------------------
-
--- | Create a property from any aeson value (the at sign looks like "A" for aeson)
-(@=) :: A.ToJSON a => JSString -> a -> PropertyOrHandler handler
-n @= a = Property n (A.toJSON a)
-
--- | Create a text-valued property.  This is here to avoid problems when OverloadedStrings extension
--- is enabled
-($=) :: JSString -> JSString -> PropertyOrHandler handler
-n $= a = Property n a
-
--- | Set the <https://facebook.github.io/react/docs/class-name-manipulation.html className> property to consist
--- of all the names which are matched with True, allowing you to easily toggle class names based on
--- a computation.
-classNames :: [(T.Text, Bool)] -> PropertyOrHandler handler
-classNames xs = "className" @= T.intercalate " " names
-    where
-        names = M.keys $ M.filter id $ M.fromList xs
-
-----------------------------------------------------------------------------------------------------
 --- Generic Event
 ----------------------------------------------------------------------------------------------------
 
