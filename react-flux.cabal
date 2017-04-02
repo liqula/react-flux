@@ -1,5 +1,5 @@
 name:                react-flux
-version:             1.3.0
+version:             1.3.1
 synopsis:            A binding to React based on the Flux application architecture for GHCJS
 category:            Web
 homepage:            https://bitbucket.org/wuzzeb/react-flux
@@ -51,13 +51,13 @@ library
                    React.Flux.Addons.React
                    React.Flux.Addons.Bootstrap
                    React.Flux.Addons.Intl
+                   -- (internal)
+                   React.Flux.Export
+                   React.Flux.ForeignEq
+                   React.Flux.Store
+                   React.Flux.Views
 
-  other-modules: React.Flux.Views
-                 React.Flux.Store
-                 React.Flux.Export
-
-  default-extensions: CPP
-                      EmptyDataDecls
+  default-extensions: EmptyDataDecls
                       ExistentialQuantification
                       FlexibleContexts
                       FlexibleInstances
@@ -73,6 +73,7 @@ library
                       TypeOperators
 
   build-depends: base >=4.9 && < 5
+               , ghcjs-base
                , deepseq
                , mtl >= 2.1
                , aeson >= 0.8
@@ -81,9 +82,7 @@ library
                , unordered-containers
                , bytestring
                , template-haskell >= 2.10
-
-  if impl(ghcjs)
-      build-depends: ghcjs-base
+               , string-conversions >= 0.4 && < 0.5
 
 executable test-client
    if !flag(test-client)
@@ -95,10 +94,9 @@ executable test-client
    hs-source-dirs: test/client
    main-is: TestClient.hs
    build-depends: base
+                , ghcjs-base
                 , react-flux
                 , time
                 , text
                 , deepseq
                 , aeson
-   if impl(ghcjs)
-      build-depends: ghcjs-base

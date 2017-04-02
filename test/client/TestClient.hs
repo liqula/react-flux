@@ -22,7 +22,7 @@ foreign import javascript unsafe
     js_output :: JSString -> IO ()
 
 data OutputStoreData = OutputStoreData
-    deriving (Show, Typeable)
+    deriving (Eq, Show, Typeable)
 
 instance StoreData OutputStoreData where
     type StoreAction OutputStoreData = [T.Text]
@@ -130,7 +130,7 @@ eventsView = mkView "events" $
 --------------------------------------------------------------------------------
 
 data Character = Character !Int !String
-    deriving (Typeable)
+    deriving (Typeable, Eq)
 
 instance Show Character where
   show (Character i s) = "C" ++ show i ++ " - " ++ s
@@ -138,7 +138,7 @@ instance Show Character where
 data CharacterPair = CharacterPair {
     c1 :: !Character
   , c2 :: !Character
-} deriving (Typeable)
+} deriving (Typeable, Eq)
 
 instance Show CharacterPair where
   show (CharacterPair x1 x2) = show x1 ++ ", " ++ show x2
@@ -146,7 +146,7 @@ instance Show CharacterPair where
 data Humans = Humans
   { h1 :: !CharacterPair
   , h2 :: !CharacterPair
-  } deriving (Typeable, Show)
+  } deriving (Typeable, Eq, Show)
 
 instance HasField "h1" Humans CharacterPair where
   getField = h1
@@ -156,7 +156,7 @@ instance HasField "h2" Humans CharacterPair where
 data Tiste = Tiste
   { t1 :: !CharacterPair
   , t2 :: !CharacterPair
-  } deriving (Typeable, Show)
+  } deriving (Typeable, Eq, Show)
 
 data CharacterIndex = P1_C1 | P1_C2 | P2_C1 | P2_C2
     deriving (Show, Eq, Typeable, Generic, NFData, Bounded, Enum)

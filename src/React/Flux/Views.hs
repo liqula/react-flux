@@ -1,5 +1,5 @@
 -- | Internal module containing the view definitions
-{-# LANGUAGE UndecidableInstances, AllowAmbiguousTypes, TypeApplications, BangPatterns #-}
+{-# LANGUAGE UndecidableInstances, AllowAmbiguousTypes, TypeApplications, BangPatterns, ScopedTypeVariables #-}
 {-# OPTIONS_GHC -fno-warn-redundant-constraints #-}
 module React.Flux.Views
   ( View(..)
@@ -30,8 +30,8 @@ import qualified Data.HashMap.Strict as M
 
 import React.Flux.Store
 import React.Flux.Internal
+import React.Flux.ForeignEq (AllEq, singleEq, allEq)
 
-#ifdef __GHCJS__
 import Control.Monad
 import System.IO.Unsafe (unsafePerformIO)
 import React.Flux.Export
@@ -41,12 +41,6 @@ import GHCJS.Types (JSVal, IsJSVal, nullRef)
 import GHCJS.Marshal (ToJSVal(..), FromJSVal(..))
 import qualified JavaScript.Array as JSA
 
-#else
-type JSVal = ()
-type JSArray = ()
-type Callback x = ()
-class FromJSVal a
-#endif
 
 ---------------------------------------------------------------------------------
 -- Public API
@@ -79,18 +73,12 @@ type StatefulViewEventHandler state = state -> ([SomeStoreAction], Maybe state)
 liftViewToStateHandler :: ReactElementM ViewEventHandler a -> ReactElementM (StatefulViewEventHandler st) a
 liftViewToStateHandler = transHandler (\h _ -> (h, Nothing))
 
-mkView :: forall (props :: [*]). ViewProps props => JSString -> ViewPropsToElement props ViewEventHandler -> View props
-
-view_ :: forall props handler. ViewProps (props :: [*]) => View props -> JSString -> ViewPropsToElement props handler
-
-mkStatefulView :: forall (state :: *) (props :: [*]). (Typeable state, NFData state, ViewProps props)
-               => JSString -- ^ A name for this view, used only for debugging/console logging
-               -> state -- ^ The initial state
-               -> (state -> ViewPropsToElement props (StatefulViewEventHandler state))
-               -> View props
-
 data StoreArg store
 data StoreField store (field :: k) a
+
+instance Eq store => Eq (StoreArg store) where _ == _ = undefined
+instance (Eq store, Eq a) => Eq (StoreField store field a) where _ == _ = undefined
+  -- (FIXME: what is this?  why does `Eq field` not hold in test suite?)
 
 class HasField (x :: k) r a | x r -> a where
   getField :: r -> a
@@ -99,13 +87,6 @@ type family ControllerViewToElement (stores :: [*]) (props :: [*]) (handler :: *
   ControllerViewToElement '[] props handler = ViewPropsToElement props handler
   ControllerViewToElement (StoreArg store ': rest) props handler = store -> ControllerViewToElement rest props handler
   ControllerViewToElement (StoreField store field a ': rest) props handler = a -> ControllerViewToElement rest props handler
-
-mkControllerView :: forall (stores :: [*]) (props :: [*]). (ViewProps props, ControllerViewStores stores)
-                 => JSString -> ControllerViewToElement stores props ViewEventHandler -> View props
-
-exportReactViewToJavaScript :: forall (props :: [*]). (ExportViewProps props) => View props -> IO JSVal
-
-callbackRenderingView :: forall (props :: [*]) handler. (ExportViewProps props) => JSString -> View props -> PropertyOrHandler handler
 
 --------------------------------------------------------------------------------
 -- View Props Classes
@@ -128,7 +109,6 @@ instance ExportViewProps '[] where
   applyViewPropsFromArray _ _ _ _ = return ()
 
 instance (ViewProps rest, Typeable a) => ViewProps (a ': (rest :: [*])) where
-#ifdef __GHCJS__
   viewPropsToJs _ h ref k props = \a -> viewPropsToJs (Proxy :: Proxy rest) h ref k (\p -> props p >> pushProp a p)
   {-# INLINE viewPropsToJs #-}
 
@@ -136,21 +116,13 @@ instance (ViewProps rest, Typeable a) => ViewProps (a ': (rest :: [*])) where
     val <- getProp props i
     applyViewPropsFromJs (Proxy :: Proxy rest) (f val) props (i+1)
   {-# INLINE applyViewPropsFromJs #-}
-#else
-  viewPropsToJs _ _ _ _ = error "Views work only with GHCJS"
-  applyViewPropsFromJs _ _ _ _ = error "Views work only with GHCJS"
-#endif
 
 instance forall (rest :: [*]) a. (ExportViewProps rest, Typeable a, FromJSVal a) => ExportViewProps (a ': rest) where
-#ifdef __GHCJS__
   applyViewPropsFromArray _ inputArr k outputArr =
     do ma <- fromJSVal $ if k >= JSA.length inputArr then nullRef else JSA.index k inputArr
        a :: a <- maybe (error "Unable to decode callback argument") return ma
        pushProp a outputArr
        applyViewPropsFromArray (Proxy :: Proxy rest) inputArr (k+1) outputArr
-#else
-  applyViewPropsFromArray _ _ _ _ = return ()
-#endif
 
 --------------------------------------------------------------------------------
 -- Controller View Props Classes
@@ -184,7 +156,6 @@ instance ControllerViewStores '[] where
 
 instance (ControllerViewStores rest, StoreData store, Typeable store)
    => ControllerViewStores (StoreArg store ': (rest :: [*])) where
-#ifdef __GHCJS__
   applyControllerViewFromJs _ p f st props i = do
     sval <- findFromState i st
     applyControllerViewFromJs (Proxy :: Proxy rest) p (f sval) st props (i+1)
@@ -194,14 +165,9 @@ instance (ControllerViewStores rest, StoreData store, Typeable store)
       storeT = typeRep (Proxy :: Proxy store)
   {-# INLINE applyControllerViewFromJs #-}
   {-# INLINE stateForView #-}
-#else
-  applyControllerViewFromJs _ _ _ _ _ _ = error "Views work only with GHCJS"
-  stateForView _ _ = error "Views work only with GHCJS"
-#endif
 
 instance (ControllerViewStores rest, StoreData store, HasField field store a, Typeable store, Typeable a)
    => ControllerViewStores (StoreField store field a ': (rest :: [*])) where
-#ifdef __GHCJS__
   applyControllerViewFromJs _ p f st props i = do
     sval <- findFromState i st
     applyControllerViewFromJs (Proxy :: Proxy rest) p (f sval) st props (i+1)
@@ -222,19 +188,16 @@ getStoreJs :: Typeable store => JSVal -> IO store
 getStoreJs arg = js_getDeriveInput arg >>= parseExport
 {-# NOINLINE getStoreJs #-} -- if this is inlined, GHCJS does not properly compile the getField callback
 
-#else
-  applyControllerViewFromJs _ _ _ _ _ _ = error "Views work only with GHCJS"
-  stateForView _ _ = error "Views work only with GHCJS"
-#endif
 
 ---------------------------------------------------------------------------------
 -- Public API Implementation
 ---------------------------------------------------------------------------------
 
-#ifdef __GHCJS__
-
+view_ :: forall props handler. ViewProps (props :: [*]) => View props -> JSString -> ViewPropsToElement props handler
 view_ (View ref) key = viewPropsToJs (Proxy :: Proxy props) (Proxy :: Proxy handler) ref key (const $ return ())
 
+mkView :: forall (props :: [*]). (ViewProps props, Typeable props, AllEq props)
+    => JSString -> ViewPropsToElement props ViewEventHandler -> View props
 mkView name buildNode = unsafePerformIO $ do
   renderCb <- syncCallback2 ContinueAsync $ \thisRef argRef -> do
     let this = ReactThis thisRef
@@ -245,24 +208,56 @@ mkView name buildNode = unsafePerformIO $ do
     evtCallbacksRef <- toJSVal evtCallbacks
     js_RenderCbSetResults arg evtCallbacksRef element
 
-  View <$> js_createNewView name renderCb
+  propsEq <- allEq (Proxy :: Proxy props)
+  View <$> js_createNewView name renderCb propsEq
 {-# NOINLINE mkView #-}
 
-mkStatefulView name initial buildNode = unsafePerformIO $ do
-    initialRef <- export initial
-    renderCb <- syncCallback2 ContinueAsync $ \thisRef argRef -> do
-      let this = ReactThis thisRef
-          arg = RenderCbArg argRef
-      props <- js_PropsList this
-      state <- js_ReactGetState this >>= parseExport
-      node <- applyViewPropsFromJs (Proxy :: Proxy props) (buildNode state) props 0
-      (element, evtCallbacks) <- mkReactElement (runStateViewHandler this) this node
-      evtCallbacksRef <- toJSVal evtCallbacks
-      js_RenderCbSetResults arg evtCallbacksRef element
+foreign import javascript unsafe
+    "hsreact$mk_new_view($1, $2, $3)"
+    js_createNewView
+        :: JSString
+        -> Callback (JSVal -> JSVal -> IO ())
+        -> Callback (JSVal -> JSVal -> IO JSVal)
+        -> IO (ReactViewRef props)
 
-    View <$> js_createNewStatefulView name initialRef renderCb
+mkStatefulView :: forall (state :: *) (props :: [*]).
+                  (Typeable state, NFData state, Typeable state, Eq state,
+                   ViewProps props, Typeable props, AllEq props)
+               => JSString -- ^ A name for this view, used only for debugging/console logging
+               -> state -- ^ The initial state
+               -> (state -> ViewPropsToElement props (StatefulViewEventHandler state))
+               -> View props
+mkStatefulView name initial buildNode = unsafePerformIO $ do
+  initialRef <- export initial
+  renderCb <- syncCallback2 ContinueAsync $ \thisRef argRef -> do
+    let this = ReactThis thisRef
+        arg = RenderCbArg argRef
+    props <- js_PropsList this
+    state <- js_ReactGetState this >>= parseExport
+    node <- applyViewPropsFromJs (Proxy :: Proxy props) (buildNode state) props 0
+    (element, evtCallbacks) <- mkReactElement (runStateViewHandler this) this node
+    evtCallbacksRef <- toJSVal evtCallbacks
+    js_RenderCbSetResults arg evtCallbacksRef element
+
+  propsEq <- allEq (Proxy :: Proxy props)
+  stateEq <- singleEq (Proxy :: Proxy state)
+  View <$> js_createNewStatefulView name initialRef renderCb propsEq stateEq
 {-# NOINLINE mkStatefulView #-}
 
+foreign import javascript unsafe
+    "hsreact$mk_new_stateful_view($1, $2, $3, $4, $5)"
+    js_createNewStatefulView
+        :: JSString
+        -> Export state
+        -> Callback (JSVal -> JSVal -> IO ())
+        -> Callback (JSVal -> JSVal -> IO JSVal)
+        -> Callback (JSVal -> JSVal -> IO JSVal)
+        -> IO (ReactViewRef props)
+
+mkControllerView :: forall (stores :: [*]) (props :: [*]).
+                    (ControllerViewStores stores, Typeable stores, AllEq stores,
+                     ViewProps props, Typeable props, AllEq props)
+                 => JSString -> ControllerViewToElement stores props ViewEventHandler -> View props
 mkControllerView name buildNode = unsafePerformIO $ do
   renderCb <- syncCallback2 ContinueAsync $ \thisRef argRef -> do
     let this = ReactThis thisRef
@@ -285,9 +280,22 @@ mkControllerView name buildNode = unsafePerformIO $ do
           js_addStoreDerivedState art i callback
     js_setArtifact artifacts (typeJsKey ty) art
 
-  View <$> js_createNewCtrlView name renderCb artifacts
+  propsEq <- allEq (Proxy :: Proxy props)
+  stateEq <- allEq (Proxy :: Proxy stores)
+  View <$> js_createNewCtrlView name renderCb artifacts propsEq stateEq
 {-# NOINLINE mkControllerView #-}
 
+foreign import javascript unsafe
+  "hsreact$mk_new_ctrl_view($1, $2, $3, $4, $5)"
+  js_createNewCtrlView
+    :: JSString
+    -> Callback (JSVal -> JSVal -> IO ())
+    -> Artifacts
+    -> Callback (JSVal -> JSVal -> IO JSVal)
+    -> Callback (JSVal -> JSVal -> IO JSVal)
+    -> IO (ReactViewRef props)
+
+exportReactViewToJavaScript :: forall (props :: [*]). (ExportViewProps props) => View props -> IO JSVal
 exportReactViewToJavaScript (View v) = do
     (_callbackToRelease, wrappedCb) <- exportNewViewToJs v $ \arr -> do
       props <- js_newEmptyPropList
@@ -295,6 +303,7 @@ exportReactViewToJavaScript (View v) = do
       return props
     return wrappedCb
 
+callbackRenderingView :: forall (props :: [*]) handler. (ExportViewProps props) => JSString -> View props -> PropertyOrHandler handler
 callbackRenderingView name (View v) = CallbackPropertyReturningNewView name v getProps
   where
     getProps arr = do
@@ -302,22 +311,10 @@ callbackRenderingView name (View v) = CallbackPropertyReturningNewView name v ge
       applyViewPropsFromArray (Proxy :: Proxy props) arr 0 props
       return props
 
-#else
-
-mkView _ _ = View (ReactViewRef ())
-view_ _ _ = error "Views work only in GHCJS"
-mkStatefulView _ _ _ = View (ReactViewRef ())
-mkControllerView _ _ = View (ReactViewRef ())
-exportReactViewToJavaScript _ = return ()
-callbackRenderingView _ _ = error "Views only work in GHCJS"
-
-#endif
 
 --------------------------------------------------------------------------------
 -- Helpers
 --------------------------------------------------------------------------------
-
-#ifdef __GHCJS__
 
 -- | Transform a controller view handler to a raw handler.
 runViewHandler :: ReactThis state props -> ViewEventHandler -> IO ()
@@ -360,14 +357,6 @@ foreign import javascript unsafe
 foreign import javascript unsafe
   "$1.push($2)"
   js_pushProp :: NewJsProps -> Export a -> IO ()
-
-foreign import javascript unsafe
-    "hsreact$mk_new_view($1, $2)"
-    js_createNewView :: JSString -> Callback (JSVal -> JSVal -> IO ()) -> IO (ReactViewRef props)
-
-foreign import javascript unsafe
-    "hsreact$mk_new_stateful_view($1, $2, $3)"
-    js_createNewStatefulView :: JSString -> Export state -> Callback (JSVal -> JSVal -> IO ()) -> IO (ReactViewRef props)
 
 getProp :: Typeable a => NewJsProps -> Int -> IO a
 getProp p i = js_getPropFromList p i >>= parseExport
@@ -419,10 +408,6 @@ foreign import javascript unsafe
   js_setArtifact :: Artifacts -> JSString -> Artifact -> IO ()
 
 foreign import javascript unsafe
-  "hsreact$mk_new_ctrl_view($1, $2, $3)"
-  js_createNewCtrlView :: JSString -> Callback (JSVal -> JSVal -> IO ()) -> Artifacts -> IO (ReactViewRef props)
-
-foreign import javascript unsafe
     "$1['state'].hs"
     js_ReactGetState :: ReactThis state props -> IO (Export state)
 
@@ -436,5 +421,3 @@ instance IsJSVal RenderCbArg
 foreign import javascript unsafe
     "$1.newCallbacks = $2; $1.elem = $3;"
     js_RenderCbSetResults :: RenderCbArg -> JSVal -> ReactElementRef -> IO ()
-
-#endif

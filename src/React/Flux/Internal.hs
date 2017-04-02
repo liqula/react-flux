@@ -12,7 +12,6 @@ module React.Flux.Internal(
   , HandlerArg(..)
   , PropertyOrHandler(..)
   , property
-  , (&=)
   , ReactElement(..)
   , ReactElementM(..)
   , transHandler
@@ -28,16 +27,24 @@ module React.Flux.Internal(
   , exportNewViewToJs
   , toJSString
   , JSString
+  , ($=)
+  , (&=)
+  , (@=)
+  , classNames
+  , classNamesLast
+  , classNamesAny
 ) where
 
+import           Control.DeepSeq
 import           Data.String (IsString(..))
-import           Data.Aeson
+import           Data.Aeson as A
+import qualified Data.HashMap.Strict as M
 import           Data.Typeable (Typeable)
 import           Control.Monad.Writer
 import           Control.Monad.Identity (Identity(..))
 import qualified Data.Text as T
+import           GHC.Generics
 
-#ifdef __GHCJS__
 import           Unsafe.Coerce
 import qualified Data.JSString as JSS
 import qualified Data.JSString.Text as JSS
@@ -49,20 +56,6 @@ import           GHCJS.Types (JSVal, JSString, IsJSVal, jsval)
 import           GHCJS.Marshal (ToJSVal(..))
 import           GHCJS.Foreign (jsNull)
 import           React.Flux.Export
-#else
-import Data.Text (Text)
-type JSVal = ()
-class ToJSVal a
-instance ToJSVal Value
-instance ToJSVal Text
-instance ToJSVal ()
-class IsJSVal a
-type JSArray = JSVal
-type JSString = String
-instance IsJSVal JSVal
-instance IsJSVal JSString
-instance ToJSVal JSString
-#endif
 
 -- type JSObject a = JSO.Object a
 
@@ -76,7 +69,9 @@ instance IsJSVal ReactElementRef
 
 -- | The first parameter of an event handler registered with React.
 newtype HandlerArg = HandlerArg JSVal
+  deriving (Generic)
 instance IsJSVal HandlerArg
+instance NFData HandlerArg
 
 -- | The this value during the rendering function
 newtype ReactThis state props = ReactThis {reactThisRef :: JSVal }
@@ -142,11 +137,6 @@ instance Functor PropertyOrHandler where
 -- | Create a property from anything that can be converted to a JSVal
 property :: ToJSVal val => JSString -> val -> PropertyOrHandler handler
 property = Property
-
--- | Create a property for anything that can be converted to a javascript value using the @ToJSVal@
--- class from the @ghcjs-base@ package..  This is just an infix version of 'property'.
-(&=) :: ToJSVal a => JSString -> a -> PropertyOrHandler handler
-n &= a = Property n a
 
 -- | A React element is a node or list of nodes in a virtual tree.  Elements are the output of the
 -- rendering functions of classes.  React takes the output of the rendering function (which is a
@@ -249,11 +239,7 @@ elemString s = elementToM () $ Content $ toJSString s
 
 -- | Create a text element from a text value. The text content is escaped to be HTML safe.
 elemText :: T.Text -> ReactElementM eventHandler ()
-#ifdef __GHCJS__
 elemText s = elementToM () $ Content $ JSS.textToJSString s
-#else
-elemText s = elementToM () $ Content $ T.unpack s
-#endif
 
 -- | Create a text element from a @JSString@.  This is more efficient for hard-coded strings than
 -- converting from text to a JavaScript string.  The string is escaped to be HTML safe.
@@ -294,9 +280,6 @@ mkReactElement :: forall eventHandler state props.
                -> ReactThis state props -- ^ this
                -> ReactElementM eventHandler ()
                -> IO (ReactElementRef, [CallbackToRelease])
-
-#ifdef __GHCJS__
-
 mkReactElement runHandler this = runWriterT . mToElem
     where
         -- Run the ReactElementM monad to create a ReactElementRef.
@@ -490,15 +473,45 @@ exportNewViewToJs view toProps = do
     wrappedCb <- js_wrapCallbackReturningElement cb
     return (jsval cb, wrappedCb)
 
-#else
-mkReactElement _ _ _ = return (ReactElementRef (), [])
 
-toJSString :: String -> String
-toJSString = id
+----------------------------------------------------------------------------------------------------
+--- Combinators
+----------------------------------------------------------------------------------------------------
 
-exportViewToJs :: Typeable props => ReactViewRef props -> (JSArray -> IO props) -> IO (CallbackToRelease, JSVal)
-exportViewToJs _ _ = return ((), ())
+-- | Create a text-valued property.  This is here to avoid problems when OverloadedStrings extension
+-- is enabled
+($=) :: JSString -> JSString -> PropertyOrHandler handler
+n $= a = Property n a
+infixr 0 $=
 
-exportNewViewToJs :: Typeable props => ReactViewRef props -> (JSArray -> IO NewJsProps) -> IO (CallbackToRelease, JSVal)
-exportNewViewToJs _ _ = return ((), ())
-#endif
+-- | Create a property for anything that can be converted to a javascript value using the @ToJSVal@
+-- class from the @ghcjs-base@ package..  This is just an infix version of 'property'.
+(&=) :: ToJSVal a => JSString -> a -> PropertyOrHandler handler
+n &= a = Property n a
+infixr 0 &=
+
+-- | Create a property from any aeson value (the at sign looks like "A" for aeson)
+(@=) :: A.ToJSON a => JSString -> a -> PropertyOrHandler handler
+n @= a = Property n (A.toJSON a)
+infixr 0 @=
+
+{-# DEPRECATED classNames "use classNamesLast" #-}
+classNames :: [(T.Text, Bool)] -> PropertyOrHandler handler
+classNames = classNamesLast
+
+-- | Set the <https://facebook.github.io/react/docs/class-name-manipulation.html className> property to consist
+-- of all the names which are matched with True, allowing you to easily toggle class names based on
+-- a computation.
+--
+-- If a class is mentioned more than once, all but the *last* mentioning in the list are overruled.
+-- See also: 'classNameAny'.
+classNamesLast :: [(T.Text, Bool)] -> PropertyOrHandler handler
+classNamesLast xs = "className" @= T.intercalate " " names
+  where
+    names = M.keys $ M.filter id $ M.fromList xs
+
+-- | Variant of 'classNamesLast' that yields any class that has *any* flag set to 'True'.
+classNamesAny :: [(T.Text, Bool)] -> PropertyOrHandler handler
+classNamesAny xs = "className" @= T.intercalate " " names
+  where
+    names = M.keys $ M.fromList $ filter snd xs

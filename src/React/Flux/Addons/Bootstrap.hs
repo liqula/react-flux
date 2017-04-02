@@ -13,10 +13,8 @@ module React.Flux.Addons.Bootstrap (
 
 import React.Flux
 
-#ifdef __GHCJS__
 import GHCJS.Types (JSVal, JSString)
 import React.Flux.Internal (toJSString)
-#endif
 
 -- | A bootstrap <http://react-bootstrap.github.io/components.html component>.  For example,
 --
@@ -40,16 +38,8 @@ bootstrap_ :: String
            -> ReactElementM eventHandler a -- ^ The child or children of the component.
            -> ReactElementM eventHandler a
 
-#ifdef __GHCJS__
-
 bootstrap_ n = foreignClass (js_ReactBootstrap $ toJSString n)
 
 foreign import javascript unsafe
     "window['ReactBootstrap'][$1]"
     js_ReactBootstrap :: JSString -> JSVal
-
-#else
-
-bootstrap_ _ _ x = x
-
-#endif

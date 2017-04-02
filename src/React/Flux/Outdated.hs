@@ -4,14 +4,11 @@
 module React.Flux.Outdated
   ( ReactStore
   , SomeStoreAction(..)
-  , mkStore
+  , unsafeMkStore
   , getStoreData
   , alterStore
   , ReactView
   , ReactViewKey(..)
-  , defineControllerView
-  , defineView
-  , defineStatefulView
   , ViewEventHandler
   , StatefulViewEventHandler
   , exportViewToJavaScript
@@ -42,9 +39,9 @@ import Data.Text
 import React.Flux.Store
 import React.Flux.Internal
 import React.Flux.Views (ViewEventHandler, StatefulViewEventHandler)
+import React.Flux.ForeignEq (singleEq)
 import React.Flux.DOM (div_)
 
-#ifdef __GHCJS__
 import System.IO.Unsafe (unsafePerformIO)
 import React.Flux.Export
 import JavaScript.Array
@@ -54,14 +51,6 @@ import GHCJS.Types (JSVal, IsJSVal, nullRef, jsval)
 import GHCJS.Marshal (ToJSVal(..), FromJSVal(..))
 import GHCJS.Marshal.Pure (PToJSVal(..))
 import qualified JavaScript.Array as JSA
-
-#else
-type JSVal = ()
-type JSArray = ()
-class FromJSVal a
-pToJSVal :: a -> JSVal
-pToJSVal _ = ()
-#endif
 
 
 -- | A view is conceptually a rendering function from @props@ and some internal state to a tree of elements.  The function
@@ -81,195 +70,6 @@ pToJSVal _ = ()
 -- a single @li@ element).
 newtype ReactView props = ReactView { reactView :: ReactViewRef props }
 
----------------------------------------------------------------------------------------------------
---- Two versions of defineControllerView
----------------------------------------------------------------------------------------------------
-
--- | A controller view provides the glue between a 'ReactStore' and the DOM.
--- The controller-view registers with the given store, and whenever the store is transformed the
--- controller-view re-renders itself.  Each instance of a controller-view also accepts properties of
--- type @props@ from its parent.  Whenever the parent re-renders itself, the new properties will be
--- passed down to the controller-view causing it to re-render itself.
---
--- Events registered on controller-views are expected to produce lists of 'SomeStoreAction'.  Since
--- lists of 'SomeStoreAction' are the output of the dispatcher, each event handler should just be a
--- call to a dispatcher function.  Once the event fires, the actions are executed causing the
--- store(s) to transform which leads to the controller-view(s) re-rendering.  This one-way flow of
--- data from actions to store to controller-views is central to the flux design.
---
--- It is recommended to have one controller-view for each
--- significant section of the page.  Controller-views deeper in the page tree can cause complexity
--- because data is now flowing into the page in multiple possibly conflicting places.  You must
--- balance the gain of encapsulated components versus the complexity of multiple entry points for
--- data into the page.  Note that multiple controller views can register with the same store.
---
--- >todoApp :: ReactView ()
--- >todoApp = defineControllerView "todo app" todoStore $ \todoState () ->
--- >    div_ $ do
--- >        todoHeader_
--- >        mainSection_ todoState
--- >        todoFooter_ todoState
-defineControllerView :: (StoreData storeData, Typeable props)
-                 => JSString -- ^ A name for this view, used only for debugging/console logging
-                 -> ReactStore storeData -- ^ The store this controller view should attach to.
-                 -> (storeData -> props -> ReactElementM ViewEventHandler ()) -- ^ The rendering function
-                 -> ReactView props
-
-#ifdef __GHCJS__
-
-defineControllerView name (ReactStore store _) buildNode = unsafePerformIO $ do
-    let render sd props = return $ buildNode sd props
-    renderCb <- mkRenderCallback (js_ReactGetState >=> parseExport) runViewHandler render
-    ReactView <$> js_createControllerView name store renderCb
-
--- | Transform a controller view handler to a raw handler.
-runViewHandler :: ReactThis state props -> ViewEventHandler -> IO ()
-runViewHandler _ handler = handler `deepseq` mapM_ executeAction handler
-
-#else
-
-defineControllerView _ _ _ = ReactView (ReactViewRef ())
-
-#endif
-
-{-# NOINLINE defineControllerView #-}
-
----------------------------------------------------------------------------------------------------
---- Two versions of defineView
----------------------------------------------------------------------------------------------------
-
--- | A view is a re-usable component of the page which accepts properties of type @props@ from its
--- parent and re-renders itself whenever the properties change.
---
--- One option to implement views is to just use a Haskell function taking the @props@ as input and
--- producing a 'ReactElementM'.  For small views, such a Haskell function is ideal.
--- Using a 'ReactView' provides more than just a Haskell function when used with a key property with
--- 'viewWithSKey' and 'viewWithIKey'.  The key property allows React to more easily reconcile the virtual DOM with the
--- browser DOM.
---
--- The following is two example views: @mainSection_@ is just a Haskell function and @todoItem@
--- is a React view.  We use the convention that an underscore suffix signifies a combinator
--- which can be used in the rendering function.
---
--- >mainSection_ :: TodoState -> ReactElementM ViewEventHandler ()
--- >mainSection_ st = section_ ["id" $= "main"] $ do
--- >    input_ [ "id" $= "toggle-all"
--- >           , "type" $= "checkbox"
--- >           , "checked" $= if all (todoComplete . snd) $ todoList st then "checked" else ""
--- >           , onChange $ \_ -> dispatchTodo ToggleAllComplete
--- >           ]
--- >
--- >    label_ [ "htmlFor" $= "toggle-all"] "Mark all as complete"
--- >    ul_ [ "id" $= "todo-list" ] $ mapM_ todoItem_ $ todoList st
--- >
--- >todoItem :: ReactView (Int, Todo)
--- >todoItem = defineView "todo item" $ \(todoIdx, todo) ->
--- >    li_ [ classNames [("completed", todoComplete todo), ("editing", todoIsEditing todo)]
--- >        , "key" @= todoIdx
--- >        ] $ do
--- >
--- >        div_ [ "className" $= "view"] $ do
--- >            input_ [ "className" $= "toggle"
--- >                   , "type" $= "checkbox"
--- >                   , "checked" @= todoComplete todo
--- >                   , onChange $ \_ -> dispatchTodo $ TodoSetComplete todoIdx $ not $ todoComplete todo
--- >                   ]
--- >
--- >            label_ [ onDoubleClick $ \_ _ -> dispatchTodo $ TodoEdit todoIdx] $
--- >                elemText $ todoText todo
--- >
--- >            button_ [ "className" $= "destroy"
--- >                    , onClick $ \_ _ -> dispatchTodo $ TodoDelete todoIdx
--- >                    ] mempty
--- >
--- >        when (todoIsEditing todo) $
--- >            todoTextInput_ TextInputArgs
--- >                { tiaId = Nothing
--- >                , tiaClass = "edit"
--- >                , tiaPlaceholder = ""
--- >                , tiaOnSave = dispatchTodo . UpdateText todoIdx
--- >                , tiaValue = Just $ todoText todo
--- >                }
--- >
--- >todoItem_ :: (Int, Todo) -> ReactElementM eventHandler ()
--- >todoItem_ !todo = viewWithIKey todoItem (fst todo) todo mempty
-defineView :: Typeable props
-       => JSString -- ^ A name for this view, used only for debugging/console logging
-       -> (props -> ReactElementM ViewEventHandler ()) -- ^ The rendering function
-       -> ReactView props
-
-#ifdef __GHCJS__
-
-defineView name buildNode = unsafePerformIO $ do
-    let render () props = return $ buildNode props
-    renderCb <- mkRenderCallback (const $ return ()) runViewHandler render
-    ReactView <$> js_createView name renderCb
-
-#else
-
-defineView _ _ = ReactView (ReactViewRef ())
-
-#endif
-
-{-# NOINLINE defineView #-}
-
----------------------------------------------------------------------------------------------------
---- Two versions of defineStatefulView
----------------------------------------------------------------------------------------------------
-
--- | A stateful view is a re-usable component of the page which keeps track of internal state.
--- Try to keep as many views as possible stateless.  The React documentation on
--- <https://facebook.github.io/react/docs/interactivity-and-dynamic-uis.html interactivity and dynamic UIs>
--- has some discussion of what should and should not go into the state.
---
--- The rendering function is a pure function of the state and the properties from the parent.  The
--- view will be re-rendered whenever the state or properties change.  The only way to
--- transform the internal state of the view is via an event handler, which can optionally produce
--- new state.  Any more complicated state should be moved out into a (possibly new) store.
---
--- >data TextInputArgs = TextInputArgs {
--- >      tiaId :: Maybe JSString
--- >    , tiaClass :: JSString
--- >    , tiaPlaceholder :: JSString
--- >    , tiaOnSave :: Text -> [SomeStoreAction]
--- >    , tiaValue :: Maybe Text
--- >} deriving (Typeable)
--- >
--- >todoTextInput :: ReactView TextInputArgs
--- >todoTextInput = defineStatefulView "todo text input" "" $ \curText args ->
--- >    input_ $
--- >        maybe [] (\i -> ["id" &= i]) (tiaId args)
--- >        ++
--- >        [ "className" &= tiaClass args
--- >        , "placeholder" &= tiaPlaceholder args
--- >        , "value" &= curText
--- >        , "autoFocus" &= True
--- >        , onChange $ \evt _ -> ([], Just $ target evt "value")
--- >        , onBlur $ \_ _ curState ->
--- >             if not (Text.null curState)
--- >                 then (tiaOnSave args curState, Just "")
--- >                 else ([], Nothing)
--- >        , onKeyDown $ \_ evt curState ->
--- >             if keyCode evt == 13 && not (Text.null curState) -- 13 is enter
--- >                 then (tiaOnSave args curState, Just "")
--- >                 else ([], Nothing)
--- >        ]
--- >
--- >todoTextInput_ :: TextInputArgs -> ReactElementM eventHandler ()
--- >todoTextInput_ !args = view todoTextInput args mempty
-defineStatefulView :: (Typeable state, NFData state, Typeable props)
-               => JSString -- ^ A name for this view, used only for debugging/console logging
-               -> state -- ^ The initial state
-               -> (state -> props -> ReactElementM (StatefulViewEventHandler state) ()) -- ^ The rendering function
-               -> ReactView props
-
-#ifdef __GHCJS__
-
-defineStatefulView name initial buildNode = unsafePerformIO $ do
-    initialRef <- export initial
-    let render state props = return $ buildNode state props
-    renderCb <- mkRenderCallback (js_ReactGetState >=> parseExport) runStateViewHandler render
-    ReactView <$> js_createStatefulView name initialRef renderCb
 
 -- | Transform a stateful view event handler to a raw event handler
 runStateViewHandler :: (Typeable state, NFData state)
@@ -289,13 +89,6 @@ runStateViewHandler this handler = do
     -- so the deepseq of actions should still pick up the proper event object.
     actions `deepseq` mapM_ executeAction actions
 
-#else
-
-defineStatefulView _ _ _ = ReactView (ReactViewRef ())
-
-#endif
-
-{-# NOINLINE defineStatefulView #-}
 
 ---------------------------------------------------------------------------------------------------
 --- Class
@@ -304,8 +97,6 @@ defineStatefulView _ _ _ = ReactView (ReactViewRef ())
 ---------------------------------------------------------------------------------------------------
 --- Various GHCJS only utilities
 ---------------------------------------------------------------------------------------------------
-
-#ifdef __GHCJS__
 
 foreign import javascript unsafe
     "$1['state'].hs"
@@ -327,32 +118,12 @@ foreign import javascript unsafe
     js_RenderCbSetResults :: RenderCbArg -> JSVal -> ReactElementRef -> IO ()
 
 foreign import javascript unsafe
-    "hsreact$mk_ctrl_view($1, $2, $3)"
-    js_createControllerView :: JSString
-                            -> ReactStoreRef storeData
-                            -> Callback (JSVal -> JSVal -> IO ())
-                            -> IO (ReactViewRef props)
-
--- | Create a view with no state.
-foreign import javascript unsafe
-    "hsreact$mk_view($1, $2)"
-    js_createView :: JSString
-                  -> Callback (JSVal -> JSVal -> IO ())
-                  -> IO (ReactViewRef props)
-
--- | Create a view which tracks its own state.  Similar releasing needs to happen for callbacks and
--- properties as for controller views.
-foreign import javascript unsafe
-    "hsreact$mk_stateful_view($1, $2, $3)"
-    js_createStatefulView :: JSString
-                          -> Export state
-                          -> Callback (JSVal -> JSVal -> IO ())
-                          -> IO (ReactViewRef props)
-
-foreign import javascript unsafe
-    "hsreact$mk_lifecycle_view($1, $2, $3, $4, $5, $6, $7, $8, $9)"
+    "hsreact$mk_lifecycle_view($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)"
     js_makeLifecycleView :: JSString -> Export state -> Callback (JSVal -> JSVal -> IO ())
-                         -> JSVal -> JSVal -> JSVal -> JSVal -> JSVal -> JSVal -> IO (ReactViewRef props)
+                         -> JSVal -> JSVal -> JSVal -> JSVal -> JSVal -> JSVal
+                         -> Callback (JSVal -> JSVal -> IO JSVal)
+                         -> Callback (JSVal -> JSVal -> IO JSVal)
+                         -> IO (ReactViewRef props)
 
 mkRenderCallback :: Typeable props
                  => (ReactThis state props -> IO state) -- ^ parse state
@@ -369,8 +140,6 @@ mkRenderCallback parseState runHandler render = syncCallback2 ContinueAsync $ \t
 
     evtCallbacksRef <- toJSVal evtCallbacks
     js_RenderCbSetResults arg evtCallbacksRef element
-
-#endif
 
 
 ----------------------------------------------------------------------------------------------------
@@ -392,19 +161,11 @@ view rc props (ReactElementM child) =
 -- | Keys in React can either be strings or integers
 class ReactViewKey key where
     toKeyRef :: key -> JSVal
-#if __GHCJS__
 instance ReactViewKey String where
     toKeyRef = pToJSVal
 
 instance ReactViewKey Int where
     toKeyRef = pToJSVal
-#else
-instance ReactViewKey String where
-    toKeyRef = const ()
-
-instance ReactViewKey Int where
-    toKeyRef = const ()
-#endif
 
 -- | A deprecated way to create a view with a key which has problems when OverloadedStrings is
 -- active.  Use 'viewWithSKey' or 'viewWithIKey' instead.
@@ -464,14 +225,10 @@ instance ArgumentsToProps props (ReturnProps props) where
     returnViewFromArguments _ _ (ReturnProps v) = return v
 
 instance (FromJSVal a, ArgumentsToProps props b) => ArgumentsToProps props (a -> b) where
-#if __GHCJS__
     returnViewFromArguments args k f = do
         ma <- fromJSVal $ if k >= JSA.length args then nullRef else JSA.index k args
         a <- maybe (error "Unable to decode callback argument") return ma
         returnViewFromArguments args (k+1) $ f a
-#else
-    returnViewFromArguments _ _ _ = error "Not supported in GHC"
-#endif
 
 -- | Export a Haskell view to a JavaScript function.  This allows you to embed a Haskell react-flux
 -- application into a larger existing JavaScript React application.  If you want to use JavaScript
@@ -516,7 +273,7 @@ instance (FromJSVal a, ArgumentsToProps props b) => ArgumentsToProps props (a ->
 --
 -- 4. Call the javascript function with two arguments to return a React element which can be used
 -- in a JavaScript React class rendering function.
--- 
+--
 --       @
 --       var myJsView = React.createClass({
 --           render: function() {
@@ -530,7 +287,7 @@ exportViewToJavaScript v func = do
     return wrappedCb
 
 -- | Create a zero-argument callback property.  When this callback function is executed, it
--- will render the given view and return the resulting React element.  If you need to 
+-- will render the given view and return the resulting React element.  If you need to
 -- create a callback which expects arguments, use 'callbackViewWithProps' instead.
 callbackView :: JSString -> ReactView () -> PropertyOrHandler handler
 callbackView name v = CallbackPropertyReturningView name (const $ return ()) (reactView v)
@@ -636,10 +393,9 @@ lifecycleConfig = LifecycleViewConfig
 -- >            { lRender = \state props -> ...
 -- >            , lComponentWillMount = \propsAndState setStateFn -> ...
 -- >            }
-defineLifecycleView :: (Typeable props, Typeable state, NFData state)
+{-# NOINLINE defineLifecycleView #-}
+defineLifecycleView :: forall props state . (Typeable props, Eq props, Typeable state, NFData state, Eq state)
               => String -> state -> LifecycleViewConfig props state -> ReactView props
-
-#ifdef __GHCJS__
 
 defineLifecycleView name initialState cfg = unsafePerformIO $ do
     initialRef <- export initialState
@@ -678,14 +434,18 @@ defineLifecycleView name initialState cfg = unsafePerformIO $ do
     willUnmountCb <- mkLCallback1 (lComponentWillUnmount cfg) $ \f this ->
         f (dom this)
 
+    compState <- singleEq (Proxy :: Proxy state)
+    compProps <- singleEq (Proxy :: Proxy props)
+
     -- willMountCbRef <- toJSVal willMountCb
     -- didMountCbRef <- toJSVal didMountCb
     -- willRecvPropsCbRef <- toJSVal willRecvPropsCb
     -- willUpdateCbRef  <- toJSVal willUpdateCb
     -- didUpdateCbRef   <- toJSVal didUpdateCb
     -- willUnmountCbRef <- toJSVal willUnmountCb
+
     ReactView <$> js_makeLifecycleView (toJSString name) initialRef
-      renderCb willMountCb didMountCb willRecvPropsCb willUpdateCb didUpdateCb willUnmountCb
+      renderCb willMountCb didMountCb willRecvPropsCb willUpdateCb didUpdateCb willUnmountCb compProps compState
 
 mkLCallback1 :: (Typeable props, Typeable state)
              => Maybe (LPropsAndState props state -> f)
@@ -726,13 +486,6 @@ foreign import javascript unsafe
     "typeof ReactDOM === 'object' ? $1['refs'][$2] : React['findDOMNode']($1['refs'][$2])"
     js_ReactGetRef :: ReactThis state props -> JSString -> IO JSVal
 
-#else
-
-defineLifecycleView _ _ _ = ReactView $ ReactViewRef ()
-
-#endif
-
-{-# NOINLINE defineLifecycleView #-}
 
 ----------------------------------------------------------------------------------------------------
 -- reactRender has two versions
@@ -747,9 +500,6 @@ reactRender :: Typeable props
             -> ReactView props -- ^ A single instance of this view is created
             -> props -- ^ the properties to pass to the view
             -> IO ()
-
-#ifdef __GHCJS__
-
 reactRender htmlId rc props = do
     (e, _) <- mkReactElement id (ReactThis nullRef) $ view rc props mempty
     js_ReactRender e (toJSString htmlId)
@@ -757,12 +507,6 @@ reactRender htmlId rc props = do
 foreign import javascript unsafe
     "(typeof ReactDOM === 'object' ? ReactDOM : React)['render']($1, document.getElementById($2))"
     js_ReactRender :: ReactElementRef -> JSString -> IO ()
-
-#else
-
-reactRender _ _ _ = error "reactRender only works when compiled with GHCJS, because we rely on the javascript React code."
-
-#endif
 
 -- | Render your React application to a string using either @ReactDOMServer.renderToString@ if the first
 -- argument is false or @ReactDOMServer.renderToStaticMarkup@ if the first argument is true.
@@ -779,9 +523,6 @@ reactRenderToString :: Typeable props
                     -> ReactView props -- ^ A single instance of this view is created
                     -> props -- ^ the properties to pass to the view
                     -> IO Text
-
-#ifdef __GHCJS__
-
 reactRenderToString includeStatic rc props = do
     (e, _) <- mkReactElement id (ReactThis nullRef) $ view rc props mempty
     sRef <- (if includeStatic then js_ReactRenderStaticMarkup else js_ReactRenderToString) e
@@ -797,9 +538,3 @@ foreign import javascript unsafe
 foreign import javascript unsafe
     "(typeof ReactDOMServer === 'object' ? ReactDOMServer : (typeof ReactDOM === 'object' ? ReactDOM : React))['renderToStaticMarkup']($1)"
     js_ReactRenderStaticMarkup :: ReactElementRef -> IO JSVal
-
-#else
-
-reactRenderToString _ _ _ = error "reactRenderToString only works when compiled with GHCJS, because we rely on the javascript React code."
-
-#endif

@@ -8,9 +8,12 @@ module React.Flux.Store (
   -- * Old Stores
   , SomeStoreAction(..)
   , ReactStore(..)
-  , mkStore
+  , unsafeMkStore
   , getStoreData
   , alterStore
+  , modifyStore
+  , modifyStoreNoCommit
+  , storeCommit
   , executeAction
 
   -- * New Stores
@@ -24,22 +27,42 @@ module React.Flux.Store (
   , typeJsKey
 ) where
 
-import Control.Concurrent.MVar (MVar, newMVar, modifyMVar_, readMVar)
+import Control.Concurrent.MVar (MVar, newMVar, modifyMVar, modifyMVar_, readMVar, withMVar)
 import Control.DeepSeq
 import Data.Typeable
+import GHC.Generics (Generic)
 import System.IO.Unsafe (unsafePerformIO)
 
-#ifdef __GHCJS__
 import Data.Monoid ((<>))
 import GHCJS.Types (JSVal, isNull, IsJSVal, JSString)
 import React.Flux.Export
 import GHC.Fingerprint.Type
-import Data.JSString.Int (decimal)
-#else
-type JSVal = ()
-type JSString = ()
-class IsJSVal a
-#endif
+import qualified Data.JSString.Int as JSString (decimal)
+import qualified Data.JSString as JSString
+import Data.Word (Word64)
+
+-- | See https://github.com/ghcjs/ghcjs/issues/570 for details.
+decimal_workaround_570 :: Word64 -> JSString
+decimal_workaround_570 w = dropleadingzeros . mconcat $ showpadded <$> chunks
+  where
+    n :: Integer -> Integer
+    n i = 10^(5 * i)
+
+    chunks :: [Integer]
+    chunks =
+      [ (fromIntegral w `div` (n 3)) `mod` n 1
+      , (fromIntegral w `div` (n 2)) `mod` n 1
+      , (fromIntegral w `div` (n 1)) `mod` n 1
+      , fromIntegral w               `mod` n 1
+      ]
+
+    showpadded :: Integer -> JSString
+    showpadded i = JSString.reverse . JSString.take 5 . JSString.reverse
+                 $ JSString.pack "00000" <> JSString.decimal i
+
+    dropleadingzeros :: JSString -> JSString
+    dropleadingzeros = JSString.dropWhile (== '0')
+
 
 -- | A store contains application state, receives actions from the dispatcher, and notifies
 -- controller-views to re-render themselves.  You can have multiple stores; it should be the case
@@ -130,6 +153,7 @@ executeAction (SomeNewStoreAction p a) = transformStore p a
 
 -- | This type is used to represent the foreign javascript object part of the store.
 newtype ReactStoreRef storeData = ReactStoreRef JSVal
+  deriving (Generic)
 instance IsJSVal (ReactStoreRef storeData)
 
 data NewReactStoreHS = NewReactStoreHS {
@@ -146,15 +170,16 @@ data ReactStore storeData = ReactStore {
     -- effectively operates as a lock allowing only one thread to modify the store at any one time.
     -- This lock is safe because only the 'alterStore' function ever writes this MVar.
   , storeData :: MVar storeData
-}
+} deriving (Generic)
 
 ----------------------------------------------------------------------------------------------------
 -- Store operations
 ----------------------------------------------------------------------------------------------------
 
 -- | Create a store from the initial data.
-mkStore :: StoreData storeData => storeData -> ReactStore storeData
-{-# NOINLINE mkStore #-}
+unsafeMkStore :: StoreData storeData => storeData -> ReactStore storeData
+{-# NOINLINE unsafeMkStore #-}
+mkStore :: StoreData storeData => storeData -> IO (ReactStore storeData)
 
 -- | Register the initial store data.  This function must be called exactly once from your main function before
 -- the initial rendering occurs.  Store data is global and so there can be only one store data value for each
@@ -168,6 +193,9 @@ registerInitialStore :: forall storeData. (Typeable storeData, StoreData storeDa
 -- Only a single thread can be transforming the store at any one time, so this function will block
 -- on an 'MVar' waiting for a previous transform to complete if one is in process.
 alterStore :: StoreData storeData => ReactStore storeData -> StoreAction storeData -> IO ()
+modifyStoreNoCommit :: Typeable storeData => ReactStore storeData -> (storeData -> IO (storeData, result)) -> IO result
+modifyStore :: Typeable storeData => ReactStore storeData -> (storeData -> IO (storeData, result)) -> IO result
+storeCommit :: Typeable storeData => ReactStore storeData -> IO ()
 
 -- | First, 'transform' the store data according to the given action and then notify all registered
 -- controller-views to re-render themselves.
@@ -195,8 +223,6 @@ getStoreData (ReactStore _ mvar) = readMVar mvar
 
 typeJsKey :: TypeRep -> JSString
 
-#ifdef __GHCJS__
-
 -- | The new type of stores, introduced in version 1.3, keep the data in a javascript dictionary indexed
 -- by the fingerprint of the type.  This allows any code to lookup the store by knowing the type.
 newtype NewReactStore storeData = NewReactStore JSVal
@@ -206,12 +232,14 @@ instance IsJSVal (NewReactStore storeData)
 storeJsKey :: Typeable ty => Proxy ty -> JSString
 storeJsKey p = typeJsKey (typeRep p)
 
-typeJsKey t = decimal f1 <> "-" <> decimal f2
+typeJsKey t = decimal_workaround_570 f1 <> "-" <> decimal_workaround_570 f2
   where
     Fingerprint f1 f2 = typeRepFingerprint t
 
 -- old store API
-mkStore initial = unsafePerformIO $ do
+unsafeMkStore = unsafePerformIO . mkStore
+
+mkStore initial = do
     i <- export initial
     ref <- js_createOldStore i
     storeMVar <- newMVar initial
@@ -227,7 +255,21 @@ registerInitialStore initial = do
 -- old transform
 alterStore store action = modifyMVar_ (storeData store) $ \oldData -> do
     newData <- transform action oldData
+    updateStoreInternal store newData
+    return newData
 
+modifyStoreNoCommit store action = modifyMVar (storeData store) action
+
+storeCommit store = withMVar (storeData store) $ \dat ->
+    updateStoreInternal store dat
+
+modifyStore store action = modifyMVar (storeData store) $ \oldData -> do
+    result@(newData, _) <- action oldData
+    updateStoreInternal store newData
+    return result
+
+updateStoreInternal :: forall storeData. Typeable storeData => ReactStore storeData -> storeData -> IO ()
+updateStoreInternal store newData = do
     -- There is a hack in PropertiesAndEvents that the fake event store for propagation and prevent
     -- default does not have a javascript store, so the store is nullRef.
     case storeRef store of
@@ -235,8 +277,6 @@ alterStore store action = modifyMVar_ (storeData store) $ \oldData -> do
             newDataE <- export newData
             js_UpdateStore (storeRef store) newDataE
         _ -> return ()
-
-    return newData
 
 -- new transform
 transformStore _ action = do
@@ -288,23 +328,3 @@ foreign import javascript unsafe
 foreign import javascript unsafe
     "hsreact$transform_new_store($1, $2)"
     js_UpdateNewStore :: NewReactStore storeData -> Export storeData -> IO ()
-
-#else
-
-mkStore initial = unsafePerformIO $ do
-    storeMVar <- newMVar initial
-    return $ ReactStore (ReactStoreRef ()) storeMVar
-
-registerInitialStore _ = return ()
-
-alterStore store action = modifyMVar_ (storeData store) (transform action)
-
-readStoreData = error "Can't call readStoreRef from GHC, only GHCJS"
-
-transformStore _ _ = return ()
-
-typeJsKey _ = ()
-
-getNewStoreJs _ = return $ ReactStoreRef ()
-
-#endif

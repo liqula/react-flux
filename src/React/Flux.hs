@@ -120,10 +120,8 @@ import React.Flux.Combinators
 import React.Flux.Store
 import Data.Text (Text)
 
-#ifdef __GHCJS__
 import GHCJS.Types (nullRef, JSVal)
 import GHCJS.Marshal (fromJSVal)
-#endif
 
 -- | Render your React application into the DOM.  Use this from your @main@ function, and only in the browser.
 -- 'reactRender' only works when compiled with GHCJS (not GHC), because we rely on the React javascript code
@@ -147,8 +145,6 @@ reactRenderViewToString :: Bool -- ^ Render to static markup?  If true, this won
                         -> View '[] -- ^ A single instance of this view is created
                         -> IO Text
 
-#ifdef __GHCJS__
-
 reactRenderView htmlId (View rc) = do
   (e, _) <- mkReactElement id (ReactThis nullRef) $ elementToM () $ NewViewElement rc htmlId (const $ return ())
   js_ReactRender e htmlId
@@ -171,17 +167,11 @@ foreign import javascript unsafe
     "(typeof ReactDOMServer === 'object' ? ReactDOMServer : (typeof ReactDOM === 'object' ? ReactDOM : React))['renderToStaticMarkup']($1)"
     js_ReactRenderStaticMarkup :: ReactElementRef -> IO JSVal
 
-#else
 
-reactRenderView _ _ _ = error "reactRender only works when compiled with GHCJS, because we rely on the javascript React code."
-
-#endif
-
-
--- $performance 
+-- $performance
 --
 -- React obtains high <https://facebook.github.io/react/docs/advanced-performance.html performance> from two techniques: the
--- <https://facebook.github.io/react/docs/reconciliation.html virtual DOM/reconciliation> and 
+-- <https://facebook.github.io/react/docs/reconciliation.html virtual DOM/reconciliation> and
 -- <https://facebook.github.io/react/docs/events.html event handlers> registered on the document.
 --
 -- __Reconciliation__

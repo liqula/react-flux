@@ -3,8 +3,6 @@
 {-# OPTIONS_GHC -fno-warn-redundant-constraints #-}
 module React.Flux.Export where
 
-#ifdef __GHCJS__
-
 import Data.Typeable (Typeable)
 import Unsafe.Coerce
 
@@ -43,5 +41,3 @@ foreign import javascript unsafe
 
 unsafeDerefExport :: Typeable a => Export a -> IO a
 unsafeDerefExport e = unsafeCoerce <$> js_unsafeDeref e
-
-#endif

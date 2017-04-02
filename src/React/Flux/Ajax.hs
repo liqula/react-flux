@@ -14,33 +14,30 @@ module React.Flux.Ajax (
 import Data.Aeson
 import Data.Text (Text)
 import Data.Typeable (Typeable)
+import Data.String.Conversions (cs, (<>))
 import GHC.Generics (Generic)
 import React.Flux.Internal
 import React.Flux.Store
 
-#ifdef __GHCJS__
 import Control.Arrow ((***))
 import Control.DeepSeq (deepseq)
 import GHCJS.Foreign.Callback
 import GHCJS.Foreign (jsNull)
-import GHCJS.Marshal (ToJSVal(..), toJSVal_aeson, FromJSVal(..))
+import GHCJS.Marshal (ToJSVal(..))
 import GHCJS.Types (JSVal)
-import qualified Data.Text as T
+import qualified Data.JSString as JSS
 import qualified Data.JSString.Text as JSS
 
 import React.Flux.Export
-#endif
 
 -- | An optional timeout to use for @XMLHttpRequest.timeout@.
 -- When a request times out, a status code of 504 is set in 'respStatus' and the
 -- response handler executes.
 data RequestTimeout = TimeoutMilliseconds Int | NoTimeout
 
-#ifdef __GHCJS__
 instance ToJSVal RequestTimeout where
     toJSVal (TimeoutMilliseconds i) = toJSVal i
     toJSVal NoTimeout = pure jsNull
-#endif
 
 -- | The input to an AJAX request built using @XMLHttpRequest@.
 data AjaxRequest = AjaxRequest
@@ -48,7 +45,7 @@ data AjaxRequest = AjaxRequest
   , reqURI :: JSString
   , reqTimeout :: RequestTimeout
   , reqHeaders :: [(JSString, JSString)]
-  , reqBody :: JSVal
+  , reqBody :: JSString
   } deriving (Typeable, Generic)
 
 -- | The response after @XMLHttpRequest@ indicates that the @readyState@ is done.
@@ -59,7 +56,6 @@ data AjaxResponse = AjaxResponse
                              --   such as response headers.
   } deriving (Typeable, Generic)
 
-#ifdef __GHCJS__
 -- | GHCJS panics if we export the function directly, so wrap it in a data struct
 data HandlerWrapper = HandlerWrapper (AjaxResponse -> IO [SomeStoreAction])
     deriving Typeable
@@ -71,12 +67,10 @@ useHandler r (HandlerWrapper h) = do
     actions <- h r
     actions `deepseq` mapM_ executeAction actions
 {-# NOINLINE useHandler #-} -- if this is inlined, there is a bug in ghcjs
-#endif
 
 -- | If you are going to use 'ajax' or 'jsonAjax', you must call 'initAjax' once from your main
 -- function.  The call should appear before the call to 'reactRender'.
 initAjax :: IO ()
-#ifdef __GHCJS__
 initAjax = do
     return ()
     a <- asyncCallback2 $ \rawXhr h -> do
@@ -88,23 +82,16 @@ initAjax = do
         parseExport e >>= useHandler resp
 
     js_setAjaxCallback a
-#else
-initAjax = return ()
-#endif
 
 -- | Use @XMLHttpRequest@ to send a request to the backend.  Once the response arrives
 -- and the @readyState@ is done, the response will be passed to the given handler and the resulting
 -- actions will be executed.  Note that 'ajax' returns immedietly and does not wait for the request
 -- to finish.
 ajax :: AjaxRequest -> (AjaxResponse -> IO [SomeStoreAction]) -> IO ()
-#ifdef __GHCJS__
 ajax req handler = do
     reqJson <- toJSVal req
     handlerE <- export $ HandlerWrapper handler
     js_ajax reqJson handlerE
-#else
-ajax _ _ = return ()
-#endif
 
 -- | Use @XMLHttpRequest@ to send a request with a JSON body, parse the response body as JSON, and
 -- then dispatch some actions with the response.  This should be used from within the transform
@@ -142,7 +129,7 @@ ajax _ _ = return ()
 -- >        return s { launchUpdate = PreviousUpdateHadError err }
 -- >
 -- >myStore :: ReactStore MyStore
--- >myStore = mkStore $ MyStore Nothing NoUpdatePending
+-- >myStore = unsafeMkStore $ MyStore Nothing NoUpdatePending
 --
 -- And then in your view, you can render this using something like:
 --
@@ -171,38 +158,28 @@ jsonAjax :: (ToJSON body, FromJSON response)
             --   * If the response status is @200@, the body will be parsed as JSON and a
             --     'Right' value will be passed to this handler.   If there is an
             --     error parsing the JSON response, a 'Left' value with @500@ and the error message
-            --     from aeson is given to the handler. 
+            --     from aeson is given to the handler.
             --
             --   * If the response status is anything besides @200@, a 'Left' value with a pair
             --     of the response status and response text is passed to the handler.
          -> IO ()
-#ifdef __GHCJS__
 jsonAjax timeout method uri headers body handler = do
-    bodyRef <- toJSVal_aeson body >>= js_JSONstringify
     let extraHeaders = [("Content-Type", "application/json"), ("Accept", "application/json")]
     let req = AjaxRequest
               { reqMethod = JSS.textToJSString method
               , reqURI = JSS.textToJSString uri
               , reqHeaders = extraHeaders ++ map (JSS.textToJSString *** JSS.textToJSString) headers
               , reqTimeout = timeout
-              , reqBody = bodyRef
+              , reqBody = JSS.pack . cs . encode $ body
               }
     ajax req $ \resp ->
-        if respStatus resp == 200
+        if respStatus resp < 300
             then do
-                j <- js_JSONParse $ respResponseText resp
-                mv <- fromJSVal j
-                case mv of
-                    Nothing -> handler $ Left (500, "Unable to convert response body")
-                    Just v -> case fromJSON v of
-                        Success v' -> handler $ Right v'
-                        Error e -> handler $ Left (500, T.pack e)
+                case eitherDecode . cs . JSS.unpack . respResponseText $ resp of
+                    Left err -> handler $ Left (500, "Unable to convert response body: " <> cs err)  -- TODO: this is not an HTTP error.
+                    Right v  -> handler $ Right v
             else handler $ Left (respStatus resp, JSS.textFromJSString $ respResponseText resp)
-#else
-jsonAjax _ _ _ _ _ _ = return ()
-#endif
 
-#ifdef __GHCJS__
 foreign import javascript unsafe
     "hsreact$ajax($1, $2)"
     js_ajax :: JSVal -> Export HandlerWrapper -> IO ()
@@ -210,14 +187,6 @@ foreign import javascript unsafe
 foreign import javascript unsafe
     "hsreact$setAjaxCallback($1)"
     js_setAjaxCallback :: Callback (JSVal -> JSVal -> IO ()) -> IO ()
-
-foreign import javascript unsafe
-    "JSON['parse']($1)"
-    js_JSONParse :: JSString -> IO JSVal
-
-foreign import javascript unsafe
-    "JSON['stringify']($1)"
-    js_JSONstringify :: JSVal -> IO JSVal
 
 foreign import javascript unsafe
     "$1.hs"
@@ -240,4 +209,3 @@ foreign import javascript unsafe
     js_release :: Export HandlerWrapper -> IO ()
 
 instance ToJSVal AjaxRequest
-#endif

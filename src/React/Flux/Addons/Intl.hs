@@ -87,7 +87,7 @@ module React.Flux.Addons.Intl(
   -- * Formatting
   , IntlProperty
   , iprop
-  
+
   -- ** Numbers
   , int_
   , double_
@@ -156,8 +156,6 @@ import qualified Data.HashMap.Strict as H
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 
-#ifdef __GHCJS__
-
 import GHCJS.Types (JSString, JSVal)
 import GHCJS.Marshal (ToJSVal(..))
 import qualified JavaScript.Object as JSO
@@ -202,63 +200,24 @@ foreign import javascript unsafe
     "$1['intl'][$2]($3, $4)"
     js_callContextAPI :: JSVal -> JSString -> JSVal -> JSO.Object -> IO JSVal
 
-#else
-
-type JSVal = ()
-
-js_intlProvider :: JSVal
-js_intlProvider = ()
-
-js_formatNumber :: JSVal
-js_formatNumber = ()
-
-js_formatDate :: JSVal
-js_formatDate = ()
-
-js_formatRelative :: JSVal
-js_formatRelative = ()
-
-js_formatPlural :: JSVal
-js_formatPlural = ()
-
-js_formatMsg :: JSVal
-js_formatMsg = ()
-
-js_formatHtmlMsg :: JSVal
-js_formatHtmlMsg = ()
-
-class ToJSVal a
-instance ToJSVal JSVal
-type JSString = String
-
-#endif
-
 -- | Convert a day to a javascript Date.  This is useful to pass a date as a property to a
 -- 'message'.  Note that @JSVal@ is an instance of @ToJSVal@ so the result of 'dayToJSVal' can
 -- be passed as a property via '(&=)'.
 dayToJSVal :: Day -> JSVal
-#ifdef __GHCJS__
 dayToJSVal day = js_mkDate (fromIntegral y) m d
     where
         (y, m, d) = toGregorian day
-#else
-dayToJSVal _ = ()
-#endif
 
 -- | Convert a UTCTime to a javascript date object.  This is useful to pass a time as a property
 -- to a 'message'.  Note that @JSVal@ is an instance of @ToJSVal@ so the result of 'timeToJSVal' can
 -- be passed as a property via '(&=)'.
 timeToJSVal :: UTCTime -> JSVal
-#ifdef __GHCJS__
 timeToJSVal (UTCTime uday time) = js_mkDateTime (fromIntegral year) month day hour minute sec milli
     where
         (year, month, day) = toGregorian uday
         TimeOfDay hour minute pSec = timeToTimeOfDay time
         (sec, fracSec) = properFraction pSec
         milli = round $ fracSec * 1000 -- milli is 10^3
-#else
-timeToJSVal _ = ()
-#endif
 
 -- | A property and value that is passed to the intl elements below in situations where
 -- React elements can not be used.
@@ -287,7 +246,6 @@ dayProp n d = IntlProperty n (dayToJSVal d)
 timeProp :: JSString -> UTCTime -> IntlProperty
 timeProp n t = IntlProperty n (timeToJSVal t)
 
-#ifdef __GHCJS__
 data ContextApiCall a = ContextApiCall JSString a [IntlProperty] JSVal
 
 instance ToJSVal a => ToJSVal (ContextApiCall a) where
@@ -301,12 +259,6 @@ instance ToJSVal a => ToJSVal (ContextApiCall a) where
 
 formatCtx :: ToJSVal a => JSString -> JSString -> a -> [IntlProperty] -> PropertyOrHandler handler
 formatCtx name func val options = PropertyFromContext name $ ContextApiCall func val options
-
-#else
-formatCtx :: JSString -> JSString -> a -> [IntlProperty] -> PropertyOrHandler handler
-formatCtx name _ _ _ = PropertyFromContext name $ \() -> ()
-#endif
-
 
 
 -- | Use the IntlProvider to set the @locale@, @formats@, and @messages@ property.
