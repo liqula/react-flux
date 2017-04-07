@@ -176,44 +176,6 @@ data ReactStore storeData = ReactStore {
 -- Store operations
 ----------------------------------------------------------------------------------------------------
 
--- | Create a store from the initial data.
-unsafeMkStore :: StoreData storeData => storeData -> ReactStore storeData
-{-# NOINLINE unsafeMkStore #-}
-mkStore :: StoreData storeData => storeData -> IO (ReactStore storeData)
-
--- | Register the initial store data.  This function must be called exactly once from your main function before
--- the initial rendering occurs.  Store data is global and so there can be only one store data value for each
--- store type.
-registerInitialStore :: forall storeData. (Typeable storeData, StoreData storeData) => storeData -> IO ()
-
--- | First, 'transform' the store data according to the given action.  Next, if compiled with GHCJS,
--- notify all registered controller-views to re-render themselves.  (If compiled with GHC, the store
--- data is just transformed since there are no controller-views.)
---
--- Only a single thread can be transforming the store at any one time, so this function will block
--- on an 'MVar' waiting for a previous transform to complete if one is in process.
-alterStore :: StoreData storeData => ReactStore storeData -> StoreAction storeData -> IO ()
-modifyStoreNoCommit :: Typeable storeData => ReactStore storeData -> (storeData -> IO (storeData, result)) -> IO result
-modifyStore :: Typeable storeData => ReactStore storeData -> (storeData -> IO (storeData, result)) -> IO result
-storeCommit :: Typeable storeData => ReactStore storeData -> IO ()
-
--- | First, 'transform' the store data according to the given action and then notify all registered
--- controller-views to re-render themselves.
---
--- Only a single thread can be transforming the store at any one time, so this function will block
--- on an 'MVar' waiting for a previous transform to complete if one is in process.
---
--- This function will 'error' if 'registerInitialStore' has not been called.
-transformStore :: forall storeData. StoreData storeData => Proxy storeData -> StoreAction storeData -> IO ()
-
--- | Obtain the store data from a store.  Note that the store data is stored in an MVar, so
--- 'readStoreData' can block since it uses 'readMVar'.  The 'MVar' is empty exactly when the store is
--- being transformed, so there is a possiblity of deadlock if two stores try and access each other's
--- data during transformation.
---
--- This function will 'error' if 'registerInitialStore' has not been called.
-readStoreData :: forall storeData. (Typeable storeData, StoreData storeData) => IO storeData
-
 -- | Obtain the store data from a store.  Note that the store data is stored in an MVar, so
 -- 'getStoreData' can block since it uses 'readMVar'.  The 'MVar' is empty exactly when the store is
 -- being transformed, so there is a possiblity of deadlock if two stores try and access each other's
@@ -236,38 +198,61 @@ typeJsKey t = decimal_workaround_570 f1 <> "-" <> decimal_workaround_570 f2
   where
     Fingerprint f1 f2 = typeRepFingerprint t
 
--- old store API
+-- | Create a store from the initial data.
+{-# NOINLINE unsafeMkStore #-}
+{-# DEPRECATED unsafeMkStore "use registerInitialStore" #-}
+unsafeMkStore :: StoreData storeData => storeData -> ReactStore storeData
 unsafeMkStore = unsafePerformIO . mkStore
 
+mkStore :: StoreData storeData => storeData -> IO (ReactStore storeData)
 mkStore initial = do
     i <- export initial
     ref <- js_createOldStore i
     storeMVar <- newMVar initial
     return $ ReactStore ref storeMVar
 
--- new store API
+-- | Register the initial store data.  This function must be called exactly once from your main function before
+-- the initial rendering occurs.  Store data is global and so there can be only one store data value for each
+-- store type.
+registerInitialStore :: forall storeData. (Typeable storeData, StoreData storeData) => storeData -> IO ()
 registerInitialStore initial = do
-    dataRef <- initial `seq` export initial
+    dataRef <- export $! initial
     store <- NewReactStoreHS <$> newMVar ()
     storeE <- export store
     js_createNewStore (storeJsKey (Proxy :: Proxy storeData)) dataRef storeE
 
--- old transform
+
+-- | First, 'transform' the store data according to the given action.  Next, if compiled with GHCJS,
+-- notify all registered controller-views to re-render themselves.  (If compiled with GHC, the store
+-- data is just transformed since there are no controller-views.)
+--
+-- Only a single thread can be transforming the store at any one time, so this function will block
+-- on an 'MVar' waiting for a previous transform to complete if one is in process.
+{-# DEPRECATED alterStore "use transformStore" #-}
+alterStore :: StoreData storeData => ReactStore storeData -> StoreAction storeData -> IO ()
 alterStore store action = modifyMVar_ (storeData store) $ \oldData -> do
     newData <- transform action oldData
     updateStoreInternal store newData
     return newData
 
+{-# DEPRECATED modifyStoreNoCommit "use transformStore" #-}
+modifyStoreNoCommit :: Typeable storeData => ReactStore storeData -> (storeData -> IO (storeData, result)) -> IO result
 modifyStoreNoCommit store action = modifyMVar (storeData store) action
 
-storeCommit store = withMVar (storeData store) $ \dat ->
+{-# DEPRECATED storeCommit "use transformStore" #-}
+modifyStore :: Typeable storeData => ReactStore storeData -> (storeData -> IO (storeData, result)) -> IO result
+storeCommit
+ store = withMVar (storeData store) $ \dat ->
     updateStoreInternal store dat
 
+{-# DEPRECATED modifyStore "use transformStore" #-}
+storeCommit :: Typeable storeData => ReactStore storeData -> IO ()
 modifyStore store action = modifyMVar (storeData store) $ \oldData -> do
     result@(newData, _) <- action oldData
     updateStoreInternal store newData
     return result
 
+{-# DEPRECATED updateStoreInternal "use transformStore" #-}
 updateStoreInternal :: forall storeData. Typeable storeData => ReactStore storeData -> storeData -> IO ()
 updateStoreInternal store newData = do
     -- There is a hack in PropertiesAndEvents that the fake event store for propagation and prevent
@@ -278,7 +263,14 @@ updateStoreInternal store newData = do
             js_UpdateStore (storeRef store) newDataE
         _ -> return ()
 
--- new transform
+-- | First, 'transform' the store data according to the given action and then notify all registered
+-- controller-views to re-render themselves.
+--
+-- Only a single thread can be transforming the store at any one time, so this function will block
+-- on an 'MVar' waiting for a previous transform to complete if one is in process.
+--
+-- This function will 'error' if 'registerInitialStore' has not been called.
+transformStore :: forall storeData. StoreData storeData => Proxy storeData -> StoreAction storeData -> IO ()
 transformStore _ action = do
     store :: NewReactStore storeData <- js_getNewStore (storeJsKey (Proxy :: Proxy storeData))
     storeHS <- getNewStoreHS store
@@ -287,8 +279,15 @@ transformStore _ action = do
       oldData <- maybe (error "Unable to decode store data") return mold
       newData <- transform action oldData
       newDataE <- newData `seq` export newData
-      js_UpdateNewStore store newDataE
+      js_updateNewStore store newDataE
 
+-- | Obtain the store data from a store.  Note that the store data is stored in an MVar, so
+-- 'readStoreData' can block since it uses 'readMVar'.  The 'MVar' is empty exactly when the store is
+-- being transformed, so there is a possiblity of deadlock if two stores try and access each other's
+-- data during transformation.
+--
+-- This function will 'error' if 'registerInitialStore' has not been called.
+readStoreData :: forall storeData. (Typeable storeData, StoreData storeData) => IO storeData
 readStoreData = do
     store :: NewReactStore storeData <- js_getNewStore (storeJsKey (Proxy :: Proxy storeData))
     mdata <- js_getNewStoreData store >>= derefExport
@@ -298,6 +297,7 @@ readStoreData = do
 foreign import javascript unsafe
     "hsreact$transform_store($1, $2)"
     js_UpdateStore :: ReactStoreRef storeData -> Export storeData -> IO ()
+{-# DEPRECATED js_UpdateStore "use js_updateNewStore" #-}
 
 foreign import javascript unsafe
     "hsreact$storedata[$1]"
@@ -319,6 +319,7 @@ foreign import javascript unsafe
 foreign import javascript unsafe
     "{sdata:$1, views: []}"
     js_createOldStore :: Export storeData -> IO (ReactStoreRef storeData)
+{-# DEPRECATED js_createOldStore "use js_createNewStore" #-}
 
 foreign import javascript unsafe
     "hsreact$storedata[$1] = {sdata: $2, views: {}, hs: $3}"
@@ -327,4 +328,4 @@ foreign import javascript unsafe
 -- | Perform the update, swapping the old export and the new export and then notifying the component views.
 foreign import javascript unsafe
     "hsreact$transform_new_store($1, $2)"
-    js_UpdateNewStore :: NewReactStore storeData -> Export storeData -> IO ()
+    js_updateNewStore :: NewReactStore storeData -> Export storeData -> IO ()
