@@ -30,13 +30,12 @@ import qualified Data.HashMap.Strict as M
 
 import React.Flux.Store
 import React.Flux.Internal
-import React.Flux.ForeignEq (AllEq, singleEq, allEq)
 
 import Control.Monad
 import System.IO.Unsafe (unsafePerformIO)
-import React.Flux.Export
 import JavaScript.Array
 import GHCJS.Foreign.Callback
+import GHCJS.Foreign.Export
 import GHCJS.Types (JSVal, IsJSVal, nullRef)
 import GHCJS.Marshal (ToJSVal(..), FromJSVal(..))
 import qualified JavaScript.Array as JSA
@@ -73,12 +72,6 @@ type StatefulViewEventHandler state = state -> ([SomeStoreAction], Maybe state)
 liftViewToStateHandler :: ReactElementM ViewEventHandler a -> ReactElementM (StatefulViewEventHandler st) a
 liftViewToStateHandler = transHandler (\h _ -> (h, Nothing))
 
-data StoreArg store
-data StoreField store (field :: k) a
-
-instance Eq store => Eq (StoreArg store) where _ == _ = undefined
-instance (Eq store, Eq a) => Eq (StoreField store field a) where _ == _ = undefined
-  -- (FIXME: what is this?  why does `Eq field` not hold in test suite?)
 
 class HasField (x :: k) r a | x r -> a where
   getField :: r -> a
@@ -179,14 +172,22 @@ instance (ControllerViewStores rest, StoreData store, HasField field store a, Ty
         syncCallback1 ThrowWouldBlock $ \arg -> do
           storeD :: store <- getStoreJs arg
           let a :: a = getField @field storeD
-          aE <- a `seq` unsafeExport a
+          aE <- fakeExport $! a
           js_setDeriveOutput arg aE
   {-# INLINE applyControllerViewFromJs #-}
   {-# INLINE stateForView #-}
 
 getStoreJs :: Typeable store => JSVal -> IO store
-getStoreJs arg = js_getDeriveInput arg >>= parseExport
+getStoreJs arg = js_getDeriveInput arg >>= unsafeDerefExport "getStoreJs"
 {-# NOINLINE getStoreJs #-} -- if this is inlined, GHCJS does not properly compile the getField callback
+
+foreign import javascript unsafe
+  "$1.input"
+  js_getDeriveInput :: JSVal -> IO (Export store)
+
+foreign import javascript unsafe
+  "$1.output = $2"
+  js_setDeriveOutput :: JSVal -> Export a -> IO ()
 
 
 ---------------------------------------------------------------------------------
@@ -233,7 +234,7 @@ mkStatefulView name initial buildNode = unsafePerformIO $ do
     let this = ReactThis thisRef
         arg = RenderCbArg argRef
     props <- js_PropsList this
-    state <- js_ReactGetState this >>= parseExport
+    state <- js_ReactGetState this >>= unsafeDerefExport "mkStatefulView"
     node <- applyViewPropsFromJs (Proxy :: Proxy props) (buildNode state) props 0
     (element, evtCallbacks) <- mkReactElement (runStateViewHandler this) this node
     evtCallbacksRef <- toJSVal evtCallbacks
@@ -269,15 +270,23 @@ mkControllerView name buildNode = unsafePerformIO $ do
     evtCallbacksRef <- toJSVal evtCallbacks
     js_RenderCbSetResults arg evtCallbacksRef element
 
+  -- what's with 'artifacts'?  -- the hashmap constructed by 'stateForView' maps single store types
+  -- to its positions in the list type of store types.  'getInitialState' (in view.js) goes through
+  -- the types, looks up the resp. store and the resp. location in the argument list of the
+  -- component, and stores it in the aragument object (indexed by locations).  you can also pass one
+  -- global state in several places.  "straight-forward", hah?!  (:
+  --
+  -- FIXME: artifacts are used in mk_new_ctrl_view, so it makes sense for them to be a foreign
+  -- value, but does it have to be *constructed* foreign?  we could make it a haskell value with a
+  -- ToJSVal instance.
+
   artifacts <- js_emptyArtifacts
   forM_ (M.toList $ stateForView (Proxy :: Proxy stores) 0) $ \(ty, states) -> do
     art <- js_newArtifact
-    forM_ states $ \s ->
+    forM_ states $ \s -> do
       case s of
         StoreState i -> js_addStoreState art i
-        StoreDerivedState i mkCall -> do
-          callback <- mkCall
-          js_addStoreDerivedState art i callback
+        StoreDerivedState i mkCall -> js_addStoreDerivedState art i =<< mkCall
     js_setArtifact artifacts (typeJsKey ty) art
 
   propsEq <- allEq (Proxy :: Proxy props)
@@ -316,15 +325,16 @@ callbackRenderingView name (View v) = CallbackPropertyReturningNewView name v ge
 -- Helpers
 --------------------------------------------------------------------------------
 
--- | Transform a controller view handler to a raw handler.
+-- | Transform a controller view handler to a raw handler.  Runs 'deepseq' on the actions so event
+-- handler (if contained in there) is still valid.  See haddocks of 'preventDefault'.
 runViewHandler :: ReactThis state props -> ViewEventHandler -> IO ()
 runViewHandler _ handler = handler `deepseq` mapM_ executeAction handler
 
--- | Transform a stateful view event handler to a raw event handler
+-- | Transform a stateful view event handler to a raw event handler.
 runStateViewHandler :: (Typeable state, NFData state)
                     => ReactThis state props -> StatefulViewEventHandler state -> IO ()
 runStateViewHandler this handler = do
-    st <- js_ReactGetState this >>= parseExport
+    st <- js_ReactGetState this >>= unsafeDerefExport "runStateViewHandler"
 
     let (actions, mNewState) = handler st
 
@@ -336,6 +346,8 @@ runStateViewHandler this handler = do
 
     -- nothing above here should block, so the handler callback should still be running syncronous,
     -- so the deepseq of actions should still pick up the proper event object.
+    --
+    -- TODO: I'm not so optimistic about the above code not blocking (is that the same as yielding?)
     actions `deepseq` mapM_ executeAction actions
 
 foreign import javascript unsafe
@@ -359,27 +371,19 @@ foreign import javascript unsafe
   js_pushProp :: NewJsProps -> Export a -> IO ()
 
 getProp :: Typeable a => NewJsProps -> Int -> IO a
-getProp p i = js_getPropFromList p i >>= parseExport
+getProp p i = js_getPropFromList p i >>= unsafeDerefExport "getProp"
 
 pushProp :: Typeable a => a -> NewJsProps -> IO ()
 pushProp val props = do
-  valE <- val `seq` export val -- this will be released in the lifecycle callbacks of the class
+  valE <- export $! val -- this will be released in the lifecycle callbacks of the class
   js_pushProp props valE
 
 findFromState :: Typeable a => Int -> JsState -> IO a
-findFromState i s = js_findFromState i s >>= unsafeDerefExport
+findFromState i s = js_findFromState i s >>= unsafeDerefExport "findFromState"
 
 foreign import javascript unsafe
   "$2[$1]"
   js_findFromState :: Int -> JsState -> IO (Export a)
-
-foreign import javascript unsafe
-  "$1.input"
-  js_getDeriveInput :: JSVal -> IO (Export storeData)
-
-foreign import javascript unsafe
-  "$1.output = $2"
-  js_setDeriveOutput :: JSVal -> Export a -> IO ()
 
 newtype Artifacts = Artifacts JSVal
 instance IsJSVal Artifacts

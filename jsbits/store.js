@@ -7,14 +7,7 @@ views: an array of @setState@ functions for component views.  The component view
 */
 var hsreact$storedata = {};
 
-function hsreact$transform_store(store, newData) {
-    var oldD = store.sdata;
-    store.sdata = newData;
-    h$release(oldD);
-    store.views.map(function(f) { f(store.sdata); });
-}
-
-function hsreact$transform_new_store(store, newData) {
+function hsreact$transform_new_store(store, newData) {  // FIXME: rename to update_new_store
     var oldD = store.sdata;
     store.sdata = newData;
     h$release(oldD);

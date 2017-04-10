@@ -83,6 +83,7 @@ module React.Flux (
   , view_
   , StoreArg
   , StoreField
+  , UnoverlapAllEq
   , ControllerViewToElement
   , HasField(..)
   , mkControllerView
@@ -138,7 +139,7 @@ reactRenderView :: JSString -- ^ The ID of the HTML element to render the applic
 -- to actually perform the rendering.
 --
 -- If you are interested in isomorphic React, I suggest instead of using 'reactRenderToString' you use
--- 'exportViewToJavaScript' and then write a small top-level JavaScript view which can then integrate with
+-- 'exportReactViewToJavaScript' and then write a small top-level JavaScript view which can then integrate with
 -- all the usual isomorphic React tools.
 reactRenderViewToString :: Bool -- ^ Render to static markup?  If true, this won't create extra DOM attributes
                                 -- that React uses internally.

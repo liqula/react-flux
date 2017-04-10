@@ -134,21 +134,6 @@ var hsreact$children_to_array = function() {
     return hsreact$children_to_array.apply(this, arguments);
 };
 
-function hsreact$check_ghcjs_obj_equal(x, y) {
-    return x === y || (x.d1 && x.d1 === y.d1 && x.d2 === y.d2);
-}
-
-function hsreact$check_props_equal(newPropsI, oldPropsI) {
-    var newProps = newPropsI.hs;
-    var oldProps = oldPropsI.hs;
-    if (newProps.length !== oldProps.length) return false;
-    for (var i = 0; i < oldProps.length; i++) {
-        if (!hsreact$check_ghcjs_obj_equal(newProps[i].root, oldProps[i].root))
-            return false;
-    }
-    return true;
-}
-
 function hsreact$mk_new_class(name, renderCb) {
     var cl = {
         'displayName': name,
@@ -180,9 +165,7 @@ function hsreact$mk_new_class(name, renderCb) {
 function hsreact$mk_new_view(name, renderCb, propsEq) {
     var cl = hsreact$mk_new_class(name, renderCb);
     cl['shouldComponentUpdate'] = function(newPropsI) {
-        if (!hsreact$check_props_equal(newPropsI, this['props'])) return true;
-        if (!propsEq(newPropsI, this['props'])) return true;
-        return false;
+        return !propsEq(newPropsI.hs, this['props'].hs);
     };
     cl['componentWillUnmount'] = function() {
         this._currentCallbacks.map(h$release);
@@ -201,11 +184,8 @@ function hsreact$mk_new_stateful_view(name, initialState, renderCb, propsEq, sta
         this['setState']({hs: s});
     };
     cl['shouldComponentUpdate'] = function(newPropsI, newStateI) {
-        if (!hsreact$check_props_equal(newPropsI, this['props'])) return true;
-        if (!propsEq(newPropsI, this['props'])) return true;
-        if (!hsreact$check_ghcjs_obj_equal(newStateI.hs.root, this['state'].hs.root)) return true;
-        if (!stateEq(newStateI.hs, this['state'].hs)) return true;
-        return false;
+        return !propsEq(newPropsI.hs, this['props'].hs)
+            || !stateEq(newStateI.hs, this['state'].hs);
     };
     cl['componentWillUnmount'] = function() {
         this._currentCallbacks.map(h$release);
@@ -224,7 +204,7 @@ function hsreact$make_ctrl_view_callback(elem, artifact) {
                 st.call(arg);
                 newState[st.i] = arg.output;
             } else {
-                newState[st.i] = newStoreData.root;
+                newState[st.i] = newStoreData;
             }
         });
         elem['setState']({hs:newState});
@@ -234,15 +214,8 @@ function hsreact$make_ctrl_view_callback(elem, artifact) {
 function hsreact$mk_new_ctrl_view(name, renderCb, artifacts, propsEq, statesEq) {
     var cl = hsreact$mk_new_class(name, renderCb);
     cl['shouldComponentUpdate'] = function(newPropsI, newStateI) {
-        if (!hsreact$check_props_equal(newPropsI, this['props'])) return true;
-        if (!propsEq(newPropsI.hs, this['props'].hs)) return true;
-        var newState = newStateI.hs;
-        var oldState = this['state'].hs;
-        for (var k in newState) {
-            if (!hsreact$check_ghcjs_obj_equal(newState[k], oldState[k])) return true;
-            // TODO: statesEq (see comments in the beginning of src/React/Flux/ForeignEq.hs for context.)
-        }
-        return false;
+        return !propsEq(newPropsI.hs, this['props'].hs)
+            || !statesEq(newStateI.hs, this['state'].hs);
     };
     cl['getInitialState'] = function() {
         var reactState = {};
@@ -254,7 +227,7 @@ function hsreact$mk_new_ctrl_view(name, renderCb, artifacts, propsEq, statesEq) 
                     st.call(arg);
                     reactState[st.i] = arg.output;
                 } else {
-                    reactState[st.i] = store.sdata.root;
+                    reactState[st.i] = store.sdata;
                 }
             });
         };

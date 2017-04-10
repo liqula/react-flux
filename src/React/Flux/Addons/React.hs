@@ -50,6 +50,8 @@ data PerfPrint = PerfPrintInclusive
                | PerfPrintDOM
     deriving (Show, Eq, Generic)
 
+instance UnoverlapAllEq [PerfPrint]
+
 instance NFData PerfPrint
 
 -- | An action to start or stop performance measurement.  For details, see

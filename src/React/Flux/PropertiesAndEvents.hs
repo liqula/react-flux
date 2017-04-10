@@ -1,7 +1,7 @@
 -- | This module contains the definitions for creating properties to pass to javascript elements and
 -- foreign javascript classes.  In addition, it contains definitions for the
 -- <https://facebook.github.io/react/docs/events.html React Event System>.
-{-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE ViewPatterns, UndecidableInstances #-}
 module React.Flux.PropertiesAndEvents (
     PropertyOrHandler
 
@@ -91,7 +91,6 @@ module React.Flux.PropertiesAndEvents (
 ) where
 
 import           Control.Monad (forM)
-import           Control.Concurrent.MVar (newMVar)
 import           Control.Monad.Writer (runWriter)
 import           Control.DeepSeq
 import           System.IO.Unsafe (unsafePerformIO)
@@ -100,7 +99,6 @@ import qualified Data.Text as T
 import           GHC.Generics
 
 import           React.Flux.Internal
-import           React.Flux.Store
 import           React.Flux.Views (ViewEventHandler, StatefulViewEventHandler)
 
 import           Data.Maybe (fromMaybe)
@@ -280,35 +278,26 @@ on2 name parseDetail f = CallbackPropertyWithSingleArgument
     , csFunc = \raw -> f (parseEvent raw) (parseDetail raw)
     }
 
--- | In a hack, the prevent default and stop propagation are actions since that is the easiest way
--- of allowing users to specify these actions (IO is not available in view event handlers).  We
--- create a fake store to handle these actions.
-data FakeEventStoreData = FakeEventStoreData
-
--- | The fake store, doesn't store any data.  Also, the dispatch function correctly detects
--- nullRef and will not attempt to notify any controller-views.
-fakeEventStore :: ReactStore FakeEventStoreData
-fakeEventStore = unsafePerformIO (ReactStore (ReactStoreRef nullRef) <$> newMVar FakeEventStoreData)
-{-# NOINLINE fakeEventStore #-}
-
--- | The actions for the fake store
-data FakeEventStoreAction = PreventDefault HandlerArg
-                          | StopPropagation HandlerArg
-
-instance StoreData FakeEventStoreData where
-    type StoreAction FakeEventStoreData = FakeEventStoreAction
-    transform _ _ = return FakeEventStoreData
-
--- | What a hack!  React re-uses event objects in a pool.  To make sure this is OK, we must perform
+-- | React re-uses event objects in a pool.  To make sure this is OK, we must perform
 -- all computation involving the event object before it is returned to React.  But the callback
 -- registered in the handler will return anytime the Haskell thread blocks, and the Haskell thread
--- will continue asynchronously.  If this occurs, the event object is no longer valid.  Thus, inside
--- the event handlers in Views.hs, the handler will use 'deepseq' to force all the actions before
--- starting any of the transforms (which could block).  We rely on this call plus use
--- unsafePerformIO to call the appropriate functions on the event object.
-instance NFData FakeEventStoreAction where
-    rnf (PreventDefault (HandlerArg ref)) = unsafePerformIO (js_preventDefault ref) `deepseq` ()
-    rnf (StopPropagation (HandlerArg ref)) = unsafePerformIO (js_stopProp ref) `deepseq` ()
+-- will continue asynchronously.  If this occurs, the event object is no longer valid.  This
+-- therefore needs to be called and fully processed in the handler before anything else happens,
+-- like sending actions to stores.
+--
+-- TODO: this requires some more reasoning that would show that it actually works.  It may be
+-- possible that there still is room for the thread to yield between receiving the handler object
+-- and executing the 'unsafePerformIO' in here, even if it is called first thing in the handler
+-- body.
+--
+-- FIXME: A better way may be to make a specialized monad available in the event handlers that
+-- allows for these things, but not general IO.
+preventDefault :: Event -> ()
+preventDefault (evtHandlerArg -> HandlerArg ref) = unsafePerformIO (js_preventDefault ref) `seq` ()
+
+-- | See 'preventDefault'.
+stopPropagation :: Event -> ()
+stopPropagation (evtHandlerArg -> HandlerArg ref) = unsafePerformIO (js_stopPropagation ref) `seq` ()
 
 foreign import javascript unsafe
     "$1['preventDefault']();"
@@ -316,26 +305,13 @@ foreign import javascript unsafe
 
 foreign import javascript unsafe
     "$1['stopPropagation']();"
-    js_stopProp :: JSVal -> IO ()
-
--- | Prevent the default browser action from occuring in response to this event.
-preventDefault :: Event -> SomeStoreAction
-preventDefault = SomeStoreAction fakeEventStore . PreventDefault . evtHandlerArg
-
--- | Stop propagating this event, either down the DOM tree during the capture phase or up the DOM
--- tree during the bubbling phase.
-stopPropagation :: Event -> SomeStoreAction
-stopPropagation = SomeStoreAction fakeEventStore . StopPropagation . evtHandlerArg
+    js_stopPropagation :: JSVal -> IO ()
 
 -- | By default, the handlers below are triggered during the bubbling phase.  Use this to switch
 -- them to trigger during the capture phase.
 capturePhase :: PropertyOrHandler handler -> PropertyOrHandler handler
 capturePhase (CallbackPropertyWithSingleArgument n h) = CallbackPropertyWithSingleArgument (n <> "Capture") h
 capturePhase _ = error "You must use React.Flux.PropertiesAndEvents.capturePhase on an event handler"
-
----------------------------------------------------------------------------------------------------
---- Clipboard
----------------------------------------------------------------------------------------------------
 
 
 ---------------------------------------------------------------------------------------------------
@@ -662,7 +638,7 @@ foreign import javascript unsafe
 -- | Access a property from an object.  Since event objects are immutable, we can use
 -- unsafePerformIO without worry.
 (.:) :: FromJSVal b => JSVal -> JSString -> b
-obj .: key = fromMaybe (error "Unable to decode event target") $ unsafePerformIO $
+obj .: key = fromMaybe (error "Unable to decode event target") $ unsafePerformIO $  -- TODO: get rid of the unsafePerformIO here!
     fromJSVal $ js_getProp obj key
 
 foreign import javascript unsafe

@@ -1,12 +1,10 @@
 -- | Internal module containing the view definitions
-{-# LANGUAGE UndecidableInstances, AllowAmbiguousTypes, TypeApplications, MagicHash #-}
+{-# LANGUAGE UndecidableInstances, TypeApplications, MagicHash #-}
 {-# OPTIONS_GHC -fno-warn-redundant-constraints #-}
 module React.Flux.Outdated
   ( ReactStore
   , SomeStoreAction(..)
-  , unsafeMkStore
   , getStoreData
-  , alterStore
   , ReactView
   , ReactViewKey(..)
   , ViewEventHandler
@@ -39,14 +37,13 @@ import Data.Text
 import React.Flux.Store
 import React.Flux.Internal
 import React.Flux.Views (ViewEventHandler, StatefulViewEventHandler)
-import React.Flux.ForeignEq (singleEq)
 import React.Flux.DOM (div_)
 
 import System.IO.Unsafe (unsafePerformIO)
-import React.Flux.Export
 import JavaScript.Array
 import GHCJS.Foreign (jsNull)
 import GHCJS.Foreign.Callback
+import GHCJS.Foreign.Export
 import GHCJS.Types (JSVal, IsJSVal, nullRef, jsval)
 import GHCJS.Marshal (ToJSVal(..), FromJSVal(..))
 import GHCJS.Marshal.Pure (PToJSVal(..))
@@ -75,7 +72,7 @@ newtype ReactView props = ReactView { reactView :: ReactViewRef props }
 runStateViewHandler :: (Typeable state, NFData state)
                     => ReactThis state props -> StatefulViewEventHandler state -> IO ()
 runStateViewHandler this handler = do
-    st <- js_ReactGetState this >>= parseExport
+    st <- js_ReactGetState this >>= unsafeDerefExport "runStateViewHandler"
 
     let (actions, mNewState) = handler st
 
@@ -89,10 +86,6 @@ runStateViewHandler this handler = do
     -- so the deepseq of actions should still pick up the proper event object.
     actions `deepseq` mapM_ executeAction actions
 
-
----------------------------------------------------------------------------------------------------
---- Class
----------------------------------------------------------------------------------------------------
 
 ---------------------------------------------------------------------------------------------------
 --- Various GHCJS only utilities
@@ -134,7 +127,7 @@ mkRenderCallback parseState runHandler render = syncCallback2 ContinueAsync $ \t
     let this = ReactThis thisRef
         arg = RenderCbArg argRef
     state <- parseState this
-    props <- js_ReactGetProps this >>= parseExport
+    props <- js_ReactGetProps this >>= unsafeDerefExport "mkRenderCallback"
     node <- render state props
     (element, evtCallbacks) <- mkReactElement (runHandler this) this node
 
@@ -145,7 +138,6 @@ mkRenderCallback parseState runHandler render = syncCallback2 ContinueAsync $ \t
 ----------------------------------------------------------------------------------------------------
 --- Element creation for views
 ----------------------------------------------------------------------------------------------------
-
 
 -- | Create an element from a view.  I suggest you make a combinator for each of your views, similar
 -- to the examples above such as @todoItem_@.
@@ -401,7 +393,8 @@ defineLifecycleView name initialState cfg = unsafePerformIO $ do
     initialRef <- export initialState
 
     let render state props = return $ lRender cfg state props
-    renderCb <- mkRenderCallback (js_ReactGetState >=> parseExport) runStateViewHandler render
+    renderCb <- mkRenderCallback (js_ReactGetState >=> unsafeDerefExport "defineLifecycleView.renderCb")
+                      runStateViewHandler render
 
     let dom this = LDOM { lThis = js_ReactFindDOMNode this
                         , lRef = \r -> js_ReactGetRef this r
@@ -416,19 +409,19 @@ defineLifecycleView name initialState cfg = unsafePerformIO $ do
         f (dom this) (setStateFn this)
 
     willRecvPropsCb <- mkLCallback2 (lComponentWillReceiveProps cfg) $ \f this newPropsE -> do
-        newProps <- parseExport $ Export newPropsE
+        newProps <- unsafeDerefExport "defineLifecycleView.willRecvProps" $ fakeJSValToExport newPropsE
         f (dom this) (setStateFn this) newProps
 
     willUpdateCb <- mkLCallback2 (lComponentWillUpdate cfg) $ \f this argRef -> do
         let arg = ReactThis argRef
-        nextProps <- js_ReactGetProps arg >>= parseExport
-        nextState <- js_ReactGetState arg >>= parseExport
+        nextProps <- js_ReactGetProps arg >>= unsafeDerefExport "defineLifecycleView.willUpdateCb.Props"
+        nextState <- js_ReactGetState arg >>= unsafeDerefExport "defineLifecycleView.willUpdateCb.State"
         f (dom this) nextProps nextState
 
     didUpdateCb <- mkLCallback2 (lComponentDidUpdate cfg) $ \f this argRef -> do
         let arg = ReactThis argRef
-        oldProps <- js_ReactGetProps arg >>= parseExport
-        oldState <- js_ReactGetState arg >>= parseExport
+        oldProps <- js_ReactGetProps arg >>= unsafeDerefExport "defineLifecycleView.didUpdateCb.Props"
+        oldState <- js_ReactGetState arg >>= unsafeDerefExport "defineLifecycleView.didUpdateCb.State"
         f (dom this) (setStateFn this) oldProps oldState
 
     willUnmountCb <- mkLCallback1 (lComponentWillUnmount cfg) $ \f this ->
@@ -455,8 +448,8 @@ mkLCallback1 Nothing _ = return jsNull
 mkLCallback1 (Just f) c = do
   cb <- syncCallback1 ThrowWouldBlock $ \thisRef -> do
     let this = ReactThis thisRef
-        ps = LPropsAndState { lGetProps = js_ReactGetProps this >>= parseExport
-                            , lGetState = js_ReactGetState this >>= parseExport
+        ps = LPropsAndState { lGetProps = js_ReactGetProps this >>= unsafeDerefExport "mkCallback1.props"
+                            , lGetState = js_ReactGetState this >>= unsafeDerefExport "mkCallback1.state"
                             }
     c (f ps) this
   return $ jsval cb
@@ -469,8 +462,8 @@ mkLCallback2 Nothing _ = return jsNull
 mkLCallback2 (Just f) c = do
   cb <- syncCallback2 ThrowWouldBlock $ \thisRef argRef -> do
     let this = ReactThis thisRef
-        ps = LPropsAndState { lGetProps = js_ReactGetProps this >>= parseExport
-                            , lGetState = js_ReactGetState this >>= parseExport
+        ps = LPropsAndState { lGetProps = js_ReactGetProps this >>= unsafeDerefExport "mkCallback2.props"
+                            , lGetState = js_ReactGetState this >>= unsafeDerefExport "mkCallback2.state"
                             }
     c (f ps) this argRef
   return $ jsval cb

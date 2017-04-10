@@ -1,9 +1,10 @@
+{-# LANGUAGE ViewPatterns #-}
+{-# OPTIONS_GHC -fno-warn-redundant-constraints #-}
+
 -- | Internal module for React.Flux
 --
 -- Normally you should not need to use anything in this module.  This module is only needed if you have
 -- complicated interaction with third-party javascript rendering code.
-
-{-# OPTIONS_GHC -fno-warn-redundant-constraints #-}
 module React.Flux.Internal(
     ReactViewRef(..)
   , NewJsProps(..)
@@ -33,13 +34,26 @@ module React.Flux.Internal(
   , classNames
   , classNamesLast
   , classNamesAny
+  , unsafeDerefExport
+  , fakeExport
+  , fakeReExport
+  , fakeJSValToExport
+  , fakeDerefExport
+  , StoreArg
+  , StoreField
+  , singleEq
+  , allEq
+  , AllEq(..)
+  , UnoverlapAllEq
 ) where
 
+import           Control.Exception (throwIO, ErrorCall(ErrorCall))
 import           Control.DeepSeq
 import           Data.String (IsString(..))
 import           Data.Aeson as A
+import           Data.Maybe (maybe)
 import qualified Data.HashMap.Strict as M
-import           Data.Typeable (Typeable)
+import           Data.Typeable
 import           Control.Monad.Writer
 import           Control.Monad.Identity (Identity(..))
 import qualified Data.Text as T
@@ -55,9 +69,8 @@ import qualified JavaScript.Object as JSO
 import           GHCJS.Types (JSVal, JSString, IsJSVal, jsval)
 import           GHCJS.Marshal (ToJSVal(..))
 import           GHCJS.Foreign (jsNull)
-import           React.Flux.Export
+import           GHCJS.Foreign.Export
 
--- type JSObject a = JSO.Object a
 
 -- | This type is for the return value of @React.createClass@
 newtype ReactViewRef (props :: k) = ReactViewRef { reactViewRef :: JSVal }
@@ -515,3 +528,93 @@ classNamesAny :: [(T.Text, Bool)] -> PropertyOrHandler handler
 classNamesAny xs = "className" @= T.intercalate " " names
   where
     names = M.keys $ M.fromList $ filter snd xs
+
+
+-- TODO: we should not need any of the following.  (also, there are probably a few calls to
+-- 'releaseExport' missing around this package.)
+
+unsafeDerefExport :: Typeable a => String -> Export a -> IO a
+unsafeDerefExport msg e = derefExport e
+                      >>= maybe (throwIO (ErrorCall $ "unsafeDerefExport: " <> show (typeOf e, msg))) pure
+
+fakeExport :: Typeable a => a -> IO (Export a)
+fakeExport = pure . unsafeCoerce  -- should be the same as @pure . Export@
+
+fakeReExport :: Typeable a => JSVal -> IO (Export a)
+fakeReExport = export . unsafeCoerce
+
+fakeJSValToExport :: Typeable a => JSVal -> Export a
+fakeJSValToExport = unsafeCoerce
+
+fakeDerefExport :: Typeable a => Export a -> IO a
+fakeDerefExport = pure . unsafeCoerce
+
+
+data StoreArg store
+data StoreField store (field :: k) a
+
+type ForeignEq = JSVal -> JSVal -> IO JSVal
+type ForeignEq_ = JSVal -> JSVal -> IO Bool
+
+singleEq :: forall (t :: *). (Typeable t, Eq t) => Proxy t -> IO (Callback ForeignEq)
+singleEq proxy = syncCallback2' (\jsa jsb -> toJSVal =<< singleEq_ proxy jsa jsb)
+
+singleEq_ :: forall (t :: *). (Typeable t, Eq t) => Proxy t -> ForeignEq_
+singleEq_ Proxy (fakeJSValToExport -> (jsa :: Export t)) (fakeJSValToExport -> (jsb :: Export t)) = do
+  a :: t <- unsafeDerefExport "singleEq_.a" jsa
+  b :: t <- unsafeDerefExport "singleEq_.b" jsb
+  pure $ a == b
+
+allEq :: AllEq t => Proxy t -> IO (Callback ForeignEq)
+allEq proxy = syncCallback2' (\jsa jsb -> toJSVal =<< allEq_ proxy 0 jsa jsb)
+
+class AllEq t where
+  allEq_ :: Proxy t -> Int -> ForeignEq_
+
+instance AllEq '[] where
+  allEq_ Proxy _ _ _ = pure True
+
+instance {-# OVERLAPPING #-} (Typeable t, Eq t, AllEq ts) => AllEq (StoreArg t ': ts) where
+  allEq_ Proxy = allEq__ (Proxy :: Proxy (t ': ts))
+
+instance {-# OVERLAPPABLE #-} (Typeable t, Eq t, UnoverlapAllEq t, AllEq ts) => AllEq (t ': ts) where
+  allEq_ = allEq__
+
+-- | Trick class for disambiguating 'AllEq' instances.  If you need an 'AllEq' instance for a type
+-- list, and that type list has a type element not wrapped by 'StoreArg' or 'StoreField', declare an
+-- empty ("marker") instance of this class for the element type.
+--
+-- FUTUREWORK: there is probably a nicer solution than this.  go find it!
+class UnoverlapAllEq t
+
+allEq__ :: forall t ts. (Typeable t, Eq t, AllEq ts) => Proxy (t ': ts) -> Int -> ForeignEq_
+allEq__ Proxy i jsas jsbs = do
+  let jsa = js_findFromArray i jsas
+      jsb = js_findFromArray i jsbs
+  (&&) <$> singleEq_ (Proxy :: Proxy t)  jsa jsb
+       <*> allEq_    (Proxy :: Proxy ts) (i + 1) jsas jsbs
+
+-- | (This is similar to findFromState, but less specific, and more "pure".  not sure if we can merge
+-- the two?)
+foreign import javascript unsafe
+  "$2[$1]"
+  js_findFromArray :: Int -> JSVal -> JSVal
+
+
+{- the rest of this module is debug noise.  FIXME: Clean up construction site.
+
+foreign import javascript unsafe
+  "console.log(',,,', $1)"
+  js_debugLog :: JSString -> IO ()
+
+foreign import javascript unsafe
+  "console.log(',,,', $1)"
+  js_debugLog' :: Export a -> IO ()
+
+
+  js_debugLog "singleEq_"
+  js_debugLog (pack . show . typeOf $ proxy)
+  js_debugLog' jsa
+  js_debugLog' jsb
+
+-}

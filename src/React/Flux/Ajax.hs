@@ -23,12 +23,12 @@ import Control.Arrow ((***))
 import Control.DeepSeq (deepseq)
 import GHCJS.Foreign.Callback
 import GHCJS.Foreign (jsNull)
+import GHCJS.Foreign.Export
 import GHCJS.Marshal (ToJSVal(..))
 import GHCJS.Types (JSVal)
 import qualified Data.JSString as JSS
 import qualified Data.JSString.Text as JSS
 
-import React.Flux.Export
 
 -- | An optional timeout to use for @XMLHttpRequest.timeout@.
 -- When a request times out, a status code of 504 is set in 'respStatus' and the
@@ -79,7 +79,7 @@ initAjax = do
                   else AjaxResponse <$> js_xhrStatus rawXhr <*> js_xhrResponseText rawXhr <*> pure rawXhr
         e <- js_getHandlerWrapper h
         js_release e
-        parseExport e >>= useHandler resp
+        unsafeDerefExport "initAjax" e >>= useHandler resp
 
     js_setAjaxCallback a
 

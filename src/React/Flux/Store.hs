@@ -8,12 +8,7 @@ module React.Flux.Store (
   -- * Old Stores
   , SomeStoreAction(..)
   , ReactStore(..)
-  , unsafeMkStore
   , getStoreData
-  , alterStore
-  , modifyStore
-  , modifyStoreNoCommit
-  , storeCommit
   , executeAction
 
   -- * New Stores
@@ -27,19 +22,19 @@ module React.Flux.Store (
   , typeJsKey
 ) where
 
-import Control.Concurrent.MVar (MVar, newMVar, modifyMVar, modifyMVar_, readMVar, withMVar)
+import Control.Concurrent.MVar (MVar, newMVar, modifyMVar_, readMVar)
 import Control.DeepSeq
 import Data.Typeable
 import GHC.Generics (Generic)
-import System.IO.Unsafe (unsafePerformIO)
-
+import React.Flux.Internal (unsafeDerefExport)
 import Data.Monoid ((<>))
-import GHCJS.Types (JSVal, isNull, IsJSVal, JSString)
-import React.Flux.Export
+import GHCJS.Foreign.Export
+import GHCJS.Types (JSVal, IsJSVal, JSString)
 import GHC.Fingerprint.Type
 import qualified Data.JSString.Int as JSString (decimal)
 import qualified Data.JSString as JSString
 import Data.Word (Word64)
+
 
 -- | See https://github.com/ghcjs/ghcjs/issues/570 for details.
 decimal_workaround_570 :: Word64 -> JSString
@@ -125,12 +120,9 @@ class Typeable storeData => StoreData storeData where
 -- | An existential type for some store action.  It is used as the output of the dispatcher.
 -- The 'NFData' instance is important for performance, for details see below.
 data SomeStoreAction = forall storeData. (StoreData storeData, NFData (StoreAction storeData))
-      => SomeStoreAction (ReactStore storeData) (StoreAction storeData)
-    | forall storeData. (StoreData storeData, NFData (StoreAction storeData))
      => SomeNewStoreAction (Proxy storeData) (StoreAction storeData)
 
 instance NFData SomeStoreAction where
-    rnf (SomeStoreAction _ action) = action `deepseq` ()
     rnf (SomeNewStoreAction _ action) = action `deepseq` ()
 
 -- | Create some store action.  You must use a type-argument to specify the storeData type (because technically, the same
@@ -144,7 +136,6 @@ someStoreAction = SomeNewStoreAction (Proxy :: Proxy storeData)
 
 -- | Call 'alterStore' on the store and action.
 executeAction :: SomeStoreAction -> IO ()
-executeAction (SomeStoreAction store action) = alterStore store action
 executeAction (SomeNewStoreAction p a) = transformStore p a
 
 --------------------------------------------------------------------------------
@@ -183,85 +174,36 @@ data ReactStore storeData = ReactStore {
 getStoreData :: ReactStore storeData -> IO storeData
 getStoreData (ReactStore _ mvar) = readMVar mvar
 
-typeJsKey :: TypeRep -> JSString
-
 -- | The new type of stores, introduced in version 1.3, keep the data in a javascript dictionary indexed
 -- by the fingerprint of the type.  This allows any code to lookup the store by knowing the type.
 newtype NewReactStore storeData = NewReactStore JSVal
 instance IsJSVal (NewReactStore storeData)
 
 -- | New stores are kept in a javascript dictionary by type.  This computes the key into this dictionary.
+--
+-- FIXME: make the return value of this a newtype StoreKey, make typeJsKey private, and make
+-- Views.stateForView use StoreKey as hashmap keys.
 storeJsKey :: Typeable ty => Proxy ty -> JSString
 storeJsKey p = typeJsKey (typeRep p)
 
+typeJsKey :: TypeRep -> JSString
 typeJsKey t = decimal_workaround_570 f1 <> "-" <> decimal_workaround_570 f2
   where
     Fingerprint f1 f2 = typeRepFingerprint t
 
--- | Create a store from the initial data.
-{-# NOINLINE unsafeMkStore #-}
-{-# DEPRECATED unsafeMkStore "use registerInitialStore" #-}
-unsafeMkStore :: StoreData storeData => storeData -> ReactStore storeData
-unsafeMkStore = unsafePerformIO . mkStore
-
-mkStore :: StoreData storeData => storeData -> IO (ReactStore storeData)
-mkStore initial = do
-    i <- export initial
-    ref <- js_createOldStore i
-    storeMVar <- newMVar initial
-    return $ ReactStore ref storeMVar
-
 -- | Register the initial store data.  This function must be called exactly once from your main function before
 -- the initial rendering occurs.  Store data is global and so there can be only one store data value for each
 -- store type.
+--
+-- FIXME: why not @storeE <- export =<< newMVar initial@?  i can't see how the 'NewReactStoreHS'
+-- type or splitting up payload and lock into two fields would have any benefit.  This would also
+-- make it unnecessary to release old store values and export new ones.  (Not sure if there is a
+-- performance reason it's done the way it is?  If so we should document this, at least.)
 registerInitialStore :: forall storeData. (Typeable storeData, StoreData storeData) => storeData -> IO ()
 registerInitialStore initial = do
-    dataRef <- export $! initial
-    store <- NewReactStoreHS <$> newMVar ()
-    storeE <- export store
-    js_createNewStore (storeJsKey (Proxy :: Proxy storeData)) dataRef storeE
-
-
--- | First, 'transform' the store data according to the given action.  Next, if compiled with GHCJS,
--- notify all registered controller-views to re-render themselves.  (If compiled with GHC, the store
--- data is just transformed since there are no controller-views.)
---
--- Only a single thread can be transforming the store at any one time, so this function will block
--- on an 'MVar' waiting for a previous transform to complete if one is in process.
-{-# DEPRECATED alterStore "use transformStore" #-}
-alterStore :: StoreData storeData => ReactStore storeData -> StoreAction storeData -> IO ()
-alterStore store action = modifyMVar_ (storeData store) $ \oldData -> do
-    newData <- transform action oldData
-    updateStoreInternal store newData
-    return newData
-
-{-# DEPRECATED modifyStoreNoCommit "use transformStore" #-}
-modifyStoreNoCommit :: Typeable storeData => ReactStore storeData -> (storeData -> IO (storeData, result)) -> IO result
-modifyStoreNoCommit store action = modifyMVar (storeData store) action
-
-{-# DEPRECATED storeCommit "use transformStore" #-}
-modifyStore :: Typeable storeData => ReactStore storeData -> (storeData -> IO (storeData, result)) -> IO result
-storeCommit
- store = withMVar (storeData store) $ \dat ->
-    updateStoreInternal store dat
-
-{-# DEPRECATED modifyStore "use transformStore" #-}
-storeCommit :: Typeable storeData => ReactStore storeData -> IO ()
-modifyStore store action = modifyMVar (storeData store) $ \oldData -> do
-    result@(newData, _) <- action oldData
-    updateStoreInternal store newData
-    return result
-
-{-# DEPRECATED updateStoreInternal "use transformStore" #-}
-updateStoreInternal :: forall storeData. Typeable storeData => ReactStore storeData -> storeData -> IO ()
-updateStoreInternal store newData = do
-    -- There is a hack in PropertiesAndEvents that the fake event store for propagation and prevent
-    -- default does not have a javascript store, so the store is nullRef.
-    case storeRef store of
-        ReactStoreRef ref | not $ isNull ref -> do
-            newDataE <- export newData
-            js_UpdateStore (storeRef store) newDataE
-        _ -> return ()
+    sdataE <- export initial
+    storeE <- export . NewReactStoreHS =<< newMVar ()
+    js_createNewStore (storeJsKey (Proxy :: Proxy storeData)) sdataE storeE
 
 -- | First, 'transform' the store data according to the given action and then notify all registered
 -- controller-views to re-render themselves.
@@ -275,11 +217,9 @@ transformStore _ action = do
     store :: NewReactStore storeData <- js_getNewStore (storeJsKey (Proxy :: Proxy storeData))
     storeHS <- getNewStoreHS store
     modifyMVar_ (newStoreLock storeHS) $ \() -> do
-      mold <- js_getNewStoreData store >>= derefExport
-      oldData <- maybe (error "Unable to decode store data") return mold
-      newData <- transform action oldData
-      newDataE <- newData `seq` export newData
-      js_updateNewStore store newDataE
+      oldData :: storeData <- js_getNewStoreData store >>= unsafeDerefExport "transformStore"
+      newData :: storeData <- transform action oldData
+      js_updateNewStore store =<< export newData
 
 -- | Obtain the store data from a store.  Note that the store data is stored in an MVar, so
 -- 'readStoreData' can block since it uses 'readMVar'.  The 'MVar' is empty exactly when the store is
@@ -290,14 +230,7 @@ transformStore _ action = do
 readStoreData :: forall storeData. (Typeable storeData, StoreData storeData) => IO storeData
 readStoreData = do
     store :: NewReactStore storeData <- js_getNewStore (storeJsKey (Proxy :: Proxy storeData))
-    mdata <- js_getNewStoreData store >>= derefExport
-    maybe (error "Unable to decode store data") return mdata
-
--- | Perform the update, swapping the old export and the new export and then notifying the component views.
-foreign import javascript unsafe
-    "hsreact$transform_store($1, $2)"
-    js_UpdateStore :: ReactStoreRef storeData -> Export storeData -> IO ()
-{-# DEPRECATED js_UpdateStore "use js_updateNewStore" #-}
+    js_getNewStoreData store >>= unsafeDerefExport "readStoreData"
 
 foreign import javascript unsafe
     "hsreact$storedata[$1]"
@@ -308,18 +241,12 @@ foreign import javascript unsafe
     js_getNewStoreHS :: NewReactStore storeData -> IO (Export NewReactStoreHS)
 
 getNewStoreHS :: NewReactStore storeData -> IO NewReactStoreHS
-getNewStoreHS s = js_getNewStoreHS s >>= parseExport
+getNewStoreHS s = js_getNewStoreHS s >>= unsafeDerefExport "getNewStoreHS"
 {-# NOINLINE getNewStoreHS #-}
 
 foreign import javascript unsafe
     "$1.sdata"
     js_getNewStoreData :: NewReactStore storeData -> IO (Export storeData)
-
--- | Create the javascript half of the store.
-foreign import javascript unsafe
-    "{sdata:$1, views: []}"
-    js_createOldStore :: Export storeData -> IO (ReactStoreRef storeData)
-{-# DEPRECATED js_createOldStore "use js_createNewStore" #-}
 
 foreign import javascript unsafe
     "hsreact$storedata[$1] = {sdata: $2, views: {}, hs: $3}"
