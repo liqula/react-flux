@@ -195,10 +195,10 @@ typeJsKey t = decimal_workaround_570 f1 <> "-" <> decimal_workaround_570 f2
 -- the initial rendering occurs.  Store data is global and so there can be only one store data value for each
 -- store type.
 --
--- FIXME: why not @storeE <- export =<< newMVar initial@?  i can't see how the 'NewReactStoreHS'
--- type or splitting up payload and lock into two fields would have any benefit.  This would also
--- make it unnecessary to release old store values and export new ones.  (Not sure if there is a
--- performance reason it's done the way it is?  If so we should document this, at least.)
+-- FIXME: why not @storeE <- export =<< newMVar initial@?  i think the reason to keep the lock
+-- separately in 'NewReactStoreHS' is just due to the fact that too much code is on the javascript
+-- side.  The MVar should contain the entirety of @{ sdata: ..., views: ..., hs: <lock> }@, which
+-- would eliminate the need fo the lock.  (medium-sized refactoring if we're lucky.)
 registerInitialStore :: forall storeData. (Typeable storeData, StoreData storeData) => storeData -> IO ()
 registerInitialStore initial = do
   sdataE <- export initial
