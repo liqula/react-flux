@@ -306,19 +306,17 @@ foreign import javascript unsafe
 
 exportReactViewToJavaScript :: forall (props :: [*]). (ExportViewProps props) => View props -> IO JSVal
 exportReactViewToJavaScript (View v) = do
-    (_callbackToRelease, wrappedCb) <- exportNewViewToJs v $ \arr -> do
-      props <- js_newEmptyPropList
-      applyViewPropsFromArray (Proxy :: Proxy props) arr 0 props
-      return props
+    (_callbackToRelease, wrappedCb) <- exportNewViewToJs v (getProps @props Proxy)
     return wrappedCb
 
 callbackRenderingView :: forall (props :: [*]) handler. (ExportViewProps props) => JSString -> View props -> PropertyOrHandler handler
-callbackRenderingView name (View v) = CallbackPropertyReturningNewView name v getProps
-  where
-    getProps arr = do
-      props <- js_newEmptyPropList
-      applyViewPropsFromArray (Proxy :: Proxy props) arr 0 props
-      return props
+callbackRenderingView name (View v) = CallbackPropertyReturningNewView name v (getProps @props Proxy)
+
+getProps :: forall (props :: [*]). (ExportViewProps props) => Proxy props -> JSArray -> IO NewJsProps
+getProps proxy arr = do
+  props <- js_newEmptyPropList
+  applyViewPropsFromArray proxy arr 0 props
+  return props
 
 
 --------------------------------------------------------------------------------
