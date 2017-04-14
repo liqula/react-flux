@@ -306,8 +306,8 @@ foreign import javascript unsafe
 
 exportReactViewToJavaScript :: forall (props :: [*]). (ExportViewProps props) => View props -> IO JSVal
 exportReactViewToJavaScript (View v) = do
-    (_callbackToRelease, wrappedCb) <- exportNewViewToJs v (getProps @props Proxy)
-    return wrappedCb
+  (_callbackToRelease, wrappedCb) <- exportNewViewToJs v (getProps @props Proxy)
+  return wrappedCb
 
 callbackRenderingView :: forall (props :: [*]) handler. (ExportViewProps props) => JSString -> View props -> PropertyOrHandler handler
 callbackRenderingView name (View v) = CallbackPropertyReturningNewView name v (getProps @props Proxy)
@@ -332,25 +332,25 @@ runViewHandler _ handler = handler `deepseq` mapM_ executeAction handler
 runStateViewHandler :: (Typeable state, NFData state)
                     => ReactThis state props -> StatefulViewEventHandler state -> IO ()
 runStateViewHandler this handler = do
-    st <- js_ReactGetState this >>= unsafeDerefExport "runStateViewHandler"
+  st <- js_ReactGetState this >>= unsafeDerefExport "runStateViewHandler"
 
-    let (actions, mNewState) = handler st
+  let (actions, mNewState) = handler st
 
-    case mNewState of
-        Nothing -> return ()
-        Just newState -> do
-            newStateRef <- newState `deepseq` export newState
-            js_ReactUpdateAndReleaseState this newStateRef
+  case mNewState of
+    Nothing -> return ()
+    Just newState -> do
+      newStateRef <- newState `deepseq` export newState
+      js_ReactUpdateAndReleaseState this newStateRef
 
-    -- nothing above here should block, so the handler callback should still be running syncronous,
-    -- so the deepseq of actions should still pick up the proper event object.
-    --
-    -- TODO: I'm not so optimistic about the above code not blocking (is that the same as yielding?)
-    actions `deepseq` mapM_ executeAction actions
+  -- nothing above here should block, so the handler callback should still be running syncronous,
+  -- so the deepseq of actions should still pick up the proper event object.
+  --
+  -- TODO: I'm not so optimistic about the above code not blocking (is that the same as yielding?)
+  actions `deepseq` mapM_ executeAction actions
 
 foreign import javascript unsafe
-    "[]"
-    js_newEmptyPropList :: IO NewJsProps
+  "[]"
+  js_newEmptyPropList :: IO NewJsProps
 
 foreign import javascript unsafe
   "$1['props'].hs"
@@ -410,16 +410,16 @@ foreign import javascript unsafe
   js_setArtifact :: Artifacts -> JSString -> Artifact -> IO ()
 
 foreign import javascript unsafe
-    "$1['state'].hs"
-    js_ReactGetState :: ReactThis state props -> IO (Export state)
+  "$1['state'].hs"
+  js_ReactGetState :: ReactThis state props -> IO (Export state)
 
 foreign import javascript unsafe
-    "$1._updateAndReleaseState($2)"
-    js_ReactUpdateAndReleaseState :: ReactThis state props -> Export state -> IO ()
+  "$1._updateAndReleaseState($2)"
+  js_ReactUpdateAndReleaseState :: ReactThis state props -> Export state -> IO ()
 
 newtype RenderCbArg = RenderCbArg JSVal
 instance IsJSVal RenderCbArg
 
 foreign import javascript unsafe
-    "$1.newCallbacks = $2; $1.elem = $3;"
-    js_RenderCbSetResults :: RenderCbArg -> JSVal -> ReactElementRef -> IO ()
+  "$1.newCallbacks = $2; $1.elem = $3;"
+  js_RenderCbSetResults :: RenderCbArg -> JSVal -> ReactElementRef -> IO ()

@@ -201,9 +201,9 @@ typeJsKey t = decimal_workaround_570 f1 <> "-" <> decimal_workaround_570 f2
 -- performance reason it's done the way it is?  If so we should document this, at least.)
 registerInitialStore :: forall storeData. (Typeable storeData, StoreData storeData) => storeData -> IO ()
 registerInitialStore initial = do
-    sdataE <- export initial
-    storeE <- export . NewReactStoreHS =<< newMVar ()
-    js_createNewStore (storeJsKey (Proxy :: Proxy storeData)) sdataE storeE
+  sdataE <- export initial
+  storeE <- export . NewReactStoreHS =<< newMVar ()
+  js_createNewStore (storeJsKey (Proxy :: Proxy storeData)) sdataE storeE
 
 -- | First, 'transform' the store data according to the given action and then notify all registered
 -- controller-views to re-render themselves.
@@ -214,12 +214,12 @@ registerInitialStore initial = do
 -- This function will 'error' if 'registerInitialStore' has not been called.
 transformStore :: forall storeData. StoreData storeData => Proxy storeData -> StoreAction storeData -> IO ()
 transformStore _ action = do
-    store :: NewReactStore storeData <- js_getNewStore (storeJsKey (Proxy :: Proxy storeData))
-    storeHS <- getNewStoreHS store
-    modifyMVar_ (newStoreLock storeHS) $ \() -> do
-      oldData :: storeData <- js_getNewStoreData store >>= unsafeDerefExport "transformStore"
-      newData :: storeData <- transform action oldData
-      js_updateNewStore store =<< export newData
+  store :: NewReactStore storeData <- js_getNewStore (storeJsKey (Proxy :: Proxy storeData))
+  storeHS <- getNewStoreHS store
+  modifyMVar_ (newStoreLock storeHS) $ \() -> do
+    oldData :: storeData <- js_getNewStoreData store >>= unsafeDerefExport "transformStore"
+    newData :: storeData <- transform action oldData
+    js_updateNewStore store =<< export newData
 
 -- | Obtain the store data from a store.  Note that the store data is stored in an MVar, so
 -- 'readStoreData' can block since it uses 'readMVar'.  The 'MVar' is empty exactly when the store is
@@ -229,30 +229,30 @@ transformStore _ action = do
 -- This function will 'error' if 'registerInitialStore' has not been called.
 readStoreData :: forall storeData. (Typeable storeData, StoreData storeData) => IO storeData
 readStoreData = do
-    store :: NewReactStore storeData <- js_getNewStore (storeJsKey (Proxy :: Proxy storeData))
-    js_getNewStoreData store >>= unsafeDerefExport "readStoreData"
+  store :: NewReactStore storeData <- js_getNewStore (storeJsKey (Proxy :: Proxy storeData))
+  js_getNewStoreData store >>= unsafeDerefExport "readStoreData"
 
 foreign import javascript unsafe
-    "hsreact$storedata[$1]"
-    js_getNewStore :: JSString -> IO (NewReactStore storeData)
+  "hsreact$storedata[$1]"
+  js_getNewStore :: JSString -> IO (NewReactStore storeData)
 
 foreign import javascript unsafe
-    "$1.hs"
-    js_getNewStoreHS :: NewReactStore storeData -> IO (Export NewReactStoreHS)
+  "$1.hs"
+  js_getNewStoreHS :: NewReactStore storeData -> IO (Export NewReactStoreHS)
 
 getNewStoreHS :: NewReactStore storeData -> IO NewReactStoreHS
 getNewStoreHS s = js_getNewStoreHS s >>= unsafeDerefExport "getNewStoreHS"
 {-# NOINLINE getNewStoreHS #-}
 
 foreign import javascript unsafe
-    "$1.sdata"
-    js_getNewStoreData :: NewReactStore storeData -> IO (Export storeData)
+  "$1.sdata"
+  js_getNewStoreData :: NewReactStore storeData -> IO (Export storeData)
 
 foreign import javascript unsafe
-    "hsreact$storedata[$1] = {sdata: $2, views: {}, hs: $3}"
-    js_createNewStore :: JSString -> Export storeData -> Export NewReactStoreHS -> IO ()
+  "hsreact$storedata[$1] = {sdata: $2, views: {}, hs: $3}"
+  js_createNewStore :: JSString -> Export storeData -> Export NewReactStoreHS -> IO ()
 
 -- | Perform the update, swapping the old export and the new export and then notifying the component views.
 foreign import javascript unsafe
-    "hsreact$transform_new_store($1, $2)"
-    js_updateNewStore :: NewReactStore storeData -> Export storeData -> IO ()
+  "hsreact$transform_new_store($1, $2)"
+  js_updateNewStore :: NewReactStore storeData -> Export storeData -> IO ()
