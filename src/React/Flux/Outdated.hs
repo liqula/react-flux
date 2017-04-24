@@ -2,9 +2,7 @@
 {-# LANGUAGE UndecidableInstances, TypeApplications, MagicHash #-}
 {-# OPTIONS_GHC -fno-warn-redundant-constraints #-}
 module React.Flux.Outdated
-  ( ReactStore
-  , SomeStoreAction(..)
-  , getStoreData
+  ( SomeStoreAction(..)
   , ReactView
   , ReactViewKey(..)
   , ViewEventHandler

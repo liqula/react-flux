@@ -7,8 +7,6 @@ module React.Flux.Store (
 
   -- * Old Stores
   , SomeStoreAction(..)
-  , ReactStore(..)
-  , getStoreData
   , executeAction
 
   -- * New Stores
@@ -151,28 +149,9 @@ data NewReactStoreHS = NewReactStoreHS {
     newStoreLock :: MVar ()
   } deriving Typeable
 
-data ReactStore storeData = ReactStore {
-    -- | A reference to the foreign javascript part of the store.
-    storeRef :: ReactStoreRef storeData
-
-    -- | An MVar containing the current store data.  Normally, the MVar is full and contains the
-    -- current store data.  When applying an action, the MVar is kept empty for the entire operation
-    -- of transforming to the new data and sending the new data to all component views.  This
-    -- effectively operates as a lock allowing only one thread to modify the store at any one time.
-    -- This lock is safe because only the 'alterStore' function ever writes this MVar.
-  , storeData :: MVar storeData
-} deriving (Generic)
-
 ----------------------------------------------------------------------------------------------------
 -- Store operations
 ----------------------------------------------------------------------------------------------------
-
--- | Obtain the store data from a store.  Note that the store data is stored in an MVar, so
--- 'getStoreData' can block since it uses 'readMVar'.  The 'MVar' is empty exactly when the store is
--- being transformed, so there is a possiblity of deadlock if two stores try and access each other's
--- data during transformation.
-getStoreData :: ReactStore storeData -> IO storeData
-getStoreData (ReactStore _ mvar) = readMVar mvar
 
 -- | The new type of stores, introduced in version 1.3, keep the data in a javascript dictionary indexed
 -- by the fingerprint of the type.  This allows any code to lookup the store by knowing the type.
