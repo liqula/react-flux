@@ -19,20 +19,15 @@ but as new LTS versions or new GHCJS versions come out I keep updating to them (
 probably forget to update this README :)
 
 ~~~
-resolver: lts-6.1
-packages:
-    - .
-extra-deps:
-    - react-flux-(version)
-
-compiler: ghcjs-0.2.0.20160414_ghc-7.10.3
+resolver: lts-7.19
+compiler: ghcjs-0.2.1.9007019_ghc-8.0.1
 compiler-check: match-exact
-setup-info:
-  ghcjs:
-    source:
-      ghcjs-0.2.0.20160414_ghc-7.10.3:
-        url: https://s3.amazonaws.com/ghcjs/ghcjs-0.2.0.20160414_ghc-7.10.3.tar.gz
-        sha1: 6d6f307503be9e94e0c96ef1308c7cf224d06be3
+packages:
+- .
+- location:
+    git: https://github.com/liqula/react-flux
+    commit: fc09983c313536d51278f9fa3bdbc10dd9d1149e
+  extra-dep: true
 ~~~
 
 
