@@ -550,8 +550,16 @@ fakeDerefExport :: Typeable a => Export a -> IO a
 fakeDerefExport = pure . unsafeCoerce
 
 
+-- | If you want to pass a store value into a component via 'mkControllerView', make entry in the
+-- type list you apply have type @StoreArg <store>@.  See also: 'StoreField'; see test client for an
+-- example how to use this.
 data StoreArg store
-data StoreField store (field :: k) a
+
+-- | If you want to pass a *part of a* store value into a component via 'mkControllerView', make entry in the
+-- type list you apply have type @StoreField <store> "<fieldname>" <fieldtype>@ (field name is a
+-- type-level string literal).  See also: 'StoreArg'; see test client for an example how to use
+-- this.
+data StoreField store (fieldname :: k) fieldtype
 
 type ForeignEq = JSVal -> JSVal -> IO JSVal
 type ForeignEq_ = JSVal -> JSVal -> IO Bool
@@ -574,8 +582,13 @@ class AllEq t where
 instance AllEq '[] where
   allEq_ Proxy _ _ _ = pure True
 
-instance {-# OVERLAPPING #-} (Typeable t, Eq t, AllEq ts) => AllEq (StoreArg t ': ts) where
-  allEq_ Proxy = allEq__ (Proxy :: Proxy (t ': ts))
+instance {-# OVERLAPPING #-} (Typeable st, Eq st, AllEq ts)
+      => AllEq (StoreArg st ': ts) where
+  allEq_ Proxy = allEq__ (Proxy :: Proxy (st ': ts))
+
+instance {-# OVERLAPPING #-} (Typeable ft, Eq ft, AllEq ts)
+      => AllEq (StoreField st fn ft ': ts) where
+  allEq_ Proxy = allEq__ (Proxy :: Proxy (ft ': ts))
 
 instance {-# OVERLAPPABLE #-} (Typeable t, Eq t, UnoverlapAllEq t, AllEq ts) => AllEq (t ': ts) where
   allEq_ = allEq__
