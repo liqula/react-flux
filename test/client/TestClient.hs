@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedStrings, TypeFamilies, ScopedTypeVariables, DeriveAnyClass,
              FlexibleInstances, DeriveGeneric, BangPatterns, TemplateHaskell, DataKinds, TypeApplications, MultiParamTypeClasses #-}
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 module Main (main) where
 
 import Control.DeepSeq (NFData)
@@ -107,18 +108,18 @@ eventsView = mkView "events" $
         p_ ["key" $= "prevent"] $
              a_ [ "id" $= "some-link"
                 , "href" $= "http://www.haskell.org"
-                , onClick $ \e _ -> output ["Click some-link"] ++ [preventDefault e]
+                , onClick $ \e _ -> preventDefault e `seq` output ["Click some-link"]
                 ]
                 "Testing preventDefault"
 
         div_ ["key" $= "prop"] $
             div_ [ "id" $= "outer-div"
                  , onClick $ \_ _ -> output ["Click on outer div"]
-                 , capturePhase $ onDoubleClick $ \e _ -> output ["Double click outer div"] ++ [stopPropagation e]
+                 , capturePhase $ onDoubleClick $ \e _ -> stopPropagation e `seq` output ["Double click outer div"]
                  ] $ do
 
                 span_ [ "id" $= "inner-span"
-                      , onClick $ \e _ -> output ["Click inner span"] ++ [stopPropagation e]
+                      , onClick $ \e _ -> stopPropagation e `seq` output ["Click inner span"]
                       , onDoubleClick $ \_ _ -> output ["Double click inner span"]
                       ]
                       "Testing stopPropagation"
@@ -129,8 +130,13 @@ eventsView = mkView "events" $
 --- Stores and should component update
 --------------------------------------------------------------------------------
 
+instance UnoverlapAllEq String
+instance UnoverlapAllEq Int
+
 data Character = Character !Int !String
     deriving (Typeable, Eq)
+
+instance UnoverlapAllEq Character
 
 instance Show Character where
   show (Character i s) = "C" ++ show i ++ " - " ++ s
@@ -140,6 +146,8 @@ data CharacterPair = CharacterPair {
   , c2 :: !Character
 } deriving (Typeable, Eq)
 
+instance UnoverlapAllEq CharacterPair
+
 instance Show CharacterPair where
   show (CharacterPair x1 x2) = show x1 ++ ", " ++ show x2
 
@@ -147,6 +155,8 @@ data Humans = Humans
   { h1 :: !CharacterPair
   , h2 :: !CharacterPair
   } deriving (Typeable, Eq, Show)
+
+instance UnoverlapAllEq Humans
 
 instance HasField "h1" Humans CharacterPair where
   getField = h1
