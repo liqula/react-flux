@@ -1,5 +1,6 @@
 /* jshint sub:true */
 
+// OUTDATED
 function hsreact$mk_class(name, renderCb, checkState, releaseState, propsEq, stateEq) {
     var cl = {
         'displayName': name,
@@ -62,6 +63,7 @@ function hsreact$mk_class(name, renderCb, checkState, releaseState, propsEq, sta
     return cl;
 }
 
+// OUTDATED
 function hsreact$mk_lifecycle_view(name, initialState, renderCb,
             willMountCb, didMountCb, willRecvPropsCb, willUpdateCb, didUpdateCb, willUnmountCb, propsEq, stateEq) {
     var cl = hsreact$mk_class(name, renderCb, true, true, propsEq, stateEq);
