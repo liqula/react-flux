@@ -1,3 +1,6 @@
+
+# DEPRECATED BY https://github.com/liqula/react-hs
+
 A GHCJS binding to [React](https://facebook.github.io/react/) based on the
 [Flux](https://facebook.github.io/flux/) design.  The flux design pushes state and complicated logic
 out of the view, allowing the rendering functions and event handlers to be pure Haskell functions.
